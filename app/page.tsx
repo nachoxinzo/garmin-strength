@@ -29,13 +29,22 @@ import {
   Check,
   Smartphone,
   TrendingUp,
-  Cloud
+  Cloud,
+  Sparkles,
+  Swords,
+  User,
+  Shuffle
 } from 'lucide-react';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { StrengthRoutine, WorkoutExerciseBlock, GarminAccountStatus } from '@/lib/types';
 import { parseHevyCSV, ParsedHevyWorkout } from '@/lib/hevy-csv-parser';
 import { encodeRoutineToShareUrl } from '@/lib/share-utils';
 import ProgressDashboard from '@/components/ProgressDashboard';
+import SocialDashboard from '@/components/SocialDashboard';
+import AuthModal from '@/components/AuthModal';
+import ExerciseSwapModal from '@/components/ExerciseSwapModal';
+import WorkoutGeneratorModal from '@/components/WorkoutGeneratorModal';
+import { UserProfile, getCurrentUserProfile } from '@/lib/social-service';
 import {
   isSupabaseConfigured,
   getRoutinesFromSupabase,
@@ -52,13 +61,22 @@ const DEFAULT_ROUTINE: StrengthRoutine = {
 };
 
 export default function WorkoutStudioPage() {
-  const [currentMainTab, setCurrentMainTab] = useState<'studio' | 'progress'>('studio');
+  const [currentMainTab, setCurrentMainTab] = useState<'studio' | 'progress' | 'social'>('studio');
   const [routine, setRoutine] = useState<StrengthRoutine>(DEFAULT_ROUTINE);
   const [accountStatus, setAccountStatus] = useState<GarminAccountStatus | null>(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Perfil de Usuario y Social
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Modales de Generador Científico y Sustitución
+  const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState(false);
+  const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
+  const [swappingBlockIndex, setSwappingBlockIndex] = useState<number | null>(null);
 
   // Selector modal de ejercicios
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
@@ -97,6 +115,7 @@ export default function WorkoutStudioPage() {
     setIsSupabaseAvailable(available);
     if (available) {
       loadCloudRoutines();
+      loadUserProfile();
     }
     try {
       const saved = localStorage.getItem('garmin_strength_current_routine');
@@ -111,6 +130,37 @@ export default function WorkoutStudioPage() {
       // ignore
     }
   }, []);
+
+  const loadUserProfile = async () => {
+    try {
+      const profile = await getCurrentUserProfile();
+      setCurrentUser(profile);
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const handleSwapExercise = (alternativeExercise: CatalogExercise, newWeightKg: number) => {
+    if (swappingBlockIndex === null) return;
+    setRoutine(prev => {
+      const newBlocks = [...prev.blocks];
+      const targetBlock = newBlocks[swappingBlockIndex];
+      newBlocks[swappingBlockIndex] = {
+        ...targetBlock,
+        exercise: alternativeExercise,
+        weightKg: newWeightKg,
+        suggestedWeightKg: newWeightKg
+      };
+      return { ...prev, blocks: newBlocks };
+    });
+    setIsSwapModalOpen(false);
+    setSwappingBlockIndex(null);
+    setStatusMessage({
+      type: 'success',
+      text: `Ejercicio cambiado a "${alternativeExercise.name}".`
+    });
+    setTimeout(() => setStatusMessage(null), 3500);
+  };
 
   const loadCloudRoutines = async () => {
     try {
@@ -621,6 +671,17 @@ export default function WorkoutStudioPage() {
               <span>Importar Hevy</span>
             </button>
 
+            {/* Botón de Perfil de Atleta */}
+            <button
+              onClick={() => setIsAuthModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-all active:scale-[0.98]"
+            >
+              <User className="w-3.5 h-3.5 text-slate-600" />
+              <span className="hidden sm:inline">
+                {currentUser ? currentUser.display_name : 'Mi Cuenta'}
+              </span>
+            </button>
+
             {accountStatus?.authenticated ? (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -672,8 +733,20 @@ export default function WorkoutStudioPage() {
             >
               <TrendingUp className="w-4 h-4" />
               <span>Progreso & Métricas</span>
-              <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200/60">
-                Hevy
+            </button>
+
+            <button
+              onClick={() => setCurrentMainTab('social')}
+              className={`flex items-center gap-2 py-3 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-150 ${
+                currentMainTab === 'social'
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+              }`}
+            >
+              <Swords className="w-4 h-4" />
+              <span>Amigos & Retos</span>
+              <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                Duelos
               </span>
             </button>
           </nav>
@@ -712,6 +785,8 @@ export default function WorkoutStudioPage() {
 
         {currentMainTab === 'progress' ? (
           <ProgressDashboard />
+        ) : currentMainTab === 'social' ? (
+          <SocialDashboard onOpenAuth={() => setIsAuthModalOpen(true)} />
         ) : (
           <>
 
@@ -734,6 +809,14 @@ export default function WorkoutStudioPage() {
 
             {/* Acciones de Sesión */}
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setIsGeneratorModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all active:scale-[0.98]"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Generador Científico</span>
+              </button>
+
               <button
                 onClick={() => setIsHevyModalOpen(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 transition-all active:scale-[0.98]"
@@ -940,7 +1023,19 @@ export default function WorkoutStudioPage() {
                   </div>
 
                   {/* Acciones de bloque */}
-                  <div className="flex items-center gap-1 text-slate-400">
+                  <div className="flex items-center gap-1.5 text-slate-400">
+                    <button
+                      onClick={() => {
+                        setSwappingBlockIndex(index);
+                        setIsSwapModalOpen(true);
+                      }}
+                      title="Máquina ocupada: Cambiar por ejercicio similar"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-xs font-semibold transition-all active:scale-95"
+                    >
+                      <Shuffle className="w-3.5 h-3.5 text-amber-600" />
+                      <span className="hidden sm:inline">Sustituir</span>
+                    </button>
+
                     <button
                       onClick={() => moveBlock(index, 'up')}
                       disabled={index === 0}
@@ -1726,6 +1821,42 @@ export default function WorkoutStudioPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* --- MODAL DE AUTENTICACIÓN / PERFIL --- */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        currentUser={currentUser}
+        onAuthChange={loadUserProfile}
+      />
+
+      {/* --- MODAL GENERADOR CIENTÍFICO DE RUTINAS --- */}
+      <WorkoutGeneratorModal
+        isOpen={isGeneratorModalOpen}
+        onClose={() => setIsGeneratorModalOpen(false)}
+        onRoutineGenerated={newRoutine => {
+          setRoutine(newRoutine);
+          setStatusMessage({
+            type: 'success',
+            text: `¡Rutina "${newRoutine.name}" generada según evidencia científica cargada en el editor!`
+          });
+          setTimeout(() => setStatusMessage(null), 4000);
+        }}
+      />
+
+      {/* --- MODAL SUSTITUCIÓN DE EJERCICIO (MÁQUINA OCUPADA) --- */}
+      {isSwapModalOpen && swappingBlockIndex !== null && routine.blocks[swappingBlockIndex] && (
+        <ExerciseSwapModal
+          isOpen={isSwapModalOpen}
+          currentExercise={routine.blocks[swappingBlockIndex].exercise}
+          currentWeightKg={routine.blocks[swappingBlockIndex].weightKg}
+          onClose={() => {
+            setIsSwapModalOpen(false);
+            setSwappingBlockIndex(null);
+          }}
+          onSelectAlternative={handleSwapExercise}
+        />
       )}
     </div>
   );
