@@ -37,152 +37,11 @@ import { encodeRoutineToShareUrl } from '@/lib/share-utils';
 import ProgressDashboard from '@/components/ProgressDashboard';
 
 const DEFAULT_ROUTINE: StrengthRoutine = {
-  id: 'routine-push-1',
-  name: 'Push Dia 1 F8',
-  warmupSeconds: 300,
-  cooldownSeconds: 180,
-  blocks: [
-    {
-      id: 'b-1',
-      exercise: EXERCISE_CATALOG[0],
-      sets: 3,
-      reps: 8,
-      weightKg: 80,
-      restSeconds: 90
-    },
-    {
-      id: 'b-2',
-      exercise: EXERCISE_CATALOG[3],
-      sets: 3,
-      reps: 10,
-      weightKg: 28,
-      restSeconds: 90
-    },
-    {
-      id: 'b-3',
-      exercise: EXERCISE_CATALOG[18],
-      sets: 3,
-      reps: 8,
-      weightKg: 50,
-      restSeconds: 90
-    },
-    {
-      id: 'b-4',
-      exercise: EXERCISE_CATALOG[21],
-      sets: 4,
-      reps: 12,
-      weightKg: 12,
-      restSeconds: 60
-    },
-    {
-      id: 'b-5',
-      exercise: EXERCISE_CATALOG[5],
-      sets: 3,
-      reps: 10,
-      weightKg: 0,
-      restSeconds: 75
-    }
-  ]
-};
-
-const PRESETS: Record<string, StrengthRoutine> = {
-  push: DEFAULT_ROUTINE,
-  pull: {
-    id: 'preset-pull',
-    name: 'Pull Dia 2 F8',
-    warmupSeconds: 300,
-    cooldownSeconds: 180,
-    blocks: [
-      {
-        id: 'p-1',
-        exercise: EXERCISE_CATALOG.find(e => e.id === 'deadlift_barbell') || EXERCISE_CATALOG[6],
-        sets: 3,
-        reps: 6,
-        weightKg: 120,
-        restSeconds: 150
-      },
-      {
-        id: 'p-2',
-        exercise: EXERCISE_CATALOG.find(e => e.id === 'pull_up') || EXERCISE_CATALOG[8],
-        sets: 4,
-        reps: 8,
-        weightKg: 0,
-        restSeconds: 90
-      },
-      {
-        id: 'p-3',
-        exercise: EXERCISE_CATALOG.find(e => e.id === 'dumbbell_row') || EXERCISE_CATALOG[10],
-        sets: 3,
-        reps: 10,
-        weightKg: 32,
-        restSeconds: 75
-      },
-      {
-        id: 'p-4',
-        exercise: EXERCISE_CATALOG.find(e => e.id === 'face_pull') || EXERCISE_CATALOG[11],
-        sets: 3,
-        reps: 15,
-        weightKg: 25,
-        restSeconds: 60
-      },
-      {
-        id: 'p-5',
-        exercise: EXERCISE_CATALOG.find(e => e.id === 'biceps_curl_barbell') || EXERCISE_CATALOG[22],
-        sets: 3,
-        reps: 10,
-        weightKg: 35,
-        restSeconds: 75
-      }
-    ]
-  },
-  legs: {
-    id: 'preset-legs',
-    name: 'Pierna Dia 3 F8',
-    warmupSeconds: 360,
-    cooldownSeconds: 180,
-    blocks: [
-      {
-        id: 'l-1',
-        exercise: EXERCISE_CATALOG.find(e => e.id === 'squat_back_barbell') || EXERCISE_CATALOG[12],
-        sets: 4,
-        reps: 8,
-        weightKg: 100,
-        restSeconds: 120
-      },
-      {
-        id: 'l-2',
-        exercise: EXERCISE_CATALOG.find(e => e.id === 'leg_press') || EXERCISE_CATALOG[14],
-        sets: 3,
-        reps: 12,
-        weightKg: 180,
-        restSeconds: 90
-      },
-      {
-        id: 'l-3',
-        exercise: EXERCISE_CATALOG.find(e => e.id === 'deadlift_straight_leg') || EXERCISE_CATALOG[7],
-        sets: 3,
-        reps: 10,
-        weightKg: 80,
-        restSeconds: 90
-      },
-      {
-        id: 'l-4',
-        exercise: EXERCISE_CATALOG.find(e => e.id === 'calf_raise_standing') || EXERCISE_CATALOG[16],
-        sets: 4,
-        reps: 15,
-        weightKg: 60,
-        restSeconds: 60
-      },
-      {
-        id: 'l-5',
-        exercise: EXERCISE_CATALOG.find(e => e.id === 'plank') || EXERCISE_CATALOG[26],
-        sets: 3,
-        reps: 45,
-        weightKg: 0,
-        restSeconds: 60
-      }
-    ]
-  }
+  id: 'nueva-sesion',
+  name: 'Nueva Sesión',
+  warmupSeconds: 0,
+  cooldownSeconds: 0,
+  blocks: []
 };
 
 export default function WorkoutStudioPage() {
@@ -332,15 +191,16 @@ export default function WorkoutStudioPage() {
     setIsSelectorOpen(false);
   };
 
-  const loadPreset = (presetKey: string) => {
-    if (PRESETS[presetKey]) {
-      setRoutine(PRESETS[presetKey]);
-      setStatusMessage({
-        type: 'success',
-        text: `Plantilla "${PRESETS[presetKey].name}" cargada con éxito.`
-      });
-      setTimeout(() => setStatusMessage(null), 3000);
+  const resetToNewRoutine = () => {
+    if (routine.blocks.length > 0 && !window.confirm('¿Deseas vaciar la sesión actual para empezar una nueva?')) {
+      return;
     }
+    setRoutine(DEFAULT_ROUTINE);
+    setStatusMessage({
+      type: 'success',
+      text: 'Sesión en blanco iniciada.'
+    });
+    setTimeout(() => setStatusMessage(null), 3000);
   };
 
   // Escalado global de cargas (ej: para adaptar al compañero o variar intensidad)
@@ -772,27 +632,23 @@ export default function WorkoutStudioPage() {
               />
             </div>
 
-            {/* Plantillas Rápidas */}
+            {/* Acciones de Sesión */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-slate-500 font-medium mr-1">Plantillas rápidas:</span>
               <button
-                onClick={() => loadPreset('push')}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all active:scale-[0.98]"
+                onClick={() => setIsHevyModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 transition-all active:scale-[0.98]"
               >
-                Push (Torso)
+                <FileSpreadsheet className="w-3.5 h-3.5 text-orange-600" />
+                <span>Cargar de Hevy</span>
               </button>
-              <button
-                onClick={() => loadPreset('pull')}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all active:scale-[0.98]"
-              >
-                Pull (Espalda)
-              </button>
-              <button
-                onClick={() => loadPreset('legs')}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all active:scale-[0.98]"
-              >
-                Pierna & Core
-              </button>
+              {routine.blocks.length > 0 && (
+                <button
+                  onClick={resetToNewRoutine}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 transition-all active:scale-[0.98]"
+                >
+                  Vaciar sesión
+                </button>
+              )}
             </div>
 
             {/* Adaptación de Cargas / Factor Amigo */}

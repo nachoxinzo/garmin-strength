@@ -16,35 +16,14 @@ import {
   BarChart2,
   Zap,
   Info,
-  RotateCcw
+  Trash2,
+  FileSpreadsheet
 } from 'lucide-react';
 import {
   extractProgressFromHevyCSV,
   ExerciseStatsSummary,
   ExerciseSessionProgress
 } from '@/lib/progress-analyzer';
-
-// Datos de demostración reales en caso de que aún no hayan subido su CSV
-const DEMO_CSV = `title,start_time,end_time,description,exercise_title,superset_id,exercise_notes,set_index,set_type,weight_kg,reps,distance_km,duration_seconds,rpe
-"Push A","2026-08-01 10:00:00","2026-08-01 11:00:00","","Bench Press (Barbell)",,"",0,"normal",70,10,,,
-"Push A","2026-08-01 10:00:00","2026-08-01 11:00:00","","Bench Press (Barbell)",,"",1,"normal",70,10,,,
-"Push A","2026-08-01 10:00:00","2026-08-01 11:00:00","","Bench Press (Barbell)",,"",2,"normal",70,8,,,
-"Push A","2026-08-01 10:00:00","2026-08-01 11:00:00","","Squat (Barbell)",,"",0,"normal",90,8,,,
-"Push A","2026-08-01 10:00:00","2026-08-01 11:00:00","","Squat (Barbell)",,"",1,"normal",90,8,,,
-"Push B","2026-08-15 10:00:00","2026-08-15 11:00:00","","Bench Press (Barbell)",,"",0,"normal",75,8,,,
-"Push B","2026-08-15 10:00:00","2026-08-15 11:00:00","","Bench Press (Barbell)",,"",1,"normal",75,8,,,
-"Push B","2026-08-15 10:00:00","2026-08-15 11:00:00","","Bench Press (Barbell)",,"",2,"normal",75,8,,,
-"Push B","2026-08-15 10:00:00","2026-08-15 11:00:00","","Squat (Barbell)",,"",0,"normal",95,8,,,
-"Push B","2026-08-15 10:00:00","2026-08-15 11:00:00","","Squat (Barbell)",,"",1,"normal",95,8,,,
-"Push C","2026-09-02 10:00:00","2026-09-02 11:00:00","","Bench Press (Barbell)",,"",0,"normal",80,8,,,
-"Push C","2026-09-02 10:00:00","2026-09-02 11:00:00","","Bench Press (Barbell)",,"",1,"normal",80,7,,,
-"Push C","2026-09-02 10:00:00","2026-09-02 11:00:00","","Squat (Barbell)",,"",0,"normal",100,8,,,
-"Push D","2026-09-20 10:00:00","2026-09-20 11:00:00","","Bench Press (Barbell)",,"",0,"normal",82.5,6,,,
-"Push D","2026-09-20 10:00:00","2026-09-20 11:00:00","","Bench Press (Barbell)",,"",1,"normal",82.5,6,,,
-"Push D","2026-09-20 10:00:00","2026-09-20 11:00:00","","Squat (Barbell)",,"",0,"normal",105,6,,,
-"Push E","2026-10-10 10:00:00","2026-10-10 11:00:00","","Bench Press (Barbell)",,"",0,"normal",85,5,,,
-"Push E","2026-10-10 10:00:00","2026-10-10 11:00:00","","Bench Press (Barbell)",,"",1,"normal",85,5,,,
-"Push E","2026-10-10 10:00:00","2026-10-10 11:00:00","","Squat (Barbell)",,"",0,"normal",110,5,,,`;
 
 type MetricMode = 'maxWeight' | 'estimated1RM' | 'totalVolume' | 'bestSetVolume';
 
@@ -54,25 +33,18 @@ export default function ProgressDashboard() {
   const [metric, setMetric] = useState<MetricMode>('maxWeight');
   const [hoveredPoint, setHoveredPoint] = useState<ExerciseSessionProgress | null>(null);
   const [searchExercise, setSearchExercise] = useState<string>('');
-  const [isDemoData, setIsDemoData] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Cargar CSV previo de localStorage o iniciar con demo
+  // Cargar CSV guardado en localStorage
   useEffect(() => {
     try {
       const savedCsv = localStorage.getItem('hevy_raw_csv_cache');
       if (savedCsv && savedCsv.trim().length > 50) {
         setCsvRaw(savedCsv);
-        setIsDemoData(false);
-      } else {
-        // Iniciar con demo para mostrar algo visual de inmediato
-        setCsvRaw(DEMO_CSV);
-        setIsDemoData(true);
       }
     } catch (e) {
-      setCsvRaw(DEMO_CSV);
-      setIsDemoData(true);
+      // ignore
     }
   }, []);
 
@@ -98,7 +70,6 @@ export default function ProgressDashboard() {
       const text = event.target?.result as string;
       if (text && text.includes('exercise_title')) {
         setCsvRaw(text);
-        setIsDemoData(false);
         try {
           localStorage.setItem('hevy_raw_csv_cache', text);
         } catch (e) {
@@ -109,13 +80,15 @@ export default function ProgressDashboard() {
     reader.readAsText(file);
   };
 
-  const handleLoadDemo = () => {
-    setCsvRaw(DEMO_CSV);
-    setIsDemoData(true);
-    try {
-      localStorage.removeItem('hevy_raw_csv_cache');
-    } catch (e) {
-      // ignore
+  const handleClearHistory = () => {
+    if (window.confirm('¿Seguro que deseas eliminar los datos de entrenamiento guardados?')) {
+      setCsvRaw('');
+      setSelectedExercise('');
+      try {
+        localStorage.removeItem('hevy_raw_csv_cache');
+      } catch (e) {
+        // ignore
+      }
     }
   };
 
@@ -192,31 +165,66 @@ export default function ProgressDashboard() {
     }
   };
 
+  if (!csvRaw || analytics.exercises.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-8 sm:p-12 text-center shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] max-w-xl mx-auto my-8 animate-in fade-in duration-150">
+        <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-5 border border-blue-100 shadow-xs">
+          <TrendingUp className="w-8 h-8" />
+        </div>
+        <h3 className="text-lg font-bold text-slate-900 mb-2">
+          Sin datos de entrenamientos aún
+        </h3>
+        <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+          Para ver tus gráficos de evolución, cargas máximas, 1RM estimado y volumen por ejercicio, sube tu archivo exportado de Hevy.
+        </p>
+
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-md shadow-blue-500/20 transition-all active:scale-[0.98] min-h-[44px]"
+        >
+          <Upload className="w-4 h-4" />
+          <span>Subir workouts.csv de Hevy</span>
+        </button>
+
+        <div className="mt-8 pt-6 border-t border-slate-100 text-left">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+            ¿Cómo exportar desde Hevy?
+          </h4>
+          <ol className="text-xs text-slate-500 space-y-1.5 list-decimal list-inside">
+            <li>Abre Hevy en tu móvil y entra en tu <strong>Perfil</strong>.</li>
+            <li>Toca en <strong>Ajustes</strong> (icono de engranaje).</li>
+            <li>Baja hasta <strong>Exportar datos</strong> y descarga el archivo CSV.</li>
+          </ol>
+        </div>
+
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept=".csv,text/csv"
+          className="hidden"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
-      {/* Alerta de datos de Demo o Subida de CSV */}
+      {/* Barra de Origen de Datos */}
       <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
             <BarChart2 className="w-4 h-4" />
           </div>
           <div>
             <div className="text-xs font-semibold text-slate-900 flex items-center gap-2">
               <span>Origen de Datos:</span>
-              {isDemoData ? (
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                  Datos de Ejemplo
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Tu Historial de Hevy
-                </span>
-              )}
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Tu Historial de Hevy
+              </span>
             </div>
             <p className="text-[11px] text-slate-500">
-              {isDemoData
-                ? 'Sube tu archivo workouts.csv de Hevy para ver tu progreso real.'
-                : `${analytics.exercises.length} ejercicios detectados en tu historial.`}
+              {analytics.exercises.length} ejercicios detectados en tu historial.
             </p>
           </div>
         </div>
@@ -227,17 +235,15 @@ export default function ProgressDashboard() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-all active:scale-95"
           >
             <Upload className="w-3.5 h-3.5" />
-            <span>Subir workouts.csv</span>
+            <span>Actualizar workouts.csv</span>
           </button>
-          {!isDemoData && (
-            <button
-              onClick={handleLoadDemo}
-              title="Restablecer a datos de ejemplo"
-              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
-            >
-              <RotateCcwIcon className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            onClick={handleClearHistory}
+            title="Borrar historial guardado"
+            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 hover:bg-rose-50 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
           <input
             type="file"
             ref={fileInputRef}
@@ -556,8 +562,4 @@ export default function ProgressDashboard() {
       )}
     </div>
   );
-}
-
-function RotateCcwIcon(props: any) {
-  return <RotateCcw {...props} />;
 }
