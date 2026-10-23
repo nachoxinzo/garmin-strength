@@ -1,0 +1,9 @@
+node_modules/
+.next/
+out/
+tokens/
+.env
+.env*.local
+*.fit
+*.log
+.DS_Store
