@@ -49,10 +49,10 @@ export default function AuthModal({
         });
         if (error) throw error;
         setSuccessMessage('¡Sesión iniciada con éxito!');
+        await onAuthChange();
         setTimeout(() => {
-          onAuthChange();
           onClose();
-        }, 1000);
+        }, 800);
       } else {
         if (!username.trim()) throw new Error('Elige un nombre de usuario');
         const cleanUser = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
@@ -68,11 +68,11 @@ export default function AuthModal({
           }
         });
         if (error) throw error;
-        setSuccessMessage('¡Cuenta creada! Ya puedes iniciar sesión y guardar tus rutinas.');
+        setSuccessMessage('¡Cuenta creada con éxito!');
+        await onAuthChange();
         setTimeout(() => {
-          onAuthChange();
           onClose();
-        }, 1200);
+        }, 1000);
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Error en la autenticación');

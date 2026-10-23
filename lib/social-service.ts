@@ -43,14 +43,42 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
 
-  if (error || !data) return null;
-  return data;
+    if (data) return data;
+
+    // Si aún no existe la fila en la tabla profiles (ej: trigger pendiente),
+    // generamos el perfil automáticamente a partir de los datos de autenticación
+    const meta = user.user_metadata || {};
+    const username = meta.username || user.email?.split('@')[0] || 'atleta';
+    const displayName = meta.display_name || user.email?.split('@')[0] || 'Atleta';
+    const friendCode = user.id.replace(/-/g, '').slice(0, 8);
+
+    const fallbackProfile: UserProfile = {
+      id: user.id,
+      username,
+      display_name: displayName,
+      friend_code: friendCode
+    };
+
+    // Intentar persistirlo en Supabase
+    await supabase.from('profiles').upsert(fallbackProfile);
+
+    return fallbackProfile;
+  } catch (err) {
+    const meta = user.user_metadata || {};
+    return {
+      id: user.id,
+      username: meta.username || user.email?.split('@')[0] || 'atleta',
+      display_name: meta.display_name || user.email?.split('@')[0] || 'Atleta',
+      friend_code: user.id.replace(/-/g, '').slice(0, 8)
+    };
+  }
 }
 
 /**

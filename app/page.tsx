@@ -46,6 +46,7 @@ import ExerciseSwapModal from '@/components/ExerciseSwapModal';
 import WorkoutGeneratorModal from '@/components/WorkoutGeneratorModal';
 import { UserProfile, getCurrentUserProfile } from '@/lib/social-service';
 import {
+  supabase,
   isSupabaseConfigured,
   getRoutinesFromSupabase,
   saveRoutineToSupabase,
@@ -113,10 +114,24 @@ export default function WorkoutStudioPage() {
     checkGarminStatus();
     const available = isSupabaseConfigured();
     setIsSupabaseAvailable(available);
-    if (available) {
+
+    let authSubscription: any = null;
+    if (available && supabase) {
       loadCloudRoutines();
       loadUserProfile();
+
+      // Escuchar cambios de autenticación en tiempo real
+      const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (session?.user) {
+          await loadUserProfile();
+          await loadCloudRoutines();
+        } else {
+          setCurrentUser(null);
+        }
+      });
+      authSubscription = data.subscription;
     }
+
     try {
       const saved = localStorage.getItem('garmin_strength_current_routine');
       if (saved) {
@@ -129,6 +144,12 @@ export default function WorkoutStudioPage() {
     } catch (e) {
       // ignore
     }
+
+    return () => {
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
+    };
   }, []);
 
   const loadUserProfile = async () => {
@@ -674,24 +695,33 @@ export default function WorkoutStudioPage() {
             {/* Botón de Perfil de Atleta */}
             <button
               onClick={() => setIsAuthModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-all active:scale-[0.98]"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-[0.98] ${
+                currentUser
+                  ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
+              }`}
             >
-              <User className="w-3.5 h-3.5 text-slate-600" />
-              <span className="hidden sm:inline">
-                {currentUser ? currentUser.display_name : 'Mi Cuenta'}
+              {currentUser ? (
+                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse shrink-0" />
+              ) : (
+                <User className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+              )}
+              <span className="truncate max-w-[120px]">
+                {currentUser ? currentUser.display_name : 'Iniciar Sesión'}
               </span>
             </button>
 
+            {/* Estado de Garmin Watch */}
             {accountStatus?.authenticated ? (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs font-medium">
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs font-medium" title="Reloj Garmin vinculado">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="hidden md:inline">Conectado:</span>
-                <span className="font-semibold truncate max-w-[120px]">{accountStatus.displayName || accountStatus.username}</span>
+                <span className="hidden md:inline">Garmin:</span>
+                <span className="font-semibold truncate max-w-[90px]">{accountStatus.displayName || 'Fénix 8'}</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium">
-                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                <span>Sesión no detectada</span>
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-xs font-medium" title="Sincronización con Garmin Fénix 8">
+                <Watch className="w-3.5 h-3.5 text-slate-500" />
+                <span>Garmin Fénix 8</span>
               </div>
             )}
 
