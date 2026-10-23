@@ -28,13 +28,20 @@ import {
   Share2,
   Check,
   Smartphone,
-  TrendingUp
+  TrendingUp,
+  Cloud
 } from 'lucide-react';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { StrengthRoutine, WorkoutExerciseBlock, GarminAccountStatus } from '@/lib/types';
 import { parseHevyCSV, ParsedHevyWorkout } from '@/lib/hevy-csv-parser';
 import { encodeRoutineToShareUrl } from '@/lib/share-utils';
 import ProgressDashboard from '@/components/ProgressDashboard';
+import {
+  isSupabaseConfigured,
+  getRoutinesFromSupabase,
+  saveRoutineToSupabase,
+  deleteRoutineFromSupabase
+} from '@/lib/supabase';
 
 const DEFAULT_ROUTINE: StrengthRoutine = {
   id: 'nueva-sesion',
@@ -75,11 +82,22 @@ export default function WorkoutStudioPage() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Supabase Cloud Routines
+  const [cloudRoutines, setCloudRoutines] = useState<StrengthRoutine[]>([]);
+  const [isCloudSaving, setIsCloudSaving] = useState(false);
+  const [isCloudRoutinesModalOpen, setIsCloudRoutinesModalOpen] = useState(false);
+  const [isSupabaseAvailable, setIsSupabaseAvailable] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Cargar estado de Garmin y rutina guardada al inicio
   useEffect(() => {
     checkGarminStatus();
+    const available = isSupabaseConfigured();
+    setIsSupabaseAvailable(available);
+    if (available) {
+      loadCloudRoutines();
+    }
     try {
       const saved = localStorage.getItem('garmin_strength_current_routine');
       if (saved) {
@@ -93,6 +111,75 @@ export default function WorkoutStudioPage() {
       // ignore
     }
   }, []);
+
+  const loadCloudRoutines = async () => {
+    try {
+      const data = await getRoutinesFromSupabase();
+      setCloudRoutines(data);
+    } catch (e) {
+      console.warn('Error al cargar rutinas de Supabase:', e);
+    }
+  };
+
+  const handleSaveToCloud = async () => {
+    if (!isSupabaseAvailable) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Supabase no está configurado aún. Añade NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY en Vercel.'
+      });
+      return;
+    }
+    if (routine.blocks.length === 0) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Añade ejercicios a la rutina antes de guardarla.'
+      });
+      return;
+    }
+
+    setIsCloudSaving(true);
+    try {
+      const ok = await saveRoutineToSupabase(routine);
+      if (ok) {
+        setStatusMessage({
+          type: 'success',
+          text: `¡Rutina "${routine.name}" guardada en la nube con éxito!`
+        });
+        await loadCloudRoutines();
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: 'No se pudo guardar la rutina en Supabase.'
+        });
+      }
+    } catch (err: any) {
+      setStatusMessage({
+        type: 'error',
+        text: err.message || 'Error al conectar con Supabase'
+      });
+    } finally {
+      setIsCloudSaving(false);
+    }
+  };
+
+  const handleDeleteCloudRoutine = async (id: string, name: string) => {
+    if (!window.confirm(`¿Seguro que deseas eliminar "${name}" de Supabase?`)) return;
+    try {
+      const ok = await deleteRoutineFromSupabase(id);
+      if (ok) {
+        setCloudRoutines(prev => prev.filter(r => r.id !== id));
+        setStatusMessage({
+          type: 'success',
+          text: `Rutina "${name}" eliminada de la nube.`
+        });
+      }
+    } catch (err: any) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Error al eliminar rutina de Supabase'
+      });
+    }
+  };
 
   // Guardar en localStorage cuando cambie
   useEffect(() => {
@@ -505,6 +592,19 @@ export default function WorkoutStudioPage() {
 
           {/* Botón Importar Hevy & Compartir & Estado de Garmin Connect */}
           <div className="flex items-center gap-2">
+            {isSupabaseAvailable && (
+              <button
+                onClick={() => setIsCloudRoutinesModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold transition-all active:scale-[0.98]"
+              >
+                <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden sm:inline">Mis Rutinas</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-emerald-200 text-emerald-800 text-[10px] font-bold">
+                  {cloudRoutines.length}
+                </span>
+              </button>
+            )}
+
             <button
               onClick={() => setIsShareModalOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold transition-all active:scale-[0.98]"
@@ -640,6 +740,14 @@ export default function WorkoutStudioPage() {
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-orange-600" />
                 <span>Cargar de Hevy</span>
+              </button>
+              <button
+                onClick={handleSaveToCloud}
+                disabled={isCloudSaving || routine.blocks.length === 0}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all active:scale-[0.98] disabled:opacity-50"
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                <span>{isCloudSaving ? 'Guardando...' : 'Guardar en Supabase'}</span>
               </button>
               {routine.blocks.length > 0 && (
                 <button
@@ -1163,6 +1271,87 @@ export default function WorkoutStudioPage() {
                   2. <strong>En su Apple Watch Serie 4</strong>: Puede activar el entreno nativo de <em>&quot;Fuerza Tradicional&quot;</em> para registrar pulsaciones y calorías mientras sigue las series en el móvil, o si tiene <strong>Hevy</strong> en el Apple Watch, importar la rutina directamente.
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL MIS RUTINAS EN LA NUBE (SUPABASE) --- */}
+      {isCloudRoutinesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center font-bold">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Mis Rutinas en la Nube</h3>
+                  <p className="text-xs text-slate-500">Guardadas permanentemente en tu base de datos Supabase</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCloudRoutinesModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 max-h-[60vh] overflow-y-auto space-y-3">
+              {cloudRoutines.length === 0 ? (
+                <div className="text-center py-8">
+                  <Cloud className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-slate-700">No hay rutinas guardadas en Supabase</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                    Diseña tu rutina o cárgala de Hevy y pulsa el botón &quot;Guardar en Supabase&quot;.
+                  </p>
+                </div>
+              ) : (
+                cloudRoutines.map(r => (
+                  <div
+                    key={r.id}
+                    className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 flex items-center justify-between gap-3 transition-colors"
+                  >
+                    <div>
+                      <h4 className="font-semibold text-slate-900 text-sm">{r.name}</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {r.blocks.length} ejercicios &bull; {r.blocks.reduce((acc, b) => acc + b.sets, 0)} series
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setRoutine(r);
+                          setIsCloudRoutinesModalOpen(false);
+                          setStatusMessage({
+                            type: 'success',
+                            text: `Rutina "${r.name}" cargada en el editor.`
+                          });
+                        }}
+                        className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all active:scale-95"
+                      >
+                        Cargar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCloudRoutine(r.id, r.name)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 hover:bg-rose-50 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setIsCloudRoutinesModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 transition-all"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>

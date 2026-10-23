@@ -17,13 +17,20 @@ import {
   Zap,
   Info,
   Trash2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Cloud
 } from 'lucide-react';
 import {
   extractProgressFromHevyCSV,
   ExerciseStatsSummary,
   ExerciseSessionProgress
 } from '@/lib/progress-analyzer';
+import {
+  isSupabaseConfigured,
+  getWorkoutLogsCsvFromSupabase,
+  syncWorkoutLogsToSupabase,
+  parseCsvToDbLogs
+} from '@/lib/supabase';
 
 type MetricMode = 'maxWeight' | 'estimated1RM' | 'totalVolume' | 'bestSetVolume';
 
@@ -33,19 +40,39 @@ export default function ProgressDashboard() {
   const [metric, setMetric] = useState<MetricMode>('maxWeight');
   const [hoveredPoint, setHoveredPoint] = useState<ExerciseSessionProgress | null>(null);
   const [searchExercise, setSearchExercise] = useState<string>('');
+  const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
+  const [hasCloudSource, setHasCloudSource] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Cargar CSV guardado en localStorage
+  // Cargar datos: primero desde Supabase si está disponible, luego fallback a localStorage
   useEffect(() => {
-    try {
-      const savedCsv = localStorage.getItem('hevy_raw_csv_cache');
-      if (savedCsv && savedCsv.trim().length > 50) {
-        setCsvRaw(savedCsv);
+    async function loadData() {
+      if (isSupabaseConfigured()) {
+        try {
+          const cloudCsv = await getWorkoutLogsCsvFromSupabase();
+          if (cloudCsv && cloudCsv.length > 50) {
+            setCsvRaw(cloudCsv);
+            setHasCloudSource(true);
+            return;
+          }
+        } catch (e) {
+          console.warn('No se pudo conectar a Supabase:', e);
+        }
       }
-    } catch (e) {
-      // ignore
+
+      try {
+        const savedCsv = localStorage.getItem('hevy_raw_csv_cache');
+        if (savedCsv && savedCsv.trim().length > 50) {
+          setCsvRaw(savedCsv);
+          setHasCloudSource(false);
+        }
+      } catch (e) {
+        // ignore
+      }
     }
+
+    loadData();
   }, []);
 
   // Extraer analíticas cada vez que cambia el CSV
@@ -66,7 +93,7 @@ export default function ProgressDashboard() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = event => {
+    reader.onload = async event => {
       const text = event.target?.result as string;
       if (text && text.includes('exercise_title')) {
         setCsvRaw(text);
@@ -74,6 +101,22 @@ export default function ProgressDashboard() {
           localStorage.setItem('hevy_raw_csv_cache', text);
         } catch (e) {
           // ignore
+        }
+
+        // Si Supabase está configurado, guardar en la nube
+        if (isSupabaseConfigured()) {
+          setIsCloudSyncing(true);
+          try {
+            const logs = parseCsvToDbLogs(text);
+            if (logs.length > 0) {
+              const ok = await syncWorkoutLogsToSupabase(logs);
+              if (ok) setHasCloudSource(true);
+            }
+          } catch (err) {
+            console.error('Error al guardar en Supabase:', err);
+          } finally {
+            setIsCloudSyncing(false);
+          }
         }
       }
     };
@@ -219,12 +262,20 @@ export default function ProgressDashboard() {
           <div>
             <div className="text-xs font-semibold text-slate-900 flex items-center gap-2">
               <span>Origen de Datos:</span>
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Tu Historial de Hevy
-              </span>
+              {hasCloudSource ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Cloud className="w-3 h-3 text-emerald-600" />
+                  Supabase Cloud
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                  Historial Local (Hevy)
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-slate-500">
               {analytics.exercises.length} ejercicios detectados en tu historial.
+              {isCloudSyncing && ' (Sincronizando con Supabase...)'}
             </p>
           </div>
         </div>
