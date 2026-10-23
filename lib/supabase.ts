@@ -1,8 +1,30 @@
 import { createClient } from '@supabase/supabase-js';
 import { StrengthRoutine, WorkoutExerciseBlock } from './types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+function cleanSupabaseUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  let url = rawUrl.trim();
+
+  // Si pegaron la URL del panel de control de Supabase (ej: https://supabase.com/dashboard/project/xyz...)
+  const dashboardMatch = url.match(/supabase\.com\/dashboard\/project\/([a-z0-9_-]+)/i);
+  if (dashboardMatch && dashboardMatch[1]) {
+    return `https://${dashboardMatch[1]}.supabase.co`;
+  }
+
+  // Si pegaron solo el identificador del proyecto (ej: xyzabcdef)
+  if (!url.startsWith('http://') && !url.startsWith('https://') && url.length > 5 && !url.includes('.')) {
+    return `https://${url}.supabase.co`;
+  }
+
+  // Eliminar barras finales o rutas como /rest/v1 o /auth/v1
+  url = url.replace(/\/+$/, '');
+  url = url.replace(/\/(rest|auth)\/v1\/?$/, '');
+  return url;
+}
+
+const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseUrl = cleanSupabaseUrl(rawSupabaseUrl);
+const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
 
 export const isSupabaseConfigured = () => {
   return Boolean(supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('placeholder'));
