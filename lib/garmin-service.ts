@@ -7,6 +7,7 @@ import {
 } from 'garminconnect-js';
 import { EXERCISES } from 'garminconnect-js/exercises';
 import { StrengthRoutine, GarminAccountStatus } from './types';
+import { EXERCISE_CATALOG } from './exercise-catalog';
 
 function getTokensPath() {
   return path.join(process.cwd(), 'tokens');
@@ -41,6 +42,46 @@ export async function getGarminStatus(): Promise<GarminAccountStatus> {
   }
 }
 
+/**
+ * Garantiza que category y name existan en el diccionario oficial EXERCISES de garminconnect-js
+ */
+export function resolveValidGarminExercise(
+  exerciseId: string,
+  category: string,
+  garminName: string
+): { category: string; name: string } {
+  const dict = EXERCISES as Record<string, readonly string[]>;
+
+  // 1. Buscar en el catálogo actualizado por ID
+  const catalogMatch = EXERCISE_CATALOG.find((e) => e.id === exerciseId);
+  if (catalogMatch && dict[catalogMatch.category]?.includes(catalogMatch.garminName)) {
+    return {
+      category: catalogMatch.category,
+      name: catalogMatch.garminName
+    };
+  }
+
+  // 2. Comprobar si category y garminName ya son válidos directamente
+  if (dict[category]?.includes(garminName)) {
+    return { category, name: garminName };
+  }
+
+  // 3. Buscar garminName en cualquier categoría de EXERCISES
+  for (const [catKey, names] of Object.entries(dict)) {
+    if (Array.isArray(names) && names.includes(garminName)) {
+      return { category: catKey, name: garminName };
+    }
+  }
+
+  // 4. Si la categoría existe pero el nombre no, usar el primer ejercicio válido de esa categoría
+  if (dict[category] && Array.isArray(dict[category]) && dict[category].length > 0) {
+    return { category, name: dict[category][0] };
+  }
+
+  // 5. Fallback seguro garantizado
+  return { category: 'BENCH_PRESS', name: 'BARBELL_BENCH_PRESS' };
+}
+
 export async function syncRoutineToGarmin(routine: StrengthRoutine) {
   const garmin = await getGarminClient();
   if (!garmin) {
@@ -60,6 +101,12 @@ export async function syncRoutineToGarmin(routine: StrengthRoutine) {
 
   // Bloques de ejercicios
   routine.blocks.forEach((block) => {
+    const validEx = resolveValidGarminExercise(
+      block.exercise.id,
+      block.exercise.category,
+      block.exercise.garminName
+    );
+
     steps.push({
       type: 'repeat',
       times: block.sets,
@@ -68,10 +115,7 @@ export async function syncRoutineToGarmin(routine: StrengthRoutine) {
           type: 'interval',
           reps: block.reps,
           weightKg: block.weightKg,
-          exercise: {
-            category: block.exercise.category,
-            name: block.exercise.garminName
-          }
+          exercise: validEx
         },
         {
           type: 'rest',

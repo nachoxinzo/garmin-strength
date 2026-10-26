@@ -1,4 +1,4 @@
-import { matchHevyExerciseToGarmin } from './hevy-mapper';
+import { mapHevyToGarminCatalog } from './hevy-mapper';
 import { StrengthRoutine, WorkoutExerciseBlock } from './types';
 
 export interface ParsedHevyWorkout {
@@ -10,45 +10,76 @@ export interface ParsedHevyWorkout {
   routine: StrengthRoutine;
 }
 
+interface RawSetEntry {
+  setType: string;
+  reps: number;
+  weightKg: number;
+}
+
 export function parseHevyCSV(csvContent: string): ParsedHevyWorkout[] {
-  const lines = csvContent.split(/\r?\n/).filter(line => line.trim().length > 0);
+  const lines = csvContent.split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) return [];
 
+  // Detectar delimitador automáticamente (coma o punto y coma)
+  const headerLine = lines[0];
+  const delimiter =
+    (headerLine.match(/;/g) || []).length > (headerLine.match(/,/g) || []).length ? ';' : ',';
+
   // Parse header
-  const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
-  const titleIdx = headers.indexOf('title');
-  const startTimeIdx = headers.indexOf('start_time');
-  const exerciseTitleIdx = headers.indexOf('exercise_title');
-  const setTypeIdx = headers.indexOf('set_type');
-  const weightIdx = headers.indexOf('weight_kg');
-  const repsIdx = headers.indexOf('reps');
+  const headers = parseCSVLine(headerLine, delimiter).map((h) => h.trim().toLowerCase());
+  const titleIdx = headers.findIndex((h) => h === 'title' || h === 'titulo' || h === 'título');
+  const startTimeIdx = headers.findIndex((h) => h === 'start_time' || h === 'fecha_inicio' || h === 'date');
+  const exerciseTitleIdx = headers.findIndex(
+    (h) => h === 'exercise_title' || h === 'ejercicio' || h === 'exercise'
+  );
+  const setTypeIdx = headers.findIndex((h) => h === 'set_type' || h === 'tipo_serie' || h === 'type');
+  const weightKgIdx = headers.findIndex((h) => h === 'weight_kg' || h === 'peso_kg' || h === 'weight');
+  const weightLbsIdx = headers.findIndex((h) => h === 'weight_lbs' || h === 'peso_lbs');
+  const repsIdx = headers.findIndex((h) => h === 'reps' || h === 'repeticiones');
 
   if (exerciseTitleIdx === -1) {
     throw new Error('El archivo CSV no contiene la columna obligatoria "exercise_title" de Hevy.');
   }
 
   // Agrupar filas por entrenamiento (Workout ID = title + startTime)
-  const workoutsMap = new Map<string, {
-    title: string;
-    startTime: string;
-    exercises: Map<string, { sets: number; reps: number[]; weights: number[] }>;
-  }>();
+  const workoutsMap = new Map<
+    string,
+    {
+      title: string;
+      startTime: string;
+      exercises: Map<string, RawSetEntry[]>;
+    }
+  >();
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = parseCSVLine(lines[i]);
+    const cols = parseCSVLine(lines[i], delimiter);
     if (cols.length <= exerciseTitleIdx) continue;
 
-    const title = titleIdx !== -1 && cols[titleIdx] ? cols[titleIdx].trim() : 'Entrenamiento Hevy';
-    const startTime = startTimeIdx !== -1 && cols[startTimeIdx] ? cols[startTimeIdx].trim() : '';
+    const title =
+      titleIdx !== -1 && cols[titleIdx] ? cols[titleIdx].trim() : 'Entrenamiento Hevy';
+    const startTime =
+      startTimeIdx !== -1 && cols[startTimeIdx] ? cols[startTimeIdx].trim() : '';
     const exerciseTitle = cols[exerciseTitleIdx]?.trim();
     if (!exerciseTitle) continue;
 
-    const setType = setTypeIdx !== -1 ? cols[setTypeIdx]?.trim().toLowerCase() : 'normal';
-    // Ignorar calentamientos si se desea, o contarlos como series de trabajo
-    const weight = weightIdx !== -1 ? parseFloat(cols[weightIdx]) || 0 : 0;
-    const reps = repsIdx !== -1 ? parseInt(cols[repsIdx]) || 10 : 10;
+    const setType =
+      setTypeIdx !== -1 && cols[setTypeIdx]
+        ? cols[setTypeIdx].trim().toLowerCase()
+        : 'normal';
 
-    const workoutKey = `${title}_${startTime.slice(0, 10)}`;
+    let weightKg = 0;
+    if (weightKgIdx !== -1 && cols[weightKgIdx]) {
+      weightKg = parseFloat(cols[weightKgIdx].replace(',', '.')) || 0;
+    } else if (weightLbsIdx !== -1 && cols[weightLbsIdx]) {
+      const lbs = parseFloat(cols[weightLbsIdx].replace(',', '.')) || 0;
+      weightKg = Math.round(lbs * 0.45359237 * 100) / 100;
+    }
+
+    const reps =
+      repsIdx !== -1 && cols[repsIdx] ? parseInt(cols[repsIdx], 10) || 10 : 10;
+
+    // Clave única por sesión (Título + Fecha/Hora exacta de inicio de esa sesión)
+    const workoutKey = `${title}_${startTime || i}`;
 
     if (!workoutsMap.has(workoutKey)) {
       workoutsMap.set(workoutKey, {
@@ -60,17 +91,14 @@ export function parseHevyCSV(csvContent: string): ParsedHevyWorkout[] {
 
     const currentWorkout = workoutsMap.get(workoutKey)!;
     if (!currentWorkout.exercises.has(exerciseTitle)) {
-      currentWorkout.exercises.set(exerciseTitle, {
-        sets: 0,
-        reps: [],
-        weights: []
-      });
+      currentWorkout.exercises.set(exerciseTitle, []);
     }
 
-    const exData = currentWorkout.exercises.get(exerciseTitle)!;
-    exData.sets += 1;
-    exData.reps.push(reps);
-    exData.weights.push(weight);
+    currentWorkout.exercises.get(exerciseTitle)!.push({
+      setType,
+      reps,
+      weightKg
+    });
   }
 
   // Convertir cada workout agrupado en una StrengthRoutine compatible con Garmin
@@ -78,28 +106,44 @@ export function parseHevyCSV(csvContent: string): ParsedHevyWorkout[] {
 
   workoutsMap.forEach((wData, key) => {
     const blocks: WorkoutExerciseBlock[] = [];
+    let exIdx = 0;
 
-    wData.exercises.forEach((exData, exTitle) => {
-      const garminExercise = matchHevyExerciseToGarmin(exTitle);
-      
-      // Calcular promedio o valor más frecuente de reps y peso
-      const avgReps = exData.reps.length > 0 
-        ? Math.round(exData.reps.reduce((a, b) => a + b, 0) / exData.reps.length) 
-        : 10;
-      const maxWeight = exData.weights.length > 0 ? Math.max(...exData.weights) : 0;
+    wData.exercises.forEach((rawSets, exTitle) => {
+      const garminExercise = mapHevyToGarminCatalog(exTitle);
+
+      // Filtrar series de calentamiento para obtener las series efectivas de trabajo
+      const workingSets = rawSets.filter((s) => s.setType !== 'warmup');
+      const effectiveSets = workingSets.length > 0 ? workingSets : rawSets;
+
+      const avgReps =
+        effectiveSets.length > 0
+          ? Math.max(
+              1,
+              Math.round(
+                effectiveSets.reduce((acc, s) => acc + (s.reps || 10), 0) /
+                  effectiveSets.length
+              )
+            )
+          : 10;
+
+      const maxWeight =
+        effectiveSets.length > 0
+          ? Math.max(0, ...effectiveSets.map((s) => s.weightKg || 0))
+          : 0;
 
       blocks.push({
-        id: `hevy-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        id: `hevy-csv-${exIdx++}-${Date.now()}`,
         exercise: garminExercise,
-        sets: Math.max(1, exData.sets),
+        sets: Math.max(1, effectiveSets.length),
         reps: avgReps,
-        weightKg: maxWeight,
-        suggestedWeightKg: maxWeight,
+        weightKg: Math.round(maxWeight * 100) / 100,
+        suggestedWeightKg:
+          maxWeight > 0 ? Math.round((maxWeight + 2.5) * 100) / 100 : undefined,
         restSeconds: 90
       });
     });
 
-    const safeName = (wData.title || 'Hevy Workout').slice(0, 16);
+    const safeName = (wData.title || 'Hevy Workout').slice(0, 28);
 
     const routine: StrengthRoutine = {
       id: `hevy-${key}`,
@@ -122,8 +166,8 @@ export function parseHevyCSV(csvContent: string): ParsedHevyWorkout[] {
   return result;
 }
 
-// Parser simple para líneas CSV respetando comillas
-function parseCSVLine(text: string): string[] {
+// Parser para líneas CSV respetando comillas y delimitador configurable
+function parseCSVLine(text: string, delimiter: string = ','): string[] {
   const result: string[] = [];
   let cur = '';
   let inQuotes = false;
@@ -132,7 +176,7 @@ function parseCSVLine(text: string): string[] {
     const c = text[i];
     if (c === '"') {
       inQuotes = !inQuotes;
-    } else if (c === ',' && !inQuotes) {
+    } else if (c === delimiter && !inQuotes) {
       result.push(cur.replace(/^"|"$/g, '').trim());
       cur = '';
     } else {
