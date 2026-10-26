@@ -88,6 +88,8 @@ export default function WorkoutStudioPage() {
   const [isHevyModalOpen, setIsHevyModalOpen] = useState(false);
   const [hevyTab, setHevyTab] = useState<'api' | 'csv'>('api');
   const [hevyApiKey, setHevyApiKey] = useState('');
+  const [isHevyKeySaved, setIsHevyKeySaved] = useState(false);
+  const [isEditingHevyKey, setIsEditingHevyKey] = useState(false);
   const [isLoadingHevyApi, setIsLoadingHevyApi] = useState(false);
   const [hevyApiRoutines, setHevyApiRoutines] = useState<any[]>([]);
   const [hevyCsvWorkouts, setHevyCsvWorkouts] = useState<ParsedHevyWorkout[]>([]);
@@ -138,8 +140,9 @@ export default function WorkoutStudioPage() {
         setRoutine(JSON.parse(saved));
       }
       const savedHevyKey = localStorage.getItem('hevy_api_key');
-      if (savedHevyKey) {
-        setHevyApiKey(savedHevyKey);
+      if (savedHevyKey && savedHevyKey.trim()) {
+        setHevyApiKey(savedHevyKey.trim());
+        setIsHevyKeySaved(true);
       }
     } catch (e) {
       // ignore
@@ -156,6 +159,21 @@ export default function WorkoutStudioPage() {
     try {
       const profile = await getCurrentUserProfile();
       setCurrentUser(profile);
+
+      // Si el usuario tiene guardada su Hevy API Key en su cuenta de Supabase, sincronizarla automáticamente
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const cloudHevyKey = user?.user_metadata?.hevy_api_key;
+        if (cloudHevyKey && typeof cloudHevyKey === 'string' && cloudHevyKey.trim()) {
+          setHevyApiKey(cloudHevyKey.trim());
+          setIsHevyKeySaved(true);
+          try {
+            localStorage.setItem('hevy_api_key', cloudHevyKey.trim());
+          } catch {
+            // ignore
+          }
+        }
+      }
     } catch (e) {
       // ignore
     }
@@ -480,25 +498,41 @@ export default function WorkoutStudioPage() {
   };
 
   // --- HEVY: Obtener rutinas de la API ---
-  const fetchHevyRoutines = async () => {
-    if (!hevyApiKey.trim()) {
-      setHevyError('Introduce tu API Key de Hevy.');
-      return;
-    }
+  const fetchHevyRoutines = async (overrideKey?: string) => {
+    const keyToUse = (overrideKey !== undefined ? overrideKey : hevyApiKey).trim();
 
     setIsLoadingHevyApi(true);
     setHevyError(null);
     setSelectedRoutineIds([]);
 
     try {
-      localStorage.setItem('hevy_api_key', hevyApiKey.trim());
-      const res = await fetch(`/api/hevy/routines?apiKey=${encodeURIComponent(hevyApiKey.trim())}`);
+      if (keyToUse) {
+        try {
+          localStorage.setItem('hevy_api_key', keyToUse);
+        } catch {
+          // ignore
+        }
+        // Guardar también en la cuenta de Supabase del usuario para no volver a pedirla en ningún dispositivo
+        if (supabase) {
+          supabase.auth.updateUser({ data: { hevy_api_key: keyToUse } }).catch(() => {});
+        }
+      }
+
+      const query = keyToUse ? `?apiKey=${encodeURIComponent(keyToUse)}` : '';
+      const res = await fetch(`/api/hevy/routines${query}`);
       const data = await res.json();
 
       if (!res.ok) {
+        if (!keyToUse) {
+          setIsEditingHevyKey(true);
+        }
         throw new Error(data.error || 'Error al consultar rutinas en Hevy');
       }
 
+      if (keyToUse) {
+        setIsHevyKeySaved(true);
+        setIsEditingHevyKey(false);
+      }
       setHevyApiRoutines(data.routines || []);
       if (data.routines?.length === 0) {
         setHevyError('No se encontraron rutinas en tu cuenta de Hevy.');
@@ -509,6 +543,13 @@ export default function WorkoutStudioPage() {
       setIsLoadingHevyApi(false);
     }
   };
+
+  // Auto-cargar rutinas de Hevy al abrir el modal si ya hay clave guardada
+  useEffect(() => {
+    if (isHevyModalOpen && hevyTab === 'api' && hevyApiKey.trim() && hevyApiRoutines.length === 0 && !isLoadingHevyApi) {
+      fetchHevyRoutines(hevyApiKey.trim());
+    }
+  }, [isHevyModalOpen, hevyTab]);
 
   // --- HEVY: Procesar archivo CSV subido ---
   const handleCsvFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1544,38 +1585,80 @@ export default function WorkoutStudioPage() {
               {/* PESTAÑA 1: API */}
               {hevyTab === 'api' && (
                 <div className="space-y-4">
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-2">
-                    <p className="font-semibold text-slate-800">¿Cómo obtener tu clave de Hevy?</p>
-                    <p>
-                      1. Inicia sesión en{' '}
-                      <a
-                        href="https://hevy.com/settings?developer"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-blue-600 underline font-medium inline-flex items-center gap-0.5"
-                      >
-                        hevy.com/settings?developer <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </p>
-                    <p>2. Genera o copia tu Developer API Key y pégala a continuación.</p>
-                  </div>
+                  {isHevyKeySaved && !isEditingHevyKey ? (
+                    <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <div>
+                          <p className="text-xs font-bold text-emerald-950">
+                            API Key de Hevy guardada permanentemente
+                          </p>
+                          <p className="text-[11px] text-emerald-700">
+                            Clave activa ({hevyApiKey ? `••••${hevyApiKey.slice(-4)}` : 'Configurada'}) sincronizada en tu navegador y cuenta
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => fetchHevyRoutines()}
+                          disabled={isLoadingHevyApi}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all active:scale-95 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingHevyApi ? 'animate-spin' : ''}`} />
+                          <span>{isLoadingHevyApi ? 'Actualizando...' : 'Actualizar rutinas'}</span>
+                        </button>
+                        <button
+                          onClick={() => setIsEditingHevyKey(true)}
+                          className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 text-xs font-semibold transition-all"
+                        >
+                          Cambiar clave
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-2">
+                        <p className="font-semibold text-slate-800">¿Cómo obtener tu clave de Hevy? (Solo se pide una vez)</p>
+                        <p>
+                          1. Inicia sesión en{' '}
+                          <a
+                            href="https://hevy.com/settings?developer"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 underline font-medium inline-flex items-center gap-0.5"
+                          >
+                            hevy.com/settings?developer <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </p>
+                        <p>2. Genera o copia tu Developer API Key y pégala a continuación. Se guardará en tu perfil para no volver a pedirla.</p>
+                      </div>
 
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      placeholder="Pega aquí tu Hevy API Key..."
-                      value={hevyApiKey}
-                      onChange={e => setHevyApiKey(e.target.value)}
-                      className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
-                    <button
-                      onClick={fetchHevyRoutines}
-                      disabled={isLoadingHevyApi}
-                      className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shrink-0 transition-all active:scale-[0.98] disabled:opacity-50"
-                    >
-                      {isLoadingHevyApi ? 'Buscando...' : 'Buscar Rutinas'}
-                    </button>
-                  </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          placeholder="Pega aquí tu Hevy API Key..."
+                          value={hevyApiKey}
+                          onChange={e => setHevyApiKey(e.target.value)}
+                          className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
+                        <button
+                          onClick={() => fetchHevyRoutines()}
+                          disabled={isLoadingHevyApi}
+                          className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shrink-0 transition-all active:scale-[0.98] disabled:opacity-50"
+                        >
+                          {isLoadingHevyApi ? 'Guardando...' : 'Guardar y Cargar'}
+                        </button>
+                        {isHevyKeySaved && (
+                          <button
+                            onClick={() => setIsEditingHevyKey(false)}
+                            className="px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold shrink-0"
+                          >
+                            Cancelar
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                   {/* Listado de Rutinas de la API */}
                   {hevyApiRoutines.length > 0 && (

@@ -31,7 +31,7 @@ function saveHevyApiKey(apiKey: string) {
     }
     fs.writeFileSync(getHevyTokenFile(), JSON.stringify({ apiKey: apiKey.trim() }, null, 2));
   } catch {
-    // En entornos serverless (Vercel) el sistema de archivos es de solo lectura; el cliente también envía ?apiKey= desde localStorage
+    // En entornos serverless (Vercel) el sistema de archivos es de solo lectura; el cliente persiste en Supabase + localStorage
   }
 }
 
@@ -80,7 +80,7 @@ function extractWorkingSetMetrics(
       ? Math.round(Math.max(...weights) * 100) / 100
       : fallbackLatest?.weightKg || 0;
 
-  // Repeticiones representativas (primera serie efectiva con peso máximo o media de series efectivas)
+  // Repeticiones representativas (media de series efectivas)
   const repsList = effectiveSets
     .map((s) => (typeof s.reps === 'number' && s.reps > 0 ? s.reps : 0))
     .filter((r) => r > 0);
@@ -101,7 +101,7 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const queryKey = searchParams.get('apiKey');
-    const apiKey = queryKey || getHevyApiKey();
+    const apiKey = (queryKey && queryKey.trim()) || getHevyApiKey();
 
     if (!apiKey) {
       return NextResponse.json(
@@ -111,6 +111,11 @@ export async function GET(req: Request) {
         },
         { status: 401 }
       );
+    }
+
+    // Guardar en disco si es posible (entorno local)
+    if (queryKey && queryKey.trim()) {
+      saveHevyApiKey(queryKey.trim());
     }
 
     const headers = {
@@ -165,7 +170,6 @@ export async function GET(req: Request) {
         const workoutsList = workoutsData.workouts || [];
         recentWorkouts.push(...workoutsList);
 
-        // Recorrer de más reciente a más antiguo; guardar solo la aparición más reciente de cada ejercicio
         for (const w of workoutsList) {
           for (const ex of (w.exercises || []) as HevyExerciseEntry[]) {
             const metrics = extractWorkingSetMetrics(ex.sets);
@@ -193,8 +197,8 @@ export async function GET(req: Request) {
       // Continuar si el endpoint de workouts falla
     }
 
-    // 3. Transformar las rutinas de Hevy al modelo de Garmin Fénix 8
-    const mappedRoutines: StrengthRoutine[] = allRawRoutines.map((r: any, idx: number) => {
+    // 3. Transformar las rutinas de Hevy al formato esperado por el editor y Garmin Fénix 8
+    const mappedRoutines: any[] = allRawRoutines.map((r: any, idx: number) => {
       const blocks: WorkoutExerciseBlock[] = (r.exercises || []).map(
         (ex: HevyExerciseEntry, exIdx: number) => {
           const tplId = ex.exercise_template_id || '';
@@ -215,23 +219,33 @@ export async function GET(req: Request) {
             sets: setsCount,
             reps,
             weightKg,
-            suggestedWeightKg:
-              weightKg > 0 ? Math.round((weightKg + 2.5) * 100) / 100 : undefined,
+            suggestedWeightKg: weightKg > 0 ? weightKg : undefined,
             restSeconds
           };
         }
       );
 
-      return {
+      const cleanTitle = (r.title || `Rutina Hevy ${idx + 1}`).trim();
+      const routineObj: StrengthRoutine = {
         id: `hevy-routine-${r.id || idx}`,
-        name: (r.title || `Rutina Hevy ${idx + 1}`).slice(0, 28),
+        name: cleanTitle.slice(0, 28),
         warmupSeconds: 300,
         cooldownSeconds: 180,
         blocks
       };
+
+      return {
+        id: routineObj.id,
+        title: cleanTitle,
+        name: routineObj.name,
+        exerciseCount: blocks.length,
+        totalSets: blocks.reduce((acc, b) => acc + b.sets, 0),
+        blocks,
+        routine: routineObj
+      };
     });
 
-    // 4. Si el usuario no tiene rutinas guardadas en /v1/routines pero sí entrenamientos en /v1/workouts,
+    // 4. Si el usuario no tiene rutinas en /v1/routines pero sí entrenamientos en /v1/workouts,
     // convertir sus entrenamientos recientes en rutinas importables para Garmin
     if (mappedRoutines.length === 0 && recentWorkouts.length > 0) {
       recentWorkouts.forEach((w: any, idx: number) => {
@@ -247,8 +261,7 @@ export async function GET(req: Request) {
               sets: setsCount,
               reps,
               weightKg,
-              suggestedWeightKg:
-                weightKg > 0 ? Math.round((weightKg + 2.5) * 100) / 100 : undefined,
+              suggestedWeightKg: weightKg > 0 ? weightKg : undefined,
               restSeconds:
                 typeof ex.rest_seconds === 'number' && ex.rest_seconds > 0 ? ex.rest_seconds : 90
             };
@@ -256,12 +269,23 @@ export async function GET(req: Request) {
         );
 
         if (blocks.length > 0) {
-          mappedRoutines.push({
+          const cleanTitle = (w.title || `Entreno Hevy ${idx + 1}`).trim();
+          const routineObj: StrengthRoutine = {
             id: `hevy-workout-${w.id || idx}`,
-            name: (w.title || `Entreno Hevy ${idx + 1}`).slice(0, 28),
+            name: cleanTitle.slice(0, 28),
             warmupSeconds: 300,
             cooldownSeconds: 180,
             blocks
+          };
+
+          mappedRoutines.push({
+            id: routineObj.id,
+            title: cleanTitle,
+            name: routineObj.name,
+            exerciseCount: blocks.length,
+            totalSets: blocks.reduce((acc, b) => acc + b.sets, 0),
+            blocks,
+            routine: routineObj
           });
         }
       });
