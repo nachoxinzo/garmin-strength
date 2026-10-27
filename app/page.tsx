@@ -42,6 +42,7 @@ import { encodeRoutineToShareUrl } from '@/lib/share-utils';
 import ProgressDashboard from '@/components/ProgressDashboard';
 import SocialDashboard from '@/components/SocialDashboard';
 import AuthModal from '@/components/AuthModal';
+import GarminAuthModal from '@/components/GarminAuthModal';
 import ExerciseSwapModal from '@/components/ExerciseSwapModal';
 import WorkoutGeneratorModal from '@/components/WorkoutGeneratorModal';
 import { UserProfile, getCurrentUserProfile } from '@/lib/social-service';
@@ -65,6 +66,8 @@ export default function WorkoutStudioPage() {
   const [currentMainTab, setCurrentMainTab] = useState<'studio' | 'progress' | 'social'>('studio');
   const [routine, setRoutine] = useState<StrengthRoutine>(DEFAULT_ROUTINE);
   const [accountStatus, setAccountStatus] = useState<GarminAccountStatus | null>(null);
+  const [garminTokens, setGarminTokens] = useState<any>(null);
+  const [isGarminAuthModalOpen, setIsGarminAuthModalOpen] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -144,6 +147,12 @@ export default function WorkoutStudioPage() {
         setHevyApiKey(savedHevyKey.trim());
         setIsHevyKeySaved(true);
       }
+      const savedGarminTokens = localStorage.getItem('garmin_oauth_tokens');
+      if (savedGarminTokens) {
+        const parsedTokens = JSON.parse(savedGarminTokens);
+        setGarminTokens(parsedTokens);
+        checkGarminStatus(parsedTokens);
+      }
     } catch (e) {
       // ignore
     }
@@ -155,12 +164,25 @@ export default function WorkoutStudioPage() {
     };
   }, []);
 
+  const persistGarminTokens = (tokens: any) => {
+    if (!tokens) return;
+    setGarminTokens(tokens);
+    try {
+      localStorage.setItem('garmin_oauth_tokens', JSON.stringify(tokens));
+    } catch {
+      // ignore
+    }
+    if (supabase) {
+      supabase.auth.updateUser({ data: { garmin_tokens: tokens } }).catch(() => {});
+    }
+  };
+
   const loadUserProfile = async () => {
     try {
       const profile = await getCurrentUserProfile();
       setCurrentUser(profile);
 
-      // Si el usuario tiene guardada su Hevy API Key en su cuenta de Supabase, sincronizarla automáticamente
+      // Si el usuario tiene guardada su Hevy API Key o Tokens de Garmin en su cuenta de Supabase, sincronizarlos automáticamente
       if (supabase) {
         const { data: { user } } = await supabase.auth.getUser();
         const cloudHevyKey = user?.user_metadata?.hevy_api_key;
@@ -172,6 +194,17 @@ export default function WorkoutStudioPage() {
           } catch {
             // ignore
           }
+        }
+
+        const cloudGarminTokens = user?.user_metadata?.garmin_tokens;
+        if (cloudGarminTokens && cloudGarminTokens.oauth1 && cloudGarminTokens.oauth2) {
+          setGarminTokens(cloudGarminTokens);
+          try {
+            localStorage.setItem('garmin_oauth_tokens', JSON.stringify(cloudGarminTokens));
+          } catch {
+            // ignore
+          }
+          checkGarminStatus(cloudGarminTokens);
         }
       }
     } catch (e) {
@@ -284,12 +317,20 @@ export default function WorkoutStudioPage() {
     setSelectedRoutineIds([]);
   }, [hevyTab]);
 
-  const checkGarminStatus = async () => {
+  const checkGarminStatus = async (overrideTokens?: any) => {
     setIsCheckingStatus(true);
     try {
-      const res = await fetch('/api/garmin/status');
+      const tokensToSend = overrideTokens !== undefined ? overrideTokens : garminTokens;
+      const res = await fetch('/api/garmin/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ garminTokens: tokensToSend })
+      });
       const data = await res.json();
       setAccountStatus(data);
+      if (data?.authenticated && data?.tokens) {
+        persistGarminTokens(data.tokens);
+      }
     } catch (err) {
       console.error(err);
       setAccountStatus({ authenticated: false });
@@ -420,6 +461,11 @@ export default function WorkoutStudioPage() {
       return;
     }
 
+    if (!accountStatus?.authenticated && !garminTokens) {
+      setIsGarminAuthModalOpen(true);
+      return;
+    }
+
     setIsSyncing(true);
     setStatusMessage(null);
 
@@ -427,14 +473,22 @@ export default function WorkoutStudioPage() {
       const res = await fetch('/api/garmin/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ routine })
+        body: JSON.stringify({ routine, garminTokens })
       });
 
       const data = await res.json();
 
       if (!res.ok) {
+        if (String(data.error || '').toLowerCase().includes('sesión activa de garmin')) {
+          setIsGarminAuthModalOpen(true);
+        }
         throw new Error(data.error || 'Error al sincronizar con Garmin');
       }
+
+      if (data.tokens) {
+        persistGarminTokens(data.tokens);
+      }
+      setAccountStatus(prev => ({ ...prev, authenticated: true }));
 
       setStatusMessage({
         type: 'success',
@@ -626,13 +680,20 @@ export default function WorkoutStudioPage() {
       const res = await fetch('/api/garmin/sync-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ routines: routinesToSync })
+        body: JSON.stringify({ routines: routinesToSync, garminTokens })
       });
 
       const data = await res.json();
 
       if (!res.ok) {
+        if (String(data.error || '').toLowerCase().includes('sesión activa de garmin')) {
+          setIsGarminAuthModalOpen(true);
+        }
         throw new Error(data.error || 'Error durante la sincronización múltiple');
+      }
+
+      if (data.tokens) {
+        persistGarminTokens(data.tokens);
       }
 
       setIsHevyModalOpen(false);
@@ -752,22 +813,30 @@ export default function WorkoutStudioPage() {
               </span>
             </button>
 
-            {/* Estado de Garmin Watch */}
+            {/* Estado / Botón de Cuenta Garmin Connect */}
             {accountStatus?.authenticated ? (
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs font-medium" title="Reloj Garmin vinculado">
+              <button
+                onClick={() => setIsGarminAuthModalOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 text-emerald-800 text-xs font-medium transition-all active:scale-[0.98]"
+                title="Cuenta Garmin Connect vinculada (clic para gestionar)"
+              >
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="hidden md:inline">Garmin:</span>
-                <span className="font-semibold truncate max-w-[90px]">{accountStatus.displayName || 'Fénix 8'}</span>
-              </div>
+                <span className="font-semibold truncate max-w-[110px]">{accountStatus.displayName || 'Fénix 8'}</span>
+              </button>
             ) : (
-              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-xs font-medium" title="Sincronización con Garmin Fénix 8">
-                <Watch className="w-3.5 h-3.5 text-slate-500" />
-                <span>Garmin Fénix 8</span>
-              </div>
+              <button
+                onClick={() => setIsGarminAuthModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-all active:scale-[0.98]"
+                title="Conectar cuenta de Garmin Connect"
+              >
+                <Watch className="w-3.5 h-3.5" />
+                <span>Conectar Garmin</span>
+              </button>
             )}
 
             <button
-              onClick={checkGarminStatus}
+              onClick={() => checkGarminStatus()}
               disabled={isCheckingStatus}
               title="Comprobar estado de conexión"
               className="p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition-all duration-150 active:scale-[0.98]"
@@ -863,58 +932,60 @@ export default function WorkoutStudioPage() {
 
         {/* Panel Superior: Título de Rutina, Métricas y Acciones Rápidas */}
         <section className="bg-white rounded-xl border border-slate-200/90 p-5 sm:p-6 mb-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)]">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-            <div className="flex-1">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-                Nombre de la Sesión en el Reloj (Máx 16 car.)
-              </label>
-              <input
-                type="text"
-                maxLength={16}
-                value={routine.name}
-                onChange={e => setRoutine({ ...routine, name: e.target.value })}
-                className="w-full text-xl sm:text-2xl font-bold text-slate-900 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 transition-all outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                placeholder="Ej: Push Dia 1 F8"
-              />
-            </div>
+          <div className="space-y-4">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div className="flex-1 min-w-[260px]">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                  Nombre de la Sesión en el Reloj (Máx 16 car.)
+                </label>
+                <input
+                  type="text"
+                  maxLength={16}
+                  value={routine.name}
+                  onChange={e => setRoutine({ ...routine, name: e.target.value })}
+                  className="w-full text-xl sm:text-2xl font-bold text-slate-900 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 transition-all outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  placeholder="Ej: Push Dia 1 F8"
+                />
+              </div>
 
-            {/* Acciones de Sesión */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setIsGeneratorModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all active:scale-[0.98]"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Generador Científico</span>
-              </button>
-
-              <button
-                onClick={() => setIsHevyModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 transition-all active:scale-[0.98]"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-orange-600" />
-                <span>Cargar de Hevy</span>
-              </button>
-              <button
-                onClick={handleSaveToCloud}
-                disabled={isCloudSaving || routine.blocks.length === 0}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all active:scale-[0.98] disabled:opacity-50"
-              >
-                <Cloud className="w-3.5 h-3.5" />
-                <span>{isCloudSaving ? 'Guardando...' : 'Guardar en Supabase'}</span>
-              </button>
-              {routine.blocks.length > 0 && (
+              {/* Acciones de Sesión */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={resetToNewRoutine}
-                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 transition-all active:scale-[0.98]"
+                  onClick={() => setIsGeneratorModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all active:scale-[0.98]"
                 >
-                  Vaciar sesión
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Generador Científico</span>
                 </button>
-              )}
+
+                <button
+                  onClick={() => setIsHevyModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 transition-all active:scale-[0.98]"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-orange-600" />
+                  <span>Cargar de Hevy</span>
+                </button>
+                <button
+                  onClick={handleSaveToCloud}
+                  disabled={isCloudSaving || routine.blocks.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all active:scale-[0.98] disabled:opacity-50"
+                >
+                  <Cloud className="w-3.5 h-3.5" />
+                  <span>{isCloudSaving ? 'Guardando...' : 'Guardar en Supabase'}</span>
+                </button>
+                {routine.blocks.length > 0 && (
+                  <button
+                    onClick={resetToNewRoutine}
+                    className="px-3 py-2 text-xs font-medium rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 transition-all active:scale-[0.98]"
+                  >
+                    Vaciar sesión
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Adaptación de Cargas / Factor Amigo */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-slate-100 lg:border-t-0 lg:pt-0">
+            <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-slate-100">
               <span className="text-xs text-slate-500 font-medium mr-1">Adaptar cargas:</span>
               <button
                 onClick={() => scaleRoutineWeights(1.0)}
@@ -1942,6 +2013,37 @@ export default function WorkoutStudioPage() {
         onClose={() => setIsAuthModalOpen(false)}
         currentUser={currentUser}
         onAuthChange={loadUserProfile}
+      />
+
+      {/* --- MODAL DE CONEXIÓN GARMIN CONNECT --- */}
+      <GarminAuthModal
+        isOpen={isGarminAuthModalOpen}
+        onClose={() => setIsGarminAuthModalOpen(false)}
+        accountStatus={accountStatus}
+        onAuthSuccess={data => {
+          setAccountStatus({
+            authenticated: true,
+            displayName: data.displayName,
+            username: data.username
+          });
+          if (data.tokens) {
+            persistGarminTokens(data.tokens);
+          }
+          setStatusMessage({
+            type: 'success',
+            text: `¡Cuenta Garmin Connect (${data.displayName || 'Fénix 8'}) vinculada y guardada permanentemente!`
+          });
+          setTimeout(() => setStatusMessage(null), 4000);
+        }}
+        onDisconnect={() => {
+          setAccountStatus({ authenticated: false });
+          setGarminTokens(null);
+          try {
+            localStorage.removeItem('garmin_oauth_tokens');
+          } catch {
+            // ignore
+          }
+        }}
       />
 
       {/* --- MODAL GENERADOR CIENTÍFICO DE RUTINAS --- */}

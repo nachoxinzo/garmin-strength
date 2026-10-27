@@ -14,3 +14,16 @@ export async function GET() {
     );
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const status = await getGarminStatus(body.garminTokens || null);
+    return NextResponse.json(status);
+  } catch (error: any) {
+    return NextResponse.json(
+      { authenticated: false, error: error.message },
+      { status: 500 }
+    );
+  }
+}

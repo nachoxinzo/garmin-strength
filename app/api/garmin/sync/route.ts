@@ -8,6 +8,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const routine: StrengthRoutine = body.routine;
+    const garminTokens = body.garminTokens || null;
 
     if (!routine || !routine.name || !routine.blocks || routine.blocks.length === 0) {
       return NextResponse.json(
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await syncRoutineToGarmin(routine);
+    const result = await syncRoutineToGarmin(routine, garminTokens);
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('Error syncing routine:', error);

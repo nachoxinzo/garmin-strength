@@ -8,6 +8,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const routines: StrengthRoutine[] = body.routines;
+    let currentTokens = body.garminTokens || null;
 
     if (!Array.isArray(routines) || routines.length === 0) {
       return NextResponse.json(
@@ -26,7 +27,10 @@ export async function POST(req: Request) {
     for (let i = 0; i < routines.length; i++) {
       const routine = routines[i];
       try {
-        const res = await syncRoutineToGarmin(routine);
+        const res = await syncRoutineToGarmin(routine, currentTokens);
+        if (res.tokens) {
+          currentTokens = res.tokens;
+        }
         results.push({
           workoutId: res.workoutId,
           workoutName: res.workoutName || routine.name,
@@ -41,20 +45,20 @@ export async function POST(req: Request) {
         });
       }
 
-      // Pequeña pausa de 400ms entre llamadas consecutivas para proteger contra rate limit de Garmin
       if (i < routines.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 400));
+        await new Promise((resolve) => setTimeout(resolve, 400));
       }
     }
 
-    const totalSuccess = results.filter(r => r.success).length;
-    const totalFailed = results.filter(r => !r.success).length;
+    const totalSuccess = results.filter((r) => r.success).length;
+    const totalFailed = results.filter((r) => !r.success).length;
 
     return NextResponse.json({
       success: totalSuccess > 0,
       totalSuccess,
       totalFailed,
-      results
+      results,
+      tokens: currentTokens
     });
   } catch (error: any) {
     console.error('Error en sync-batch:', error);
