@@ -33,7 +33,14 @@ import {
   Sparkles,
   Swords,
   User,
-  Shuffle
+  Shuffle,
+  X,
+  Minus,
+  Layers,
+  Repeat,
+  Timer,
+  SlidersHorizontal,
+  Activity
 } from 'lucide-react';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { StrengthRoutine, WorkoutExerciseBlock, GarminAccountStatus } from '@/lib/types';
@@ -741,38 +748,38 @@ export default function WorkoutStudioPage() {
   const muscleGroups = ['Todos', 'Pecho', 'Espalda', 'Piernas', 'Hombros', 'Brazos', 'Core'];
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-28 bg-background text-foreground">
       {/* Barra de Navegación Superior */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-xs border-b border-slate-200/90 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)]">
+      <header className="sticky top-0 z-30 bg-card/95 backdrop-blur-md border-b border-border/60 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shrink-0">
               <Dumbbell className="w-5 h-5" strokeWidth={2} />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-slate-900 tracking-tight text-base sm:text-lg">
+                <span className="font-semibold text-foreground tracking-tight text-base sm:text-lg truncate">
                   Garmin Strength Studio
                 </span>
-                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                  <Watch className="w-3 h-3 text-slate-600" />
+                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border/60 shrink-0">
+                  <Watch className="w-3 h-3 text-blue-600" />
                   Fénix 8
                 </span>
               </div>
-              <p className="text-xs text-slate-500">Planificador de entrenamientos nativos</p>
+              <p className="text-xs text-muted-foreground truncate">Planificador de entrenamientos nativos</p>
             </div>
           </div>
 
-          {/* Botón Importar Hevy & Compartir & Estado de Garmin Connect */}
-          <div className="flex items-center gap-2">
+          {/* Botones de Acción Global & Estado de Garmin Connect */}
+          <div className="flex items-center gap-2 shrink-0">
             {isSupabaseAvailable && (
               <button
                 onClick={() => setIsCloudRoutinesModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold transition-all active:scale-[0.98]"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
               >
                 <Cloud className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">Mis Rutinas</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-emerald-200 text-emerald-800 text-[10px] font-bold">
+                <span className="hidden md:inline">Mis Rutinas</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900 text-[10px] font-bold tabular-nums">
                   {cloudRoutines.length}
                 </span>
               </button>
@@ -780,35 +787,35 @@ export default function WorkoutStudioPage() {
 
             <button
               onClick={() => setIsShareModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold transition-all active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
             >
               <Share2 className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="hidden sm:inline">Compartir</span>
+              <span className="hidden md:inline">Compartir</span>
             </button>
 
             <button
               onClick={() => setIsHevyModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 text-xs font-semibold transition-all active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-orange-600" />
-              <span>Importar Hevy</span>
+              <span className="hidden sm:inline">Importar Hevy</span>
             </button>
 
             {/* Botón de Perfil de Atleta */}
             <button
               onClick={() => setIsAuthModalOpen(true)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-[0.98] ${
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] ${
                 currentUser
-                  ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 shadow-xs'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
+                  ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200/80 shadow-xs'
+                  : 'bg-muted/70 hover:bg-muted text-foreground border border-border/60'
               }`}
             >
               {currentUser ? (
                 <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse shrink-0" />
               ) : (
-                <User className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               )}
-              <span className="truncate max-w-[120px]">
+              <span className="truncate max-w-[110px]">
                 {currentUser ? currentUser.display_name : 'Iniciar Sesión'}
               </span>
             </button>
@@ -817,17 +824,17 @@ export default function WorkoutStudioPage() {
             {accountStatus?.authenticated ? (
               <button
                 onClick={() => setIsGarminAuthModalOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 text-emerald-800 text-xs font-medium transition-all active:scale-[0.98]"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 text-emerald-800 text-xs font-medium transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
                 title="Cuenta Garmin Connect vinculada (clic para gestionar)"
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="hidden md:inline">Garmin:</span>
+                <span className="hidden lg:inline">Garmin:</span>
                 <span className="font-semibold truncate max-w-[110px]">{accountStatus.displayName || 'Fénix 8'}</span>
               </button>
             ) : (
               <button
                 onClick={() => setIsGarminAuthModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-all active:scale-[0.98]"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
                 title="Conectar cuenta de Garmin Connect"
               >
                 <Watch className="w-3.5 h-3.5" />
@@ -839,7 +846,7 @@ export default function WorkoutStudioPage() {
               onClick={() => checkGarminStatus()}
               disabled={isCheckingStatus}
               title="Comprobar estado de conexión"
-              className="p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition-all duration-150 active:scale-[0.98]"
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/60 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
             >
               <RefreshCw className={`w-4 h-4 ${isCheckingStatus ? 'animate-spin' : ''}`} />
             </button>
@@ -847,16 +854,16 @@ export default function WorkoutStudioPage() {
         </div>
       </header>
 
-      {/* Sub-barra de Navegación de Pestañas (Mobile-First & SaaS B2B) */}
-      <div className="bg-white border-b border-slate-200/90 shadow-[0_1px_2px_0_rgba(15,23,42,0.02)] sticky top-16 z-20">
+      {/* Sub-barra de Navegación de Pestañas */}
+      <div className="bg-card border-b border-border/60 shadow-xs sticky top-16 z-20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between">
-          <nav className="flex items-center gap-1 sm:gap-2">
+          <nav className="flex items-center gap-2 sm:gap-4 overflow-x-auto">
             <button
               onClick={() => setCurrentMainTab('studio')}
-              className={`flex items-center gap-2 py-3 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-150 ${
+              className={`flex items-center gap-2 py-3.5 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap ${
                 currentMainTab === 'studio'
                   ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
               }`}
             >
               <Dumbbell className="w-4 h-4" />
@@ -865,10 +872,10 @@ export default function WorkoutStudioPage() {
 
             <button
               onClick={() => setCurrentMainTab('progress')}
-              className={`flex items-center gap-2 py-3 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-150 ${
+              className={`flex items-center gap-2 py-3.5 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap ${
                 currentMainTab === 'progress'
                   ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
               }`}
             >
               <TrendingUp className="w-4 h-4" />
@@ -877,35 +884,36 @@ export default function WorkoutStudioPage() {
 
             <button
               onClick={() => setCurrentMainTab('social')}
-              className={`flex items-center gap-2 py-3 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-150 ${
+              className={`flex items-center gap-2 py-3.5 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap ${
                 currentMainTab === 'social'
                   ? 'border-indigo-600 text-indigo-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
               }`}
             >
               <Swords className="w-4 h-4" />
               <span>Amigos & Retos</span>
-              <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/60">
                 Duelos
               </span>
             </button>
           </nav>
 
-          <div className="text-[11px] text-slate-400 font-mono hidden sm:block">
-            Garmin Connect &bull; Fénix 8
+          <div className="text-xs text-muted-foreground font-mono hidden md:flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-blue-600" />
+            <span>Garmin Connect &bull; Fénix 8</span>
           </div>
         </div>
       </div>
 
       {/* Contenido Principal */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-6">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-8 space-y-6">
         {/* Banner de Mensajes de Estado */}
         {statusMessage && (
           <div
-            className={`mb-6 p-4 rounded-xl border flex items-start gap-3 transition-all duration-200 ${
+            className={`p-4 rounded-xl border flex items-start gap-3 shadow-sm transition-all duration-200 ${
               statusMessage.type === 'success'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                : 'bg-rose-50 border-rose-200 text-rose-900'
+                ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
+                : 'bg-rose-50/90 border-rose-200 text-rose-950'
             }`}
           >
             {statusMessage.type === 'success' ? (
@@ -913,12 +921,13 @@ export default function WorkoutStudioPage() {
             ) : (
               <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
             )}
-            <div className="flex-1 text-sm">{statusMessage.text}</div>
+            <div className="flex-1 text-sm font-medium">{statusMessage.text}</div>
             <button
               onClick={() => setStatusMessage(null)}
-              className="text-xs font-medium opacity-70 hover:opacity-100"
+              className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 transition-colors"
+              aria-label="Cerrar notificación"
             >
-              Cerrar
+              <X className="w-4 h-4" />
             </button>
           </div>
         )}
@@ -931,11 +940,11 @@ export default function WorkoutStudioPage() {
           <>
 
         {/* Panel Superior: Título de Rutina, Métricas y Acciones Rápidas */}
-        <section className="bg-white rounded-xl border border-slate-200/90 p-5 sm:p-6 mb-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)]">
-          <div className="space-y-4">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <section className="bg-card rounded-2xl border border-border/60 p-6 sm:p-8 shadow-sm transition-all duration-200">
+          <div className="space-y-6">
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
               <div className="flex-1 min-w-[260px]">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                   Nombre de la Sesión en el Reloj (Máx 16 car.)
                 </label>
                 <input
@@ -943,118 +952,131 @@ export default function WorkoutStudioPage() {
                   maxLength={16}
                   value={routine.name}
                   onChange={e => setRoutine({ ...routine, name: e.target.value })}
-                  className="w-full text-xl sm:text-2xl font-bold text-slate-900 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 transition-all outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  className="w-full text-xl sm:text-2xl font-semibold text-foreground bg-muted/40 hover:bg-muted/60 focus:bg-card border border-border/60 rounded-xl px-4 py-3 transition-all duration-200 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   placeholder="Ej: Push Dia 1 F8"
                 />
               </div>
 
               {/* Acciones de Sesión */}
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   onClick={() => setIsGeneratorModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all active:scale-[0.98]"
+                  className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
                   <span>Generador Científico</span>
                 </button>
 
                 <button
                   onClick={() => setIsHevyModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 transition-all active:scale-[0.98]"
+                  className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/80 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-orange-600" />
+                  <FileSpreadsheet className="w-4 h-4 text-orange-600" />
                   <span>Cargar de Hevy</span>
                 </button>
                 <button
                   onClick={handleSaveToCloud}
                   disabled={isCloudSaving || routine.blocks.length === 0}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all active:scale-[0.98] disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50"
                 >
-                  <Cloud className="w-3.5 h-3.5" />
+                  <Cloud className="w-4 h-4" />
                   <span>{isCloudSaving ? 'Guardando...' : 'Guardar en Supabase'}</span>
                 </button>
                 {routine.blocks.length > 0 && (
                   <button
                     onClick={resetToNewRoutine}
-                    className="px-3 py-2 text-xs font-medium rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 transition-all active:scale-[0.98]"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-muted/60 hover:bg-rose-50 hover:text-rose-700 text-muted-foreground border border-border/60 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
                   >
-                    Vaciar sesión
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Vaciar sesión</span>
                   </button>
                 )}
               </div>
             </div>
 
             {/* Adaptación de Cargas / Factor Amigo */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-slate-100">
-              <span className="text-xs text-slate-500 font-medium mr-1">Adaptar cargas:</span>
+            <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-border/60">
+              <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground font-medium mr-1">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
+                <span>Adaptar cargas:</span>
+              </div>
               <button
                 onClick={() => scaleRoutineWeights(1.0)}
                 title="Restablecer al 100% de los pesos de Hevy"
-                className="px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all active:scale-95"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-muted/60 hover:bg-muted text-foreground border border-border/60 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
               >
                 100% Hevy
               </button>
               <button
                 onClick={() => scaleRoutineWeights(0.85)}
                 title="Ajustar al 85% para un compañero"
-                className="px-2.5 py-1 text-xs font-semibold rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/60 transition-all active:scale-95"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/70 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
               >
                 85% (Amigo)
               </button>
               <button
                 onClick={() => scaleRoutineWeights(0.75)}
                 title="Ajustar al 75%"
-                className="px-2.5 py-1 text-xs font-semibold rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/60 transition-all active:scale-95"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/70 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
               >
                 75%
               </button>
               <button
                 onClick={() => adjustAllWeightsDelta(5)}
                 title="Añadir +5kg a todos los ejercicios"
-                className="px-2 py-1 text-xs font-semibold rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 transition-all active:scale-95"
+                className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/70 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
               >
-                +5kg
+                +5 kg
               </button>
               <button
                 onClick={() => adjustAllWeightsDelta(-5)}
                 title="Restar -5kg a todos los ejercicios"
-                className="px-2 py-1 text-xs font-semibold rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 transition-all active:scale-95"
+                className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/70 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
               >
-                -5kg
+                -5 kg
               </button>
             </div>
           </div>
 
           {/* Estadísticas de la Sesión */}
-          <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-6 pt-5 border-t border-slate-100">
-            <div className="bg-slate-50 rounded-lg p-3 sm:p-4 border border-slate-200/60">
-              <div className="text-xs text-slate-500 font-medium">Ejercicios</div>
-              <div className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums mt-0.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-border/60">
+            <div className="bg-muted/30 hover:bg-muted/50 rounded-xl p-4 sm:p-5 border border-border/60 transition-all duration-200">
+              <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
+                <span>Ejercicios</span>
+                <Layers className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="text-2xl font-semibold text-foreground tabular-nums mt-1">
                 {routine.blocks.length}
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-lg p-3 sm:p-4 border border-slate-200/60">
-              <div className="text-xs text-slate-500 font-medium">Series Totales</div>
-              <div className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums mt-0.5">
+            <div className="bg-muted/30 hover:bg-muted/50 rounded-xl p-4 sm:p-5 border border-border/60 transition-all duration-200">
+              <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
+                <span>Series Totales</span>
+                <Repeat className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div className="text-2xl font-semibold text-foreground tabular-nums mt-1">
                 {totalSets}
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-lg p-3 sm:p-4 border border-slate-200/60">
-              <div className="text-xs text-slate-500 font-medium">Tiempo Estimado</div>
-              <div className="text-xl sm:text-2xl font-bold text-slate-900 tabular-nums mt-0.5">
+            <div className="bg-muted/30 hover:bg-muted/50 rounded-xl p-4 sm:p-5 border border-border/60 transition-all duration-200">
+              <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
+                <span>Tiempo Estimado</span>
+                <Timer className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="text-2xl font-semibold text-foreground tabular-nums mt-1">
                 ~{estimatedMinutes} min
               </div>
             </div>
           </div>
 
           {/* Configuración de Calentamiento y Enfriamiento */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100 text-sm">
-            <div className="flex items-center justify-between bg-slate-50/70 p-3 rounded-lg border border-slate-200/60">
-              <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-border/60 text-sm">
+            <div className="flex items-center justify-between bg-muted/30 hover:bg-muted/50 p-4 rounded-xl border border-border/60 transition-all duration-200">
+              <div className="flex items-center gap-2.5">
                 <Flame className="w-4 h-4 text-amber-500" />
-                <span className="font-medium text-slate-700">Calentamiento</span>
+                <span className="font-semibold text-foreground">Calentamiento</span>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -1063,16 +1085,16 @@ export default function WorkoutStudioPage() {
                   step={30}
                   value={routine.warmupSeconds}
                   onChange={e => setRoutine({ ...routine, warmupSeconds: Math.max(0, parseInt(e.target.value) || 0) })}
-                  className="w-18 px-2 py-1 text-center font-mono font-semibold bg-white border border-slate-200 rounded text-slate-800"
+                  className="w-20 px-2.5 py-1.5 text-center font-mono font-semibold bg-card border border-border/60 rounded-lg text-foreground tabular-nums"
                 />
-                <span className="text-xs text-slate-500 font-medium">seg ({Math.round(routine.warmupSeconds / 60)}m)</span>
+                <span className="text-xs text-muted-foreground font-medium">seg ({Math.round(routine.warmupSeconds / 60)}m)</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between bg-slate-50/70 p-3 rounded-lg border border-slate-200/60">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between bg-muted/30 hover:bg-muted/50 p-4 rounded-xl border border-border/60 transition-all duration-200">
+              <div className="flex items-center gap-2.5">
                 <Clock className="w-4 h-4 text-blue-500" />
-                <span className="font-medium text-slate-700">Enfriamiento</span>
+                <span className="font-semibold text-foreground">Enfriamiento</span>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -1081,9 +1103,9 @@ export default function WorkoutStudioPage() {
                   step={30}
                   value={routine.cooldownSeconds}
                   onChange={e => setRoutine({ ...routine, cooldownSeconds: Math.max(0, parseInt(e.target.value) || 0) })}
-                  className="w-18 px-2 py-1 text-center font-mono font-semibold bg-white border border-slate-200 rounded text-slate-800"
+                  className="w-20 px-2.5 py-1.5 text-center font-mono font-semibold bg-card border border-border/60 rounded-lg text-foreground tabular-nums"
                 />
-                <span className="text-xs text-slate-500 font-medium">seg ({Math.round(routine.cooldownSeconds / 60)}m)</span>
+                <span className="text-xs text-muted-foreground font-medium">seg ({Math.round(routine.cooldownSeconds / 60)}m)</span>
               </div>
             </div>
           </div>
@@ -1091,292 +1113,314 @@ export default function WorkoutStudioPage() {
 
         {/* Lista de Ejercicios */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-base font-semibold text-slate-800 tracking-tight">
-              Estructura de Ejercicios ({routine.blocks.length})
-            </h2>
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base sm:text-lg font-semibold text-foreground tracking-tight">
+                Estructura de Ejercicios ({routine.blocks.length})
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Configura series, repeticiones, peso objetivo y descansos para tu reloj Garmin
+              </p>
+            </div>
+            <div className="flex items-center gap-2.5">
               <button
                 onClick={() => setIsHevyModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98]"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-card hover:bg-muted/50 text-foreground border border-border/60 text-xs sm:text-sm font-semibold shadow-2xs transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
               >
                 <FileSpreadsheet className="w-4 h-4 text-orange-600" />
-                Desde Hevy
+                <span>Desde Hevy</span>
               </button>
 
               <button
                 onClick={() => setIsSelectorOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold shadow-sm transition-all active:scale-[0.98]"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
               >
                 <Plus className="w-4 h-4" />
-                Añadir Ejercicio
+                <span>Añadir Ejercicio</span>
               </button>
             </div>
           </div>
 
           {routine.blocks.length === 0 ? (
-            <div className="bg-white rounded-xl border border-dashed border-slate-300 p-12 text-center">
-              <Dumbbell className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <p className="text-base font-medium text-slate-700">No hay ejercicios en la rutina</p>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                Puedes añadir ejercicios manualmente o importar tus entrenamientos directamente desde Hevy.
+            <div className="bg-card rounded-2xl border border-dashed border-border p-12 text-center shadow-sm">
+              <div className="w-12 h-12 rounded-2xl bg-muted/60 border border-border/60 flex items-center justify-center mx-auto mb-4 text-muted-foreground">
+                <Dumbbell className="w-6 h-6" />
+              </div>
+              <p className="text-base font-semibold text-foreground">No hay ejercicios en la rutina</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+                Añade ejercicios del catálogo oficial de Garmin, genera una sesión científica o importa tus entrenamientos desde Hevy.
               </p>
-              <div className="flex items-center justify-center gap-3 mt-4">
+              <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+                <button
+                  onClick={() => setIsGeneratorModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition-all duration-200 hover:-translate-y-0.5"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Generador Científico</span>
+                </button>
                 <button
                   onClick={() => setIsHevyModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 text-xs font-semibold hover:bg-orange-100"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-xs font-semibold hover:bg-orange-100 transition-all duration-200 hover:-translate-y-0.5"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
-                  Importar desde Hevy
+                  <span>Importar desde Hevy</span>
                 </button>
                 <button
                   onClick={() => setIsSelectorOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5"
                 >
                   <Plus className="w-4 h-4" />
-                  Explorar Catálogo Garmin
+                  <span>Explorar Catálogo Garmin</span>
                 </button>
               </div>
             </div>
           ) : (
-            routine.blocks.map((block, index) => (
-              <div
-                key={block.id}
-                className="bg-white rounded-xl border border-slate-200/90 p-4 sm:p-5 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] transition-all hover:border-slate-300"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0">
-                      {index + 1}
-                    </span>
-                    <div>
-                      <h3 className="font-semibold text-slate-900 text-base sm:text-lg">
-                        {block.exercise.name}
-                      </h3>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs font-medium px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/60">
-                          {block.exercise.muscleGroup}
-                        </span>
-                        <span className="text-[11px] text-slate-400 font-mono">
-                          {block.exercise.garminName}
-                        </span>
+            <div className="space-y-4">
+              {routine.blocks.map((block, index) => (
+                <div
+                  key={block.id}
+                  className="bg-card rounded-2xl border border-border/60 p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-border"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <span className="w-8 h-8 rounded-xl bg-muted text-foreground font-semibold text-xs flex items-center justify-center shrink-0 border border-border/60 tabular-nums">
+                        {index + 1}
+                      </span>
+                      <div>
+                        <h3 className="font-semibold text-foreground text-base sm:text-lg">
+                          {block.exercise.name}
+                        </h3>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <span className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/60">
+                            {block.exercise.muscleGroup}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground font-mono">
+                            {block.exercise.garminName}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Acciones de bloque */}
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <button
+                        onClick={() => {
+                          setSwappingBlockIndex(index);
+                          setIsSwapModalOpen(true);
+                        }}
+                        title="Máquina ocupada: Cambiar por ejercicio similar"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                      >
+                        <Shuffle className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="hidden sm:inline">Sustituir</span>
+                      </button>
+
+                      <button
+                        onClick={() => moveBlock(index, 'up')}
+                        disabled={index === 0}
+                        title="Mover arriba"
+                        className="p-2 rounded-lg hover:text-foreground hover:bg-muted/50 disabled:opacity-30 transition-colors"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => moveBlock(index, 'down')}
+                        disabled={index === routine.blocks.length - 1}
+                        title="Mover abajo"
+                        className="p-2 rounded-lg hover:text-foreground hover:bg-muted/50 disabled:opacity-30 transition-colors"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => duplicateBlock(index)}
+                        title="Duplicar ejercicio"
+                        className="p-2 rounded-lg hover:text-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => removeBlock(index)}
+                        title="Eliminar ejercicio"
+                        className="p-2 rounded-lg hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Parámetros de la serie (Series, Reps, Peso, Descanso) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-border/60">
+                    {/* Series */}
+                    <div className="bg-muted/30 p-3.5 rounded-xl border border-border/60">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                        Series
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => updateBlock(index, { sets: Math.max(1, block.sets - 1) })}
+                          className="w-9 h-9 rounded-lg bg-card border border-border/60 text-foreground flex items-center justify-center hover:bg-muted/50 transition-all duration-200 active:scale-95"
+                          aria-label="Reducir series"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={block.sets}
+                          onChange={e => updateBlock(index, { sets: Math.max(1, parseInt(e.target.value) || 1) })}
+                          className="w-full text-center font-semibold text-foreground bg-transparent text-base tabular-nums"
+                        />
+                        <button
+                          onClick={() => updateBlock(index, { sets: block.sets + 1 })}
+                          className="w-9 h-9 rounded-lg bg-card border border-border/60 text-foreground flex items-center justify-center hover:bg-muted/50 transition-all duration-200 active:scale-95"
+                          aria-label="Aumentar series"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Repeticiones */}
+                    <div className="bg-muted/30 p-3.5 rounded-xl border border-border/60">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                        Reps objetivo
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => updateBlock(index, { reps: Math.max(1, block.reps - 1) })}
+                          className="w-9 h-9 rounded-lg bg-card border border-border/60 text-foreground flex items-center justify-center hover:bg-muted/50 transition-all duration-200 active:scale-95"
+                          aria-label="Reducir repeticiones"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={block.reps}
+                          onChange={e => updateBlock(index, { reps: Math.max(1, parseInt(e.target.value) || 1) })}
+                          className="w-full text-center font-semibold text-foreground bg-transparent text-base tabular-nums"
+                        />
+                        <button
+                          onClick={() => updateBlock(index, { reps: block.reps + 1 })}
+                          className="w-9 h-9 rounded-lg bg-card border border-border/60 text-foreground flex items-center justify-center hover:bg-muted/50 transition-all duration-200 active:scale-95"
+                          aria-label="Aumentar repeticiones"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Carga / Peso en kg con sugerencia de Hevy y ajuste ágil */}
+                    <div className="bg-muted/30 p-3.5 rounded-xl border border-border/60">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Carga (kg)
+                        </label>
+                        {block.suggestedWeightKg !== undefined && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-orange-700 font-bold bg-orange-100/80 px-1.5 py-0.5 rounded border border-orange-200">
+                              Hevy: {block.suggestedWeightKg}k
+                            </span>
+                            {block.weightKg !== block.suggestedWeightKg && (
+                              <button
+                                onClick={() => updateBlock(index, { weightKg: block.suggestedWeightKg })}
+                                title={`Restablecer al peso de Hevy (${block.suggestedWeightKg} kg)`}
+                                className="text-[10px] text-blue-600 hover:underline font-semibold"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => updateBlock(index, { weightKg: Math.max(0, block.weightKg - 5) })}
+                          title="-5 kg"
+                          className="w-8 h-9 rounded-lg bg-card border border-border/60 text-muted-foreground font-semibold hover:text-foreground hover:bg-muted/50 transition-all duration-200 active:scale-95 text-[10px]"
+                        >
+                          -5
+                        </button>
+                        <button
+                          onClick={() => updateBlock(index, { weightKg: Math.max(0, block.weightKg - 2.5) })}
+                          title="-2.5 kg"
+                          className="w-8 h-9 rounded-lg bg-card border border-border/60 text-foreground flex items-center justify-center hover:bg-muted/50 transition-all duration-200 active:scale-95"
+                          aria-label="Restar 2.5 kg"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <input
+                          type="number"
+                          step={0.5}
+                          min={0}
+                          value={block.weightKg}
+                          onChange={e => updateBlock(index, { weightKg: Math.max(0, parseFloat(e.target.value) || 0) })}
+                          className="w-full text-center font-semibold text-foreground bg-transparent text-base tabular-nums"
+                        />
+                        <button
+                          onClick={() => updateBlock(index, { weightKg: block.weightKg + 2.5 })}
+                          title="+2.5 kg"
+                          className="w-8 h-9 rounded-lg bg-card border border-border/60 text-foreground flex items-center justify-center hover:bg-muted/50 transition-all duration-200 active:scale-95"
+                          aria-label="Sumar 2.5 kg"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => updateBlock(index, { weightKg: block.weightKg + 5 })}
+                          title="+5 kg"
+                          className="w-8 h-9 rounded-lg bg-card border border-border/60 text-muted-foreground font-semibold hover:text-foreground hover:bg-muted/50 transition-all duration-200 active:scale-95 text-[10px]"
+                        >
+                          +5
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Descanso posterior */}
+                    <div className="bg-muted/30 p-3.5 rounded-xl border border-border/60">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                        Descanso
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          step={15}
+                          min={0}
+                          value={block.restSeconds}
+                          onChange={e => updateBlock(index, { restSeconds: Math.max(0, parseInt(e.target.value) || 0) })}
+                          className="w-full text-center font-semibold text-foreground bg-card border border-border/60 rounded-lg px-2 py-1.5 text-base tabular-nums"
+                        />
+                        <span className="text-xs text-muted-foreground font-medium">s</span>
                       </div>
                     </div>
                   </div>
-
-                  {/* Acciones de bloque */}
-                  <div className="flex items-center gap-1.5 text-slate-400">
-                    <button
-                      onClick={() => {
-                        setSwappingBlockIndex(index);
-                        setIsSwapModalOpen(true);
-                      }}
-                      title="Máquina ocupada: Cambiar por ejercicio similar"
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-xs font-semibold transition-all active:scale-95"
-                    >
-                      <Shuffle className="w-3.5 h-3.5 text-amber-600" />
-                      <span className="hidden sm:inline">Sustituir</span>
-                    </button>
-
-                    <button
-                      onClick={() => moveBlock(index, 'up')}
-                      disabled={index === 0}
-                      title="Mover arriba"
-                      className="p-1.5 rounded-lg hover:text-slate-800 hover:bg-slate-100 disabled:opacity-30"
-                    >
-                      <ChevronUp className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => moveBlock(index, 'down')}
-                      disabled={index === routine.blocks.length - 1}
-                      title="Mover abajo"
-                      className="p-1.5 rounded-lg hover:text-slate-800 hover:bg-slate-100 disabled:opacity-30"
-                    >
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => duplicateBlock(index)}
-                      title="Duplicar ejercicio"
-                      className="p-1.5 rounded-lg hover:text-slate-800 hover:bg-slate-100"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => removeBlock(index)}
-                      title="Eliminar ejercicio"
-                      className="p-1.5 rounded-lg hover:text-rose-600 hover:bg-rose-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
                 </div>
-
-                {/* Parámetros de la serie (Series, Reps, Peso, Descanso) */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100">
-                  {/* Series */}
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/60">
-                    <label className="block text-[11px] font-semibold uppercase text-slate-500 mb-1">
-                      Series
-                    </label>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => updateBlock(index, { sets: Math.max(1, block.sets - 1) })}
-                        className="w-8 h-8 rounded bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 active:scale-95"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        min={1}
-                        max={10}
-                        value={block.sets}
-                        onChange={e => updateBlock(index, { sets: Math.max(1, parseInt(e.target.value) || 1) })}
-                        className="w-full text-center font-bold text-slate-900 bg-transparent text-base tabular-nums"
-                      />
-                      <button
-                        onClick={() => updateBlock(index, { sets: block.sets + 1 })}
-                        className="w-8 h-8 rounded bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 active:scale-95"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Repeticiones */}
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/60">
-                    <label className="block text-[11px] font-semibold uppercase text-slate-500 mb-1">
-                      Reps objetivo
-                    </label>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => updateBlock(index, { reps: Math.max(1, block.reps - 1) })}
-                        className="w-8 h-8 rounded bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 active:scale-95"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={block.reps}
-                        onChange={e => updateBlock(index, { reps: Math.max(1, parseInt(e.target.value) || 1) })}
-                        className="w-full text-center font-bold text-slate-900 bg-transparent text-base tabular-nums"
-                      />
-                      <button
-                        onClick={() => updateBlock(index, { reps: block.reps + 1 })}
-                        className="w-8 h-8 rounded bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 active:scale-95"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Carga / Peso en kg con sugerencia de Hevy y ajuste ágil */}
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/60">
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[11px] font-semibold uppercase text-slate-500">
-                        Carga (kg)
-                      </label>
-                      {block.suggestedWeightKg !== undefined && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-orange-700 font-bold bg-orange-100/80 px-1.5 py-0.5 rounded border border-orange-200">
-                            Hevy: {block.suggestedWeightKg}k
-                          </span>
-                          {block.weightKg !== block.suggestedWeightKg && (
-                            <button
-                              onClick={() => updateBlock(index, { weightKg: block.suggestedWeightKg })}
-                              title={`Restablecer al peso de Hevy (${block.suggestedWeightKg} kg)`}
-                              className="text-[10px] text-blue-600 hover:underline font-semibold"
-                            >
-                              Reset
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => updateBlock(index, { weightKg: Math.max(0, block.weightKg - 5) })}
-                        title="-5 kg"
-                        className="w-7 h-8 rounded bg-white border border-slate-200 text-slate-500 font-bold hover:bg-slate-100 active:scale-95 text-[10px]"
-                      >
-                        -5
-                      </button>
-                      <button
-                        onClick={() => updateBlock(index, { weightKg: Math.max(0, block.weightKg - 2.5) })}
-                        title="-2.5 kg"
-                        className="w-7 h-8 rounded bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 active:scale-95 text-xs"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        step={0.5}
-                        min={0}
-                        value={block.weightKg}
-                        onChange={e => updateBlock(index, { weightKg: Math.max(0, parseFloat(e.target.value) || 0) })}
-                        className="w-full text-center font-bold text-slate-900 bg-transparent text-base tabular-nums"
-                      />
-                      <button
-                        onClick={() => updateBlock(index, { weightKg: block.weightKg + 2.5 })}
-                        title="+2.5 kg"
-                        className="w-7 h-8 rounded bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 active:scale-95 text-xs"
-                      >
-                        +
-                      </button>
-                      <button
-                        onClick={() => updateBlock(index, { weightKg: block.weightKg + 5 })}
-                        title="+5 kg"
-                        className="w-7 h-8 rounded bg-white border border-slate-200 text-slate-500 font-bold hover:bg-slate-100 active:scale-95 text-[10px]"
-                      >
-                        +5
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Descanso posterior */}
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/60">
-                    <label className="block text-[11px] font-semibold uppercase text-slate-500 mb-1">
-                      Descanso
-                    </label>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        step={15}
-                        min={0}
-                        value={block.restSeconds}
-                        onChange={e => updateBlock(index, { restSeconds: Math.max(0, parseInt(e.target.value) || 0) })}
-                        className="w-full text-center font-bold text-slate-900 bg-white border border-slate-200 rounded px-2 py-1 text-base tabular-nums"
-                      />
-                      <span className="text-xs text-slate-500 font-medium">s</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </section>
 
         {/* Botón flotante inferior de acción */}
-        <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-md border-t border-slate-200/90 py-3.5 px-4 shadow-lg">
-          <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+        <div className="fixed bottom-0 left-0 right-0 z-20 bg-card/95 backdrop-blur-md border-t border-border/60 py-3.5 px-4 shadow-lg">
+          <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
             <div className="hidden sm:block">
-              <span className="text-xs text-slate-500 font-medium block">
-                Sesión: <strong className="text-slate-800">{routine.name}</strong>
+              <span className="text-xs text-muted-foreground font-medium block">
+                Sesión: <strong className="text-foreground">{routine.name}</strong>
               </span>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-muted-foreground tabular-nums">
                 {totalSets} series · ~{estimatedMinutes} min
               </span>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-2.5 w-full sm:w-auto">
               {/* Botón Compartir / Apple Watch */}
               <button
                 onClick={() => setIsShareModalOpen(true)}
                 disabled={routine.blocks.length === 0}
                 title="Compartir con un amigo o Apple Watch"
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-semibold border border-indigo-200 transition-all active:scale-[0.98] disabled:opacity-50 min-h-[44px]"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-semibold border border-indigo-200/80 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 min-h-[44px]"
               >
                 <Share2 className="w-4 h-4 text-indigo-600" />
                 <span className="hidden sm:inline">Compartir</span>
@@ -1386,7 +1430,7 @@ export default function WorkoutStudioPage() {
               <button
                 onClick={handleDownloadFit}
                 disabled={isDownloading || routine.blocks.length === 0}
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold border border-slate-200 transition-all active:scale-[0.98] disabled:opacity-50 min-h-[44px]"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-muted/70 hover:bg-muted text-foreground text-sm font-semibold border border-border/60 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 min-h-[44px]"
               >
                 <Download className={`w-4 h-4 ${isDownloading ? 'animate-bounce' : ''}`} />
                 <span className="hidden sm:inline">Descargar</span> .FIT
@@ -1396,7 +1440,7 @@ export default function WorkoutStudioPage() {
               <button
                 onClick={handleSyncToGarmin}
                 disabled={isSyncing || routine.blocks.length === 0}
-                className="flex-2 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-md shadow-blue-500/20 transition-all active:scale-[0.98] disabled:opacity-50 min-h-[44px]"
+                className="flex-2 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 min-h-[44px]"
               >
                 {isSyncing ? (
                   <>
@@ -1420,30 +1464,31 @@ export default function WorkoutStudioPage() {
       {/* --- MODAL COMPARTIR RUTINA / APPLE WATCH --- */}
       {isShareModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-card rounded-2xl border border-border/60 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Cabecera */}
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
+            <div className="p-6 border-b border-border/60 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
                   <Share2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base sm:text-lg">Compartir Rutina</h3>
-                  <p className="text-xs text-slate-500">Para entrenar juntos con Apple Watch o móvil</p>
+                  <h3 className="font-semibold text-foreground text-base sm:text-lg">Compartir Rutina</h3>
+                  <p className="text-xs text-muted-foreground">Para entrenar juntos con Apple Watch o móvil</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsShareModalOpen(false)}
-                className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 text-sm font-semibold"
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                aria-label="Cerrar"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Contenido */}
-            <div className="p-5 space-y-4 text-sm">
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <div className="p-6 space-y-4 text-sm">
+              <div className="bg-muted/30 p-4 rounded-xl border border-border/60 space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Enlace directo a la sesión
                 </div>
                 <div className="flex items-center gap-2">
@@ -1451,11 +1496,11 @@ export default function WorkoutStudioPage() {
                     type="text"
                     readOnly
                     value={shareUrl}
-                    className="w-full text-xs font-mono bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-700 truncate select-all outline-none"
+                    className="w-full text-xs font-mono bg-card border border-border/60 rounded-lg px-3 py-2 text-foreground truncate select-all outline-none"
                   />
                   <button
                     onClick={handleCopyShareLink}
-                    className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-all shrink-0 active:scale-95 flex items-center gap-1.5"
+                    className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 shrink-0 active:scale-95 flex items-center gap-1.5"
                   >
                     {copiedLink ? (
                       <>
@@ -1473,12 +1518,12 @@ export default function WorkoutStudioPage() {
               </div>
 
               {/* Botones de acción rápida */}
-              <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 <a
                   href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`¡Hola! Te comparto la rutina de hoy (${routine.name}) para entrenar juntos: ${shareUrl}`)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-center"
+                  className="py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 hover:-translate-y-0.5 text-center"
                 >
                   <span>Enviar por WhatsApp</span>
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1488,7 +1533,7 @@ export default function WorkoutStudioPage() {
                   href={shareUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-center"
+                  className="py-2.5 px-3 rounded-xl bg-primary hover:opacity-90 text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 hover:-translate-y-0.5 text-center"
                 >
                   <span>Probar Modo Live</span>
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1496,16 +1541,16 @@ export default function WorkoutStudioPage() {
               </div>
 
               {/* Explicación Apple Watch */}
-              <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-4 text-xs text-slate-700 space-y-2">
-                <div className="flex items-center gap-2 font-bold text-blue-900">
+              <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-4 text-xs text-foreground space-y-2">
+                <div className="flex items-center gap-2 font-semibold text-blue-950">
                   <Watch className="w-4 h-4 text-blue-600" />
                   <span>¿Cómo lo sigue tu amigo con su Apple Watch?</span>
                 </div>
-                <p className="text-slate-600">
-                  1. <strong>En el móvil (Modo Gym Live)</strong>: Al abrir el enlace, tendrá una pantalla táctil para el gimnasio con series, repeticiones y temporizador sonoro/vibratorio de descanso sincronizado.
+                <p className="text-muted-foreground">
+                  1. <strong className="text-foreground">En el móvil (Modo Gym Live)</strong>: Al abrir el enlace, tendrá una pantalla táctil para el gimnasio con series, repeticiones y temporizador sonoro/vibratorio de descanso sincronizado.
                 </p>
-                <p className="text-slate-600">
-                  2. <strong>En su Apple Watch Serie 4</strong>: Puede activar el entreno nativo de <em>&quot;Fuerza Tradicional&quot;</em> para registrar pulsaciones y calorías mientras sigue las series en el móvil, o si tiene <strong>Hevy</strong> en el Apple Watch, importar la rutina directamente.
+                <p className="text-muted-foreground">
+                  2. <strong className="text-foreground">En su Apple Watch Serie 4</strong>: Puede activar el entreno nativo de <em>&quot;Fuerza Tradicional&quot;</em> para registrar pulsaciones y calorías mientras sigue las series en el móvil, o si tiene <strong className="text-foreground">Hevy</strong> en el Apple Watch, importar la rutina directamente.
                 </p>
               </div>
             </div>
@@ -1516,31 +1561,32 @@ export default function WorkoutStudioPage() {
       {/* --- MODAL MIS RUTINAS EN LA NUBE (SUPABASE) --- */}
       {isCloudRoutinesModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center font-bold">
+          <div className="bg-card rounded-2xl border border-border/60 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-border/60 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center font-bold">
                   <Cloud className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">Mis Rutinas en la Nube</h3>
-                  <p className="text-xs text-slate-500">Guardadas permanentemente en tu base de datos Supabase</p>
+                  <h3 className="font-semibold text-foreground text-base">Mis Rutinas en la Nube</h3>
+                  <p className="text-xs text-muted-foreground">Guardadas permanentemente en tu base de datos Supabase</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsCloudRoutinesModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg text-sm"
+                className="text-muted-foreground hover:text-foreground hover:bg-muted/50 p-2 rounded-lg transition-colors"
+                aria-label="Cerrar"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 sm:p-5 max-h-[60vh] overflow-y-auto space-y-3">
+            <div className="p-6 max-h-[60vh] overflow-y-auto space-y-3">
               {cloudRoutines.length === 0 ? (
                 <div className="text-center py-8">
-                  <Cloud className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-slate-700">No hay rutinas guardadas en Supabase</p>
-                  <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                  <Cloud className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-foreground">No hay rutinas guardadas en Supabase</p>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
                     Diseña tu rutina o cárgala de Hevy y pulsa el botón &quot;Guardar en Supabase&quot;.
                   </p>
                 </div>
@@ -1548,11 +1594,11 @@ export default function WorkoutStudioPage() {
                 cloudRoutines.map(r => (
                   <div
                     key={r.id}
-                    className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 flex items-center justify-between gap-3 transition-colors"
+                    className="p-4 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/50 flex items-center justify-between gap-3 transition-all duration-200"
                   >
                     <div>
-                      <h4 className="font-semibold text-slate-900 text-sm">{r.name}</h4>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <h4 className="font-semibold text-foreground text-sm">{r.name}</h4>
+                      <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
                         {r.blocks.length} ejercicios &bull; {r.blocks.reduce((acc, b) => acc + b.sets, 0)} series
                       </p>
                     </div>
@@ -1566,13 +1612,13 @@ export default function WorkoutStudioPage() {
                             text: `Rutina "${r.name}" cargada en el editor.`
                           });
                         }}
-                        className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all active:scale-95"
+                        className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
                       >
                         Cargar
                       </button>
                       <button
                         onClick={() => handleDeleteCloudRoutine(r.id, r.name)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 hover:bg-rose-50 transition-colors"
+                        className="p-2 text-muted-foreground hover:text-rose-600 rounded-lg border border-border/60 hover:bg-rose-50 transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1582,10 +1628,10 @@ export default function WorkoutStudioPage() {
               )}
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <div className="p-4 bg-muted/30 border-t border-border/60 flex justify-end">
               <button
                 onClick={() => setIsCloudRoutinesModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 transition-all"
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-card border border-border/60 hover:bg-muted/50 text-foreground transition-all duration-200"
               >
                 Cerrar
               </button>
@@ -1597,34 +1643,35 @@ export default function WorkoutStudioPage() {
       {/* --- MODAL HEVY (API + CSV) --- */}
       {isHevyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-card rounded-2xl border border-border/60 shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Cabecera del Modal */}
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm">
-                  H
+            <div className="p-6 border-b border-border/60 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                  <Dumbbell className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-lg">Importar Entrenamientos de Hevy</h3>
-                  <p className="text-xs text-slate-500">Selecciona una o varias rutinas para enviarlas a tu Fénix 8</p>
+                  <h3 className="font-semibold text-foreground text-lg">Importar Entrenamientos de Hevy</h3>
+                  <p className="text-xs text-muted-foreground">Selecciona una o varias rutinas para enviarlas a tu Fénix 8</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsHevyModalOpen(false)}
-                className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 text-sm font-semibold"
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                aria-label="Cerrar"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Selector de Pestañas (API vs CSV) */}
-            <div className="flex border-b border-slate-100 bg-slate-50/70 p-2 gap-2">
+            <div className="flex border-b border-border/60 bg-muted/40 p-2 gap-2">
               <button
                 onClick={() => setHevyTab('api')}
-                className={`flex-1 py-2 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
                   hevyTab === 'api'
-                    ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
-                    : 'text-slate-500 hover:text-slate-900'
+                    ? 'bg-card text-foreground shadow-xs border border-border/60'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
               >
                 <Key className="w-4 h-4" />
@@ -1633,10 +1680,10 @@ export default function WorkoutStudioPage() {
 
               <button
                 onClick={() => setHevyTab('csv')}
-                className={`flex-1 py-2 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
                   hevyTab === 'csv'
-                    ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
-                    : 'text-slate-500 hover:text-slate-900'
+                    ? 'bg-card text-foreground shadow-xs border border-border/60'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
               >
                 <FileSpreadsheet className="w-4 h-4" />
@@ -1645,9 +1692,9 @@ export default function WorkoutStudioPage() {
             </div>
 
             {/* Contenido de la pestaña */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {hevyError && (
-                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{hevyError}</span>
                 </div>
@@ -1657,7 +1704,7 @@ export default function WorkoutStudioPage() {
               {hevyTab === 'api' && (
                 <div className="space-y-4">
                   {isHevyKeySaved && !isEditingHevyKey ? (
-                    <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+                    <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <div>
@@ -1673,14 +1720,14 @@ export default function WorkoutStudioPage() {
                         <button
                           onClick={() => fetchHevyRoutines()}
                           disabled={isLoadingHevyApi}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all active:scale-95 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
                         >
                           <RefreshCw className={`w-3.5 h-3.5 ${isLoadingHevyApi ? 'animate-spin' : ''}`} />
                           <span>{isLoadingHevyApi ? 'Actualizando...' : 'Actualizar rutinas'}</span>
                         </button>
                         <button
                           onClick={() => setIsEditingHevyKey(true)}
-                          className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 text-xs font-semibold transition-all"
+                          className="px-2.5 py-1.5 rounded-lg bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border border-border/60 text-xs font-semibold transition-all"
                         >
                           Cambiar clave
                         </button>
@@ -1688,8 +1735,8 @@ export default function WorkoutStudioPage() {
                     </div>
                   ) : (
                     <>
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-2">
-                        <p className="font-semibold text-slate-800">¿Cómo obtener tu clave de Hevy? (Solo se pide una vez)</p>
+                      <div className="bg-muted/30 border border-border/60 rounded-xl p-4 text-xs text-muted-foreground space-y-2">
+                        <p className="font-semibold text-foreground">¿Cómo obtener tu clave de Hevy? (Solo se pide una vez)</p>
                         <p>
                           1. Inicia sesión en{' '}
                           <a
@@ -1710,19 +1757,19 @@ export default function WorkoutStudioPage() {
                           placeholder="Pega aquí tu Hevy API Key..."
                           value={hevyApiKey}
                           onChange={e => setHevyApiKey(e.target.value)}
-                          className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                          className="flex-1 bg-card border border-border/60 rounded-xl px-3.5 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                         />
                         <button
                           onClick={() => fetchHevyRoutines()}
                           disabled={isLoadingHevyApi}
-                          className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shrink-0 transition-all active:scale-[0.98] disabled:opacity-50"
+                          className="px-4 py-2.5 rounded-xl bg-primary hover:opacity-90 text-primary-foreground text-xs font-semibold shrink-0 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50"
                         >
                           {isLoadingHevyApi ? 'Guardando...' : 'Guardar y Cargar'}
                         </button>
                         {isHevyKeySaved && (
                           <button
                             onClick={() => setIsEditingHevyKey(false)}
-                            className="px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold shrink-0"
+                            className="px-3 py-2.5 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground text-xs font-semibold shrink-0"
                           >
                             Cancelar
                           </button>
@@ -1735,7 +1782,7 @@ export default function WorkoutStudioPage() {
                   {hevyApiRoutines.length > 0 && (
                     <div className="space-y-2 mt-4 pt-2">
                       <div className="flex items-center justify-between pb-1">
-                        <span className="text-xs font-semibold uppercase text-slate-500">
+                        <span className="text-xs font-semibold uppercase text-muted-foreground">
                           Rutinas en tu cuenta ({hevyApiRoutines.length})
                         </span>
                         <button
@@ -1748,30 +1795,30 @@ export default function WorkoutStudioPage() {
                         </button>
                       </div>
 
-                      <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white max-h-72 overflow-y-auto">
+                      <div className="divide-y divide-border/60 border border-border/60 rounded-xl overflow-hidden bg-card max-h-72 overflow-y-auto">
                         {hevyApiRoutines.map(r => {
                           const isSelected = selectedRoutineIds.includes(r.id);
                           return (
                             <div
                               key={r.id}
-                              className={`p-3.5 flex items-center justify-between transition-all ${
-                                isSelected ? 'bg-blue-50/70' : 'hover:bg-slate-50'
+                              className={`p-4 flex items-center justify-between transition-all duration-200 ${
+                                isSelected ? 'bg-blue-50/70' : 'hover:bg-muted/50'
                               }`}
                             >
                               <div className="flex items-center gap-3">
                                 <button
                                   onClick={() => toggleSelectRoutine(r.id)}
-                                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
+                                  className="text-muted-foreground hover:text-blue-600 transition-colors p-1"
                                 >
                                   {isSelected ? (
                                     <CheckSquare className="w-5 h-5 text-blue-600" />
                                   ) : (
-                                    <Square className="w-5 h-5 text-slate-300" />
+                                    <Square className="w-5 h-5 text-muted-foreground/50" />
                                   )}
                                 </button>
                                 <div>
-                                  <div className="font-semibold text-slate-900 text-sm">{r.title}</div>
-                                  <div className="text-xs text-slate-500 mt-0.5">
+                                  <div className="font-semibold text-foreground text-sm">{r.title}</div>
+                                  <div className="text-xs text-muted-foreground mt-0.5 tabular-nums">
                                     {r.exerciseCount} ejercicios · {r.totalSets} series
                                   </div>
                                 </div>
@@ -1779,7 +1826,7 @@ export default function WorkoutStudioPage() {
 
                               <button
                                 onClick={() => applyHevyRoutine(r.routine)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-all border border-slate-200"
+                                className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg bg-card hover:bg-muted text-foreground text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 border border-border/60"
                               >
                                 <span>Cargar</span>
                                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1796,23 +1843,23 @@ export default function WorkoutStudioPage() {
               {/* PESTAÑA 2: CSV */}
               {hevyTab === 'csv' && (
                 <div className="space-y-4">
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-1.5">
-                    <p className="font-semibold text-slate-800">Exportar desde la app móvil de Hevy:</p>
-                    <p>1. Abre Hevy en tu teléfono y ve a tu <strong>Perfil</strong>.</p>
-                    <p>2. Toca en el engranaje de <strong>Ajustes</strong> $\rightarrow$ <strong>Export & Import Data</strong>.</p>
-                    <p>3. Pulsa <strong>Export Workouts (CSV)</strong> y sube el archivo descargado aquí.</p>
+                  <div className="bg-muted/30 border border-border/60 rounded-xl p-4 text-xs text-muted-foreground space-y-1.5">
+                    <p className="font-semibold text-foreground">Exportar desde la app móvil de Hevy:</p>
+                    <p>1. Abre Hevy en tu teléfono y ve a tu <strong className="text-foreground">Perfil</strong>.</p>
+                    <p>2. Toca en el engranaje de <strong className="text-foreground">Ajustes</strong> y entra en <strong className="text-foreground">Export & Import Data</strong>.</p>
+                    <p>3. Pulsa <strong className="text-foreground">Export Workouts (CSV)</strong> y sube el archivo descargado aquí.</p>
                   </div>
 
                   {/* Zona de Drop / Input de archivo */}
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-slate-300 hover:border-blue-400 rounded-xl p-6 text-center cursor-pointer bg-slate-50/50 hover:bg-blue-50/30 transition-all"
+                    className="border-2 border-dashed border-border hover:border-blue-400 rounded-xl p-6 text-center cursor-pointer bg-muted/20 hover:bg-blue-50/30 transition-all duration-200"
                   >
-                    <FileSpreadsheet className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-slate-700">
+                    <FileSpreadsheet className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-foreground">
                       Haz clic para seleccionar tu archivo CSV de Hevy
                     </p>
-                    <p className="text-xs text-slate-400 mt-1">workouts.csv exportado desde la app</p>
+                    <p className="text-xs text-muted-foreground mt-1">workouts.csv exportado desde la app</p>
                     <input
                       type="file"
                       ref={fileInputRef}
@@ -1826,7 +1873,7 @@ export default function WorkoutStudioPage() {
                   {hevyCsvWorkouts.length > 0 && (
                     <div className="space-y-2 mt-4 pt-2">
                       <div className="flex items-center justify-between pb-1">
-                        <span className="text-xs font-semibold uppercase text-slate-500">
+                        <span className="text-xs font-semibold uppercase text-muted-foreground">
                           Entrenamientos detectados ({hevyCsvWorkouts.length})
                         </span>
                         <button
@@ -1839,30 +1886,30 @@ export default function WorkoutStudioPage() {
                         </button>
                       </div>
 
-                      <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white max-h-72 overflow-y-auto">
+                      <div className="divide-y divide-border/60 border border-border/60 rounded-xl overflow-hidden bg-card max-h-72 overflow-y-auto">
                         {hevyCsvWorkouts.slice(0, 20).map(w => {
                           const isSelected = selectedRoutineIds.includes(w.id);
                           return (
                             <div
                               key={w.id}
-                              className={`p-3.5 flex items-center justify-between transition-all ${
-                                isSelected ? 'bg-blue-50/70' : 'hover:bg-slate-50'
+                              className={`p-4 flex items-center justify-between transition-all duration-200 ${
+                                isSelected ? 'bg-blue-50/70' : 'hover:bg-muted/50'
                               }`}
                             >
                               <div className="flex items-center gap-3">
                                 <button
                                   onClick={() => toggleSelectRoutine(w.id)}
-                                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
+                                  className="text-muted-foreground hover:text-blue-600 transition-colors p-1"
                                 >
                                   {isSelected ? (
                                     <CheckSquare className="w-5 h-5 text-blue-600" />
                                   ) : (
-                                    <Square className="w-5 h-5 text-slate-300" />
+                                    <Square className="w-5 h-5 text-muted-foreground/50" />
                                   )}
                                 </button>
                                 <div>
-                                  <div className="font-semibold text-slate-900 text-sm">{w.name}</div>
-                                  <div className="text-xs text-slate-500 mt-0.5">
+                                  <div className="font-semibold text-foreground text-sm">{w.name}</div>
+                                  <div className="text-xs text-muted-foreground mt-0.5 tabular-nums">
                                     Fecha: {w.date} · {w.exerciseCount} ejercicios ({w.totalSets} series)
                                   </div>
                                 </div>
@@ -1870,7 +1917,7 @@ export default function WorkoutStudioPage() {
 
                               <button
                                 onClick={() => applyHevyRoutine(w.routine)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-all border border-slate-200"
+                                className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg bg-card hover:bg-muted text-foreground text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 border border-border/60"
                               >
                                 <span>Cargar</span>
                                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1900,7 +1947,7 @@ export default function WorkoutStudioPage() {
                 <button
                   onClick={handleBatchSyncToGarmin}
                   disabled={isBatchSyncing}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold shadow-md transition-all active:scale-[0.98] disabled:opacity-50 shrink-0"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold shadow-md transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 shrink-0"
                 >
                   {isBatchSyncing ? (
                     <>
@@ -1923,33 +1970,34 @@ export default function WorkoutStudioPage() {
       {/* MODAL / SELECTOR DE EJERCICIOS GARMIN */}
       {isSelectorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-card rounded-2xl border border-border/60 shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Cabecera del Modal */}
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+            <div className="p-6 border-b border-border/60 flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-slate-900 text-lg">Catálogo Oficial de Ejercicios Garmin</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <h3 className="font-semibold text-foreground text-lg">Catálogo Oficial de Ejercicios Garmin</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Mapeados directamente a los identificadores del sensor de fuerza de Garmin
                 </p>
               </div>
               <button
                 onClick={() => setIsSelectorOpen(false)}
-                className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 text-sm font-semibold"
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                aria-label="Cerrar"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Barra de Búsqueda y Filtros de Grupo Muscular */}
-            <div className="p-4 bg-slate-50/70 border-b border-slate-100 space-y-3">
+            <div className="p-4 bg-muted/30 border-b border-border/60 space-y-3">
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="Buscar por ejercicio o músculo (ej. banca, sentadilla, dominadas)..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  className="w-full bg-card border border-border/60 rounded-xl pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
 
@@ -1958,10 +2006,10 @@ export default function WorkoutStudioPage() {
                   <button
                     key={group}
                     onClick={() => setSelectedMuscle(group)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all duration-200 ${
                       selectedMuscle === group
                         ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                        : 'bg-card text-muted-foreground border border-border/60 hover:bg-muted/50 hover:text-foreground'
                     }`}
                   >
                     {group}
@@ -1971,9 +2019,9 @@ export default function WorkoutStudioPage() {
             </div>
 
             {/* Lista Scrollable de Ejercicios */}
-            <div className="flex-1 overflow-y-auto p-4 divide-y divide-slate-100">
+            <div className="flex-1 overflow-y-auto p-4 divide-y divide-border/60">
               {filteredCatalog.length === 0 ? (
-                <div className="p-8 text-center text-sm text-slate-500">
+                <div className="p-8 text-center text-sm text-muted-foreground">
                   No se encontraron ejercicios que coincidan con la búsqueda.
                 </div>
               ) : (
@@ -1981,23 +2029,24 @@ export default function WorkoutStudioPage() {
                   <div
                     key={exercise.id}
                     onClick={() => addExercise(exercise)}
-                    className="py-3 px-3 rounded-xl hover:bg-blue-50/60 cursor-pointer flex items-center justify-between gap-4 transition-all group"
+                    className="py-3.5 px-4 rounded-xl hover:bg-muted/50 cursor-pointer flex items-center justify-between gap-4 transition-all duration-200 group"
                   >
                     <div>
-                      <div className="font-semibold text-slate-900 text-sm group-hover:text-blue-600">
+                      <div className="font-semibold text-foreground text-sm group-hover:text-blue-600 transition-colors">
                         {exercise.name}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted text-muted-foreground">
                           {exercise.muscleGroup}
                         </span>
-                        <span className="text-[11px] text-slate-400 font-mono">
+                        <span className="text-[11px] text-muted-foreground font-mono">
                           {exercise.garminName}
                         </span>
                       </div>
                     </div>
-                    <button className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 text-slate-700 text-xs font-semibold transition-all shrink-0">
-                      + Añadir
+                    <button className="px-3.5 py-1.5 rounded-lg bg-card border border-border/60 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 text-foreground text-xs font-semibold transition-all duration-200 shrink-0 inline-flex items-center gap-1">
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Añadir</span>
                     </button>
                   </div>
                 ))
