@@ -31,6 +31,7 @@ import {
   computeLinearTrend,
 } from '@/lib/progress-analyzer';
 import { analyzeWeeklyMuscleBalance, MuscleVolumeStatus } from '@/lib/weekly-volume-analyzer';
+import { loadProgressionHistory } from '@/lib/progressive-overload-engine';
 import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
 import { GarminWellnessCard } from './GarminWellnessCard';
 import {
@@ -54,6 +55,7 @@ export default function ProgressDashboard() {
   const [hasCloudSource, setHasCloudSource] = useState<boolean>(false);
   const [muscleBalance, setMuscleBalance] = useState<MuscleVolumeStatus[]>([]);
   const [garminDates, setGarminDates] = useState<string[]>([]);
+  const [liveVolumeByDate, setLiveVolumeByDate] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setMuscleBalance(analyzeWeeklyMuscleBalance());
@@ -65,6 +67,17 @@ export default function ProgressDashboard() {
           .filter(Boolean)
       );
     }
+
+    // Fusionar sesiones registradas en Entreno en Vivo (localStorage)
+    const liveHistory = loadProgressionHistory();
+    const liveVol: Record<string, number> = {};
+    Object.values(liveHistory).forEach((rec) => {
+      if (rec.lastDate && rec.lastWeightKg > 0 && rec.lastReps > 0 && rec.lastSets > 0) {
+        const vol = rec.lastWeightKg * rec.lastReps * rec.lastSets;
+        liveVol[rec.lastDate] = (liveVol[rec.lastDate] || 0) + vol;
+      }
+    });
+    setLiveVolumeByDate(liveVol);
   }, []);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -169,15 +182,26 @@ export default function ProgressDashboard() {
     );
   }, [analytics.exercises, searchExercise]);
 
+  // Fusionar volumen de Hevy/Supabase con sesiones registradas en Entreno en Vivo
+  const mergedGlobalVolumeByDate = useMemo(() => {
+    const merged: Record<string, number> = { ...analytics.globalVolumeByDate };
+    for (const [date, vol] of Object.entries(liveVolumeByDate)) {
+      if (!merged[date]) {
+        merged[date] = vol;
+      }
+    }
+    return merged;
+  }, [analytics.globalVolumeByDate, liveVolumeByDate]);
+
   // Tendencias globales (tonelaje semanal y mapa de consistencia 84 días)
   const weeklyTonnage = useMemo(
-    () => computeWeeklyTonnageTrend(analytics.globalVolumeByDate, 10),
-    [analytics.globalVolumeByDate]
+    () => computeWeeklyTonnageTrend(mergedGlobalVolumeByDate, 10),
+    [mergedGlobalVolumeByDate]
   );
 
   const consistency = useMemo(
-    () => computeConsistencyHeatmap(analytics.globalVolumeByDate, garminDates),
-    [analytics.globalVolumeByDate, garminDates]
+    () => computeConsistencyHeatmap(mergedGlobalVolumeByDate, garminDates),
+    [mergedGlobalVolumeByDate, garminDates]
   );
 
   // Cálculos para la gráfica SVG interactiva con filtro temporal y regresión lineal
@@ -314,6 +338,9 @@ export default function ProgressDashboard() {
                     }`}
                     style={{ width: `${Math.max(4, pct)}%` }}
                   />
+                </div>
+                <div className="text-[11px] text-muted-foreground tabular-nums">
+                  {m.recordedSets} hechas &middot; {m.plannedSets} planificadas
                 </div>
               </div>
             );
