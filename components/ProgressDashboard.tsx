@@ -25,9 +25,13 @@ import {
 import {
   extractProgressFromHevyCSV,
   ExerciseStatsSummary,
-  ExerciseSessionProgress
+  ExerciseSessionProgress,
+  computeWeeklyTonnageTrend,
+  computeConsistencyHeatmap,
+  computeLinearTrend,
 } from '@/lib/progress-analyzer';
 import { analyzeWeeklyMuscleBalance, MuscleVolumeStatus } from '@/lib/weekly-volume-analyzer';
+import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
 import { GarminWellnessCard } from './GarminWellnessCard';
 import {
   isSupabaseConfigured,
@@ -37,19 +41,30 @@ import {
 } from '@/lib/supabase';
 
 type MetricMode = 'maxWeight' | 'estimated1RM' | 'totalVolume' | 'bestSetVolume';
+type TimeRangeMode = '1M' | '3M' | '6M' | 'ALL';
 
 export default function ProgressDashboard() {
   const [csvRaw, setCsvRaw] = useState<string>('');
   const [selectedExercise, setSelectedExercise] = useState<string>('');
   const [metric, setMetric] = useState<MetricMode>('maxWeight');
+  const [timeRange, setTimeRange] = useState<TimeRangeMode>('ALL');
   const [hoveredPoint, setHoveredPoint] = useState<ExerciseSessionProgress | null>(null);
   const [searchExercise, setSearchExercise] = useState<string>('');
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
   const [hasCloudSource, setHasCloudSource] = useState<boolean>(false);
   const [muscleBalance, setMuscleBalance] = useState<MuscleVolumeStatus[]>([]);
+  const [garminDates, setGarminDates] = useState<string[]>([]);
 
   useEffect(() => {
     setMuscleBalance(analyzeWeeklyMuscleBalance());
+    const snap = loadGarminWellnessSnapshot();
+    if (snap?.recentActivities) {
+      setGarminDates(
+        snap.recentActivities
+          .map((a) => a.startTimeLocal.slice(0, 10))
+          .filter(Boolean)
+      );
+    }
   }, []);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -154,11 +169,32 @@ export default function ProgressDashboard() {
     );
   }, [analytics.exercises, searchExercise]);
 
-  // Cálculos para la gráfica SVG interactiva
+  // Tendencias globales (tonelaje semanal y mapa de consistencia 84 días)
+  const weeklyTonnage = useMemo(
+    () => computeWeeklyTonnageTrend(analytics.globalVolumeByDate, 10),
+    [analytics.globalVolumeByDate]
+  );
+
+  const consistency = useMemo(
+    () => computeConsistencyHeatmap(analytics.globalVolumeByDate, garminDates),
+    [analytics.globalVolumeByDate, garminDates]
+  );
+
+  // Cálculos para la gráfica SVG interactiva con filtro temporal y regresión lineal
   const chartData = useMemo(() => {
     if (!currentStats || currentStats.progression.length === 0) return null;
 
-    const dataPoints = currentStats.progression.map(p => {
+    let filteredProg = currentStats.progression;
+    if (timeRange !== 'ALL') {
+      const daysBack = timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : 180;
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - daysBack);
+      const cutoffIso = cutoff.toISOString().slice(0, 10);
+      const subset = currentStats.progression.filter((p) => p.date >= cutoffIso);
+      if (subset.length > 0) filteredProg = subset;
+    }
+
+    const dataPoints = filteredProg.map(p => {
       let val = 0;
       if (metric === 'maxWeight') val = p.maxWeight;
       else if (metric === 'estimated1RM') val = p.bestEstimated1RM;
@@ -174,14 +210,16 @@ export default function ProgressDashboard() {
     const values = dataPoints.map(d => d.value);
     const minVal = Math.max(0, Math.min(...values) * 0.9);
     const maxVal = Math.max(...values) * 1.08 || 10;
+    const trend = computeLinearTrend(values);
 
     return {
       points: dataPoints,
       minVal,
       maxVal,
-      range: maxVal - minVal || 1
+      range: maxVal - minVal || 1,
+      trend,
     };
-  }, [currentStats, metric]);
+  }, [currentStats, metric, timeRange]);
 
   // Porcentaje de cambio
   const percentageChange = useMemo(() => {
@@ -285,10 +323,151 @@ export default function ProgressDashboard() {
     );
   };
 
+  const renderGlobalTrendsSection = () => {
+    const maxWeekVol = Math.max(1, ...weeklyTonnage.map((w) => w.totalVolumeKg));
+    const latestWeek = weeklyTonnage[weeklyTonnage.length - 1];
+
+    return (
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-left">
+        {/* Tonelaje Semanal */}
+        <div className="bg-card rounded-2xl border border-border/60 p-5 shadow-sm space-y-4">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <BarChart2 className="w-4 h-4 text-blue-600" />
+                <span>Tendencia de Tonelaje Semanal</span>
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Volumen total levantado por semana (últimas {weeklyTonnage.length || 0} semanas)
+              </p>
+            </div>
+            {latestWeek && (
+              <div className="text-right">
+                <div className="text-sm font-black text-foreground tabular-nums">
+                  {latestWeek.totalVolumeKg.toLocaleString('es-ES')} kg
+                </div>
+                {latestWeek.deltaPct !== null && (
+                  <div
+                    className={`text-[11px] font-bold tabular-nums ${
+                      latestWeek.deltaPct >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                    }`}
+                  >
+                    {latestWeek.deltaPct >= 0 ? '+' : ''}
+                    {latestWeek.deltaPct}% vs sem. ant.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {weeklyTonnage.length > 0 ? (
+            <div className="h-36 flex items-end gap-1.5 pt-2">
+              {weeklyTonnage.map((w, idx) => {
+                const heightPct = Math.max(8, Math.round((w.totalVolumeKg / maxWeekVol) * 100));
+                const isLatest = idx === weeklyTonnage.length - 1;
+                return (
+                  <div
+                    key={w.weekKey}
+                    className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full group"
+                    title={`Semana ${w.label}: ${w.totalVolumeKg.toLocaleString('es-ES')} kg (${w.sessionsCount} sesiones)`}
+                  >
+                    <div className="w-full flex-1 flex items-end">
+                      <div
+                        className={`w-full rounded-t-md transition-all duration-300 ${
+                          isLatest
+                            ? 'bg-blue-600'
+                            : 'bg-blue-200 group-hover:bg-blue-400'
+                        }`}
+                        style={{ height: `${heightPct}%` }}
+                      />
+                    </div>
+                    <span className="text-[9px] text-muted-foreground font-medium truncate max-w-full">
+                      {w.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="h-36 flex items-center justify-center rounded-xl bg-muted/30 border border-dashed border-border text-xs text-muted-foreground">
+              Sube tu historial o completa sesiones para ver tu evolución semanal.
+            </div>
+          )}
+        </div>
+
+        {/* Consistencia 12 Semanas (Fuerza + Garmin) */}
+        <div className="bg-card rounded-2xl border border-border/60 p-5 shadow-sm space-y-4">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-emerald-600" />
+                <span>Consistencia (Últimos 84 días)</span>
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Fuerza + actividades multideporte de Garmin
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-right">
+              <div>
+                <div className="text-sm font-black text-foreground tabular-nums">
+                  {consistency.activeLast30Days}d
+                </div>
+                <div className="text-[10px] text-muted-foreground">últimos 30d</div>
+              </div>
+              <div>
+                <div className="text-sm font-black text-blue-600 tabular-nums">
+                  {consistency.avgSessionsPerWeek}/sem
+                </div>
+                <div className="text-[10px] text-muted-foreground">media 12s</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-12 gap-1.5">
+            {Array.from({ length: 12 }).map((_, weekIdx) => (
+              <div key={weekIdx} className="grid grid-rows-7 gap-1.5">
+                {consistency.days.slice(weekIdx * 7, weekIdx * 7 + 7).map((day) => {
+                  const colorClass =
+                    day.strengthVolume > 0 && day.hasGarminSport
+                      ? 'bg-indigo-600'
+                      : day.strengthVolume > 0
+                      ? 'bg-blue-500'
+                      : day.hasGarminSport
+                      ? 'bg-emerald-500'
+                      : 'bg-muted';
+                  return (
+                    <div
+                      key={day.date}
+                      title={`${day.date}${day.strengthVolume > 0 ? ` · Fuerza: ${day.strengthVolume} kg` : ''}${day.hasGarminSport ? ' · Actividad Garmin' : ''}`}
+                      className={`w-full aspect-square rounded-[3px] ${colorClass} transition-transform hover:scale-125`}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-[2px] bg-blue-500" /> Fuerza
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-[2px] bg-emerald-500" /> Cardio / Garmin
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-[2px] bg-indigo-600" /> Doble sesión
+            </span>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
   if (!csvRaw || analytics.exercises.length === 0) {
     return (
       <div className="space-y-6">
         <GarminWellnessCard />
+        {renderGlobalTrendsSection()}
         {renderMuscleBalanceCard()}
         <div className="bg-white rounded-2xl border border-slate-200/90 p-8 sm:p-12 text-center shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] max-w-xl mx-auto my-4 animate-in fade-in duration-150">
         <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-5 border border-blue-100 shadow-xs">
@@ -335,6 +514,7 @@ export default function ProgressDashboard() {
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
       <GarminWellnessCard />
+      {renderGlobalTrendsSection()}
       {renderMuscleBalanceCard()}
       {/* Barra de Origen de Datos */}
       <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -400,7 +580,7 @@ export default function ProgressDashboard() {
               <select
                 value={selectedExercise}
                 onChange={e => setSelectedExercise(e.target.value)}
-                className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
               >
                 {filteredExercises.map(ex => (
                   <option key={ex} value={ex}>
@@ -408,9 +588,6 @@ export default function ProgressDashboard() {
                   </option>
                 ))}
               </select>
-              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs">
-                ▼
-              </div>
             </div>
           </div>
 
@@ -521,26 +698,64 @@ export default function ProgressDashboard() {
 
       {/* Gráfica Interactiva SVG */}
       <div className="bg-white rounded-xl border border-slate-200/90 p-5 sm:p-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-blue-600" />
-              <span>{metricLabels[metric].title}</span>
-            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-blue-600" />
+                <span>{metricLabels[metric].title}</span>
+              </h3>
+              {chartData?.trend && (
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
+                    chartData.trend.isPlateau
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : chartData.trend.direction === 'up'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : chartData.trend.direction === 'down'
+                      ? 'bg-rose-50 text-rose-700 border-rose-200'
+                      : 'bg-slate-100 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  {chartData.trend.isPlateau
+                    ? 'Meseta detectada (3 ses.)'
+                    : `Tendencia: ${chartData.trend.deltaPct >= 0 ? '+' : ''}${chartData.trend.deltaPct}%`}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">{metricLabels[metric].desc}</p>
           </div>
 
-          {hoveredPoint && (
-            <div className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200/80 text-right animate-in fade-in duration-100">
-              <div className="text-xs font-black text-blue-900 tabular-nums">
-                {metric === 'maxWeight' && `${hoveredPoint.maxWeight} kg`}
-                {metric === 'estimated1RM' && `${hoveredPoint.bestEstimated1RM} kg`}
-                {metric === 'totalVolume' && `${hoveredPoint.totalVolume} kg`}
-                {metric === 'bestSetVolume' && `${hoveredPoint.bestSetVolume} kg`}
-              </div>
-              <div className="text-[10px] text-blue-600">{hoveredPoint.formattedDate}</div>
+          <div className="flex items-center gap-2">
+            <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200/60">
+              {(['1M', '3M', '6M', 'ALL'] as TimeRangeMode[]).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setTimeRange(r)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                    timeRange === r
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {r === 'ALL' ? 'Todo' : r}
+                </button>
+              ))}
             </div>
-          )}
+
+            {hoveredPoint && (
+              <div className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200/80 text-right animate-in fade-in duration-100">
+                <div className="text-xs font-black text-blue-900 tabular-nums">
+                  {metric === 'maxWeight' && `${hoveredPoint.maxWeight} kg`}
+                  {metric === 'estimated1RM' && `${hoveredPoint.bestEstimated1RM} kg`}
+                  {metric === 'totalVolume' && `${hoveredPoint.totalVolume} kg`}
+                  {metric === 'bestSetVolume' && `${hoveredPoint.bestSetVolume} kg`}
+                </div>
+                <div className="text-[10px] text-blue-600">{hoveredPoint.formattedDate}</div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Contenedor del Lienzo SVG */}
@@ -599,6 +814,19 @@ export default function ProgressDashboard() {
                   <>
                     {/* Área sombreada */}
                     <path d={areaPath} fill="url(#chartGradient)" />
+
+                    {/* Línea de tendencia (regresión lineal) */}
+                    {chartData.trend && n >= 2 && (
+                      <line
+                        x1={coords[0].x}
+                        y1={240 - ((chartData.trend.startY - chartData.minVal) / chartData.range) * 200}
+                        x2={coords[coords.length - 1].x}
+                        y2={240 - ((chartData.trend.endY - chartData.minVal) / chartData.range) * 200}
+                        stroke="#10B981"
+                        strokeWidth="2"
+                        strokeDasharray="6 4"
+                      />
+                    )}
 
                     {/* Línea principal */}
                     <path

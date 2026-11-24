@@ -207,3 +207,162 @@ function parseCSVLine(text: string): string[] {
   result.push(cur.replace(/^"|"$/g, '').trim());
   return result;
 }
+
+export interface WeeklyTonnagePoint {
+  weekKey: string;
+  label: string;
+  totalVolumeKg: number;
+  sessionsCount: number;
+  deltaPct: number | null;
+}
+
+export interface HeatmapDay {
+  date: string;
+  strengthVolume: number;
+  hasGarminSport: boolean;
+}
+
+export interface LinearTrendResult {
+  slope: number;
+  startY: number;
+  endY: number;
+  direction: 'up' | 'flat' | 'down';
+  deltaPct: number;
+  isPlateau: boolean;
+}
+
+function getIsoWeekMonday(dateStr: string): string | null {
+  const d = new Date(`${dateStr.slice(0, 10)}T12:00:00Z`);
+  if (isNaN(d.getTime())) return null;
+  const day = d.getUTCDay(); // 0=Sun..6=Sat
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Agrupa el volumen global por semana (Lunes-Domingo) para mostrar tendencia de tonelaje.
+ */
+export function computeWeeklyTonnageTrend(
+  globalVolumeByDate: Record<string, number>,
+  maxWeeks = 10
+): WeeklyTonnagePoint[] {
+  const weekMap = new Map<string, { totalVolumeKg: number; sessionsCount: number }>();
+
+  for (const [dateStr, vol] of Object.entries(globalVolumeByDate)) {
+    const weekKey = getIsoWeekMonday(dateStr);
+    if (!weekKey) continue;
+    const prev = weekMap.get(weekKey) || { totalVolumeKg: 0, sessionsCount: 0 };
+    weekMap.set(weekKey, {
+      totalVolumeKg: prev.totalVolumeKg + vol,
+      sessionsCount: prev.sessionsCount + (vol > 0 ? 1 : 0),
+    });
+  }
+
+  const sortedWeeks = Array.from(weekMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-maxWeeks);
+
+  return sortedWeeks.map(([weekKey, stats], idx) => {
+    const d = new Date(`${weekKey}T12:00:00Z`);
+    const label = !isNaN(d.getTime())
+      ? d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+      : weekKey;
+    const prevVol = idx > 0 ? sortedWeeks[idx - 1][1].totalVolumeKg : 0;
+    const deltaPct =
+      idx > 0 && prevVol > 0
+        ? Math.round(((stats.totalVolumeKg - prevVol) / prevVol) * 1000) / 10
+        : null;
+
+    return {
+      weekKey,
+      label,
+      totalVolumeKg: Math.round(stats.totalVolumeKg),
+      sessionsCount: stats.sessionsCount,
+      deltaPct,
+    };
+  });
+}
+
+/**
+ * Construye una matriz de consistencia de los últimos 84 días (12 semanas)
+ * combinando entrenos de fuerza y actividades multideporte de Garmin.
+ */
+export function computeConsistencyHeatmap(
+  globalVolumeByDate: Record<string, number>,
+  garminActivityDates: string[] = []
+): {
+  days: HeatmapDay[];
+  activeLast30Days: number;
+  avgSessionsPerWeek: number;
+} {
+  const garminSet = new Set(garminActivityDates.map((d) => d.slice(0, 10)));
+  const days: HeatmapDay[] = [];
+  const today = new Date();
+  let activeLast30Days = 0;
+  let totalActive84 = 0;
+
+  for (let offset = 83; offset >= 0; offset--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - offset);
+    const iso = d.toISOString().slice(0, 10);
+    const strengthVolume = Math.round(globalVolumeByDate[iso] || 0);
+    const hasGarminSport = garminSet.has(iso);
+    const isActive = strengthVolume > 0 || hasGarminSport;
+
+    if (isActive) {
+      totalActive84++;
+      if (offset < 30) activeLast30Days++;
+    }
+
+    days.push({ date: iso, strengthVolume, hasGarminSport });
+  }
+
+  return {
+    days,
+    activeLast30Days,
+    avgSessionsPerWeek: Math.round((totalActive84 / 12) * 10) / 10,
+  };
+}
+
+/**
+ * Regresión lineal simple + detección de estancamiento (plateau) en las últimas 3 sesiones.
+ */
+export function computeLinearTrend(values: number[]): LinearTrendResult | null {
+  const n = values.length;
+  if (n < 2) return null;
+
+  let sumX = 0;
+  let sumY = 0;
+  let sumXY = 0;
+  let sumXX = 0;
+
+  for (let i = 0; i < n; i++) {
+    sumX += i;
+    sumY += values[i];
+    sumXY += i * values[i];
+    sumXX += i * i;
+  }
+
+  const denom = n * sumXX - sumX * sumX;
+  const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+  const intercept = (sumY - slope * sumX) / n;
+  const startY = intercept;
+  const endY = intercept + slope * (n - 1);
+
+  const deltaPct = startY > 0 ? Math.round(((endY - startY) / startY) * 1000) / 10 : 0;
+  const direction: 'up' | 'flat' | 'down' =
+    deltaPct > 1.5 ? 'up' : deltaPct < -1.5 ? 'down' : 'flat';
+
+  let isPlateau = false;
+  if (n >= 3) {
+    const last3 = values.slice(-3);
+    const max3 = Math.max(...last3);
+    const min3 = Math.min(...last3);
+    if (max3 > 0 && (max3 - min3) / max3 <= 0.015) {
+      isPlateau = true;
+    }
+  }
+
+  return { slope, startY, endY, direction, deltaPct, isPlateau };
+}
