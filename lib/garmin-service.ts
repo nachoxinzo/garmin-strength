@@ -197,7 +197,8 @@ export async function loginToGarminAccount(email: string, password: string) {
 }
 
 export async function resumeGarminMfaLogin(code: string, mfaStateFromClient?: any) {
-  const stateToUse = mfaStateFromClient || pendingMfaState;
+  const stateToUse =
+    mfaStateFromClient || (process.env.NODE_ENV !== 'production' ? pendingMfaState : null);
   if (!stateToUse) {
     throw new Error('La sesión de verificación MFA ha expirado. Vuelve a introducir tu email y contraseña.');
   }

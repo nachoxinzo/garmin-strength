@@ -70,6 +70,7 @@ export default function ProgressDashboard() {
   const [loadingActivityId, setLoadingActivityId] = useState<number | null>(null);
   const [activityDetailError, setActivityDetailError] = useState<string | null>(null);
   const [liveVolumeByDate, setLiveVolumeByDate] = useState<Record<string, number>>({});
+  const [confirmClearHistory, setConfirmClearHistory] = useState<boolean>(false);
 
   useEffect(() => {
     setMuscleBalance(analyzeWeeklyMuscleBalance());
@@ -176,14 +177,13 @@ export default function ProgressDashboard() {
   };
 
   const handleClearHistory = () => {
-    if (window.confirm('¿Seguro que deseas eliminar los datos de entrenamiento guardados?')) {
-      setCsvRaw('');
-      setSelectedExercise('');
-      try {
-        localStorage.removeItem('hevy_raw_csv_cache');
-      } catch (e) {
-        // ignore
-      }
+    setCsvRaw('');
+    setSelectedExercise('');
+    setConfirmClearHistory(false);
+    try {
+      localStorage.removeItem('hevy_raw_csv_cache');
+    } catch (e) {
+      // ignore
     }
   };
 
@@ -910,7 +910,7 @@ export default function ProgressDashboard() {
       />
         {renderGlobalTrendsSection()}
         {renderMuscleBalanceCard()}
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-8 sm:p-12 text-center shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] max-w-xl mx-auto my-4 animate-in fade-in duration-150">
+        <div className="bg-card rounded-2xl border border-border/80 p-8 sm:p-12 text-center saas-card max-w-xl mx-auto my-4 animate-in fade-in duration-150">
         <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-5 border border-blue-100 shadow-xs">
           <TrendingUp className="w-8 h-8" />
         </div>
@@ -961,7 +961,7 @@ export default function ProgressDashboard() {
       {renderGlobalTrendsSection()}
       {renderMuscleBalanceCard()}
       {/* Barra de Origen de Datos */}
-      <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-card rounded-xl border border-border/80 p-4 saas-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
             <BarChart2 className="w-4 h-4" />
@@ -990,18 +990,38 @@ export default function ProgressDashboard() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-all active:scale-95"
+            className="saas-btn min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs"
           >
             <Upload className="w-3.5 h-3.5" />
             <span>Actualizar workouts.csv</span>
           </button>
-          <button
-            onClick={handleClearHistory}
-            title="Borrar historial guardado"
-            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 hover:bg-rose-50 transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {confirmClearHistory ? (
+            <div className="inline-flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleClearHistory}
+                className="min-h-[38px] px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold"
+              >
+                Confirmar
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmClearHistory(false)}
+                className="min-h-[38px] px-2.5 py-1 rounded-lg bg-muted hover:bg-accent text-foreground text-xs font-medium border border-border/80"
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmClearHistory(true)}
+              title="Borrar historial guardado"
+              className="min-h-[38px] min-w-[38px] flex items-center justify-center text-muted-foreground hover:text-rose-600 rounded-lg border border-border/80 hover:bg-rose-500/10 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
           <input
             type="file"
             ref={fileInputRef}
@@ -1013,7 +1033,7 @@ export default function ProgressDashboard() {
       </div>
 
       {/* Selector de Ejercicio y Métrica */}
-      <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] space-y-4">
+      <div className="bg-card rounded-xl border border-border/80 p-5 saas-card space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* Selector de Ejercicio con Buscador */}
           <div className="flex-1 max-w-md">
@@ -1367,7 +1387,7 @@ export default function ProgressDashboard() {
 
       {/* Historial Detallado de Sesiones para este Ejercicio */}
       {currentStats && (
-        <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] space-y-3">
+        <div className="bg-card rounded-xl border border-border/80 p-5 saas-card space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="font-bold text-slate-900 text-sm">Historial Cronológico de Sesiones</h4>
             <span className="text-xs text-slate-500 font-medium">

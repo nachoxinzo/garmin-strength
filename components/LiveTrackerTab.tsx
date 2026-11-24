@@ -27,6 +27,12 @@ import {
 import { StrengthRoutine } from '@/lib/types';
 import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
 import {
+  DbWorkoutLog,
+  isSupabaseConfigured,
+  parseCsvToDbLogs,
+  syncWorkoutLogsToSupabase,
+} from '@/lib/supabase';
+import {
   EffortRating,
   ExerciseProgressRecord,
   loadProgressionHistory,
@@ -462,10 +468,25 @@ export function LiveTrackerTab({
     const muscleMap = new Map<string, number>();
     let easyCount = 0;
     let hardCount = 0;
+    const completedLogsToPersist: DbWorkoutLog[] = [];
+    const nowIso = new Date().toISOString();
 
     for (const ex of liveExercises) {
-      const doneSets = ex.sets.filter((s) => s.completed);
+      const doneSets = ex.sets.filter((s) => s.completed && !s.isWarmup);
       if (doneSets.length === 0) continue;
+
+      doneSets.forEach((s, sIdx) => {
+        if (s.reps > 0) {
+          completedLogsToPersist.push({
+            workout_title: routine.name || 'Entreno en Vivo',
+            performed_at: nowIso,
+            exercise_title: ex.exercise.name,
+            set_index: sIdx,
+            weight_kg: s.weightKg,
+            reps: s.reps,
+          });
+        }
+      });
 
       loggedCount += 1;
       if (ex.effort === 'easy') easyCount += 1;
@@ -502,6 +523,48 @@ export function LiveTrackerTab({
         },
         ex.effort
       );
+    }
+
+    // Volcar series efectivas realizadas al historial de gráficas (CSV local + Supabase sin duplicados)
+    if (completedLogsToPersist.length > 0 && typeof window !== 'undefined') {
+      try {
+        const currentCsv = localStorage.getItem('hevy_raw_csv_cache') || '';
+        const existingParsed = currentCsv ? parseCsvToDbLogs(currentCsv) : [];
+        const seen = new Set(
+          existingParsed.map(
+            (r) =>
+              `${String(r.performed_at || '').slice(0, 10)}|${String(r.exercise_title || '')
+                .trim()
+                .toLowerCase()}|${Number(r.set_index) || 0}`
+          )
+        );
+        const fresh = completedLogsToPersist.filter((r) => {
+          const k = `${r.performed_at.slice(0, 10)}|${r.exercise_title.trim().toLowerCase()}|${r.set_index}`;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+
+        if (fresh.length > 0) {
+          const header =
+            'title,start_time,end_time,description,exercise_title,superset_id,exercise_notes,set_index,set_type,weight_kg,reps,distance_km,duration_seconds,rpe';
+          const newLines = fresh.map((r) => {
+            const t = `"${(r.workout_title || 'Entreno en Vivo').replace(/"/g, '""')}"`;
+            const d = `"${r.performed_at}"`;
+            const exName = `"${r.exercise_title.replace(/"/g, '""')}"`;
+            return `${t},${d},${d},"",${exName},,"",${r.set_index},"normal",${r.weight_kg || 0},${r.reps || 0},,,,`;
+          });
+          const baseLines =
+            currentCsv.trim().length > 0 ? currentCsv.trim().split(/\r?\n/) : [header];
+          localStorage.setItem('hevy_raw_csv_cache', [...baseLines, ...newLines].join('\n'));
+        }
+
+        if (isSupabaseConfigured()) {
+          void syncWorkoutLogsToSupabase(completedLogsToPersist);
+        }
+      } catch {
+        // ignore storage errors
+      }
     }
 
     const completionPct =

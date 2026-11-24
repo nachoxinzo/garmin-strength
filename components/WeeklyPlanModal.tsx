@@ -6,6 +6,7 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  CloudUpload,
   Dumbbell,
   Layers,
   Play,
@@ -51,6 +52,8 @@ export function WeeklyPlanModal({
   const [useGymProfile, setUseGymProfile] = useState(true);
   const [moveSourceDay, setMoveSourceDay] = useState<WeekDayKey | null>(null);
   const [gymName, setGymName] = useState('Mi Gimnasio Habitual');
+  const [isSyncingWeek, setIsSyncingWeek] = useState(false);
+  const [weekSyncNotice, setWeekSyncNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   const todayKey = getTodayWeekKey();
 
@@ -161,6 +164,50 @@ export function WeeklyPlanModal({
     setPlan({});
     saveWeeklyPlan({});
     setMoveSourceDay(null);
+    setWeekSyncNotice(null);
+  };
+
+  const handleSyncWeekToGarmin = async () => {
+    const routinesToSync = WEEK_DAYS.map((d) => {
+      const r = plan[d.key];
+      if (!r) return null;
+      return {
+        ...r,
+        name: `${d.short} ${r.name}`.slice(0, 16),
+      };
+    }).filter(Boolean) as StrengthRoutine[];
+
+    if (routinesToSync.length === 0) return;
+
+    setIsSyncingWeek(true);
+    setWeekSyncNotice(null);
+    try {
+      const rawTokens = localStorage.getItem('garmin_oauth_tokens');
+      const garminTokens = rawTokens ? JSON.parse(rawTokens) : null;
+      const res = await fetch('/api/garmin/sync-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routines: routinesToSync, garminTokens }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Conecta tu cuenta de Garmin antes de enviar la semana.');
+      }
+      if (data.tokens) {
+        localStorage.setItem('garmin_oauth_tokens', JSON.stringify(data.tokens));
+      }
+      setWeekSyncNotice({
+        ok: true,
+        text: `Enviadas ${data.totalSuccess}/${routinesToSync.length} sesiones de la semana a Garmin Connect.`,
+      });
+    } catch (err: any) {
+      setWeekSyncNotice({
+        ok: false,
+        text: err?.message || 'Error al sincronizar la semana con Garmin.',
+      });
+    } finally {
+      setIsSyncingWeek(false);
+    }
   };
 
   return (
@@ -344,15 +391,38 @@ export function WeeklyPlanModal({
               &bull; {weeklyStats.totalExercises} ejercicios
             </div>
             {weeklyStats.totalSessions > 0 && (
-              <button
-                type="button"
-                onClick={clearAll}
-                className="text-xs font-semibold text-rose-600 hover:text-rose-700"
-              >
-                Vaciar semana
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleSyncWeekToGarmin}
+                  disabled={isSyncingWeek}
+                  className="min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all active:scale-[0.98] disabled:opacity-50"
+                >
+                  <CloudUpload className="w-3.5 h-3.5" />
+                  <span>{isSyncingWeek ? 'Enviando...' : 'Enviar semana a Garmin'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                >
+                  Vaciar semana
+                </button>
+              </div>
             )}
           </div>
+
+          {weekSyncNotice && (
+            <div
+              className={`p-3 rounded-xl border text-xs font-medium ${
+                weekSyncNotice.ok
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-rose-50 border-rose-200 text-rose-800'
+              }`}
+            >
+              {weekSyncNotice.text}
+            </div>
+          )}
 
           {moveSourceDay && (
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">

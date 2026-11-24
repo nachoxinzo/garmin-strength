@@ -24,8 +24,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: 'cover',
   themeColor: '#0f172a',
 };
@@ -37,7 +35,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" className={cn("font-sans", geist.variable)}>
-      <body className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
+      <body className="min-h-screen bg-background text-foreground font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
         {children}
         <PwaManager />
       </body>

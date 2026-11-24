@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
 import { syncRoutineToGarmin } from '@/lib/garmin-service';
 import { StrengthRoutine } from '@/lib/types';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    const rate = checkRateLimit(`garmin-batch:${getClientIp(req)}`, 8, 10 * 60 * 1000);
+    if (!rate.success) {
+      return NextResponse.json(
+        { error: `Límite de sincronización por lotes alcanzado. Espera ${rate.resetSeconds}s.` },
+        { status: 429, headers: { 'Retry-After': String(rate.resetSeconds) } }
+      );
+    }
+
     const body = await req.json();
     const routines: StrengthRoutine[] = body.routines;
     let currentTokens = body.garminTokens || null;
@@ -13,6 +22,13 @@ export async function POST(req: Request) {
     if (!Array.isArray(routines) || routines.length === 0) {
       return NextResponse.json(
         { error: 'Debes proporcionar al menos una rutina para sincronizar.' },
+        { status: 400 }
+      );
+    }
+
+    if (routines.length > 14) {
+      return NextResponse.json(
+        { error: 'Máximo 14 rutinas permitidas por lote de sincronización.' },
         { status: 400 }
       );
     }

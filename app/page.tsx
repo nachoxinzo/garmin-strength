@@ -874,37 +874,38 @@ export default function WorkoutStudioPage() {
 
   return (
     <div className="min-h-screen pb-28 ambient-canvas text-foreground overflow-x-hidden">
-      {/* Barra de Navegación Superior */}
-      <header className="sticky top-0 z-30 bg-card/90 backdrop-blur-xl border-b border-border/60 shadow-[0_1px_12px_-2px_rgba(15,23,42,0.05)]">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      {/* Barra de Navegación Superior Ejecutiva (Linear / Vercel Style) */}
+      <header className="sticky top-0 z-30 bg-card/90 backdrop-blur-xl border-b border-border/80 pt-[env(safe-area-inset-top)]">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-15 sm:h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-md shadow-slate-900/20 shrink-0 transition-transform duration-200 hover:scale-105 overflow-hidden border border-slate-700/60">
+            <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-xs shrink-0 transition-transform duration-150 hover:scale-[1.03] overflow-hidden ring-1 ring-slate-800/80">
               <img src="/icon.svg" alt="IronSync" className="w-full h-full object-cover" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-foreground tracking-tight text-base sm:text-lg truncate">
+                <span className="font-semibold text-foreground tracking-tight text-base sm:text-[17px] truncate">
                   IronSync
                 </span>
-                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border/60 shrink-0">
-                  <Watch className="w-3 h-3 text-blue-600" />
-                  Garmin &amp; Watch
+                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider bg-muted text-muted-foreground border border-border/80 shrink-0">
+                  Studio
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground truncate">Smart Strength &amp; Watch Sync</p>
+              <p className="text-[11px] text-muted-foreground truncate hidden xs:block sm:block">
+                Strength Architecture &amp; Garmin Sync
+              </p>
             </div>
           </div>
 
-          {/* Botones de Acción Global & Estado de Garmin Connect (Escritorio) */}
-          <div className="hidden md:flex items-center gap-2 shrink-0">
+          {/* Barra de Herramientas Ejecutiva (>= 1024px) */}
+          <div className="hidden lg:flex items-center gap-1.5 shrink-0">
             {isSupabaseAvailable && (
               <button
                 onClick={() => setIsCloudRoutinesModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                className="saas-btn inline-flex items-center gap-1.5 px-3 min-h-[38px] rounded-lg bg-card hover:bg-accent text-foreground border border-border/80 text-xs font-medium shadow-2xs"
               >
                 <Cloud className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Mis Rutinas</span>
-                <span className="px-1.5 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900 text-[10px] font-bold tabular-nums">
+                <span>Rutinas</span>
+                <span className="px-1.5 py-0.2 rounded-md bg-muted text-muted-foreground text-[10px] font-semibold tabular-nums">
                   {cloudRoutines.length}
                 </span>
               </button>
@@ -912,7 +913,7 @@ export default function WorkoutStudioPage() {
 
             <button
               onClick={() => setIsGuideModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+              className="saas-btn inline-flex items-center gap-1.5 px-3 min-h-[38px] rounded-lg bg-card hover:bg-accent text-foreground border border-border/80 text-xs font-medium shadow-2xs"
             >
               <BookOpen className="w-3.5 h-3.5 text-blue-600" />
               <span>Guía</span>
@@ -920,7 +921,7 @@ export default function WorkoutStudioPage() {
 
             <button
               onClick={() => setIsShareModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+              className="saas-btn inline-flex items-center gap-1.5 px-3 min-h-[38px] rounded-lg bg-card hover:bg-accent text-foreground border border-border/80 text-xs font-medium shadow-2xs"
             >
               <Share2 className="w-3.5 h-3.5 text-indigo-600" />
               <span>Compartir</span>
@@ -928,28 +929,30 @@ export default function WorkoutStudioPage() {
 
             <button
               onClick={() => setIsHevyModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+              className="saas-btn inline-flex items-center gap-1.5 px-3 min-h-[38px] rounded-lg bg-card hover:bg-accent text-foreground border border-border/80 text-xs font-medium shadow-2xs"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-orange-600" />
-              <span>Importar Hevy</span>
+              <FileSpreadsheet className="w-3.5 h-3.5 text-amber-600" />
+              <span>Hevy</span>
             </button>
+
+            <div className="h-4 w-px bg-border mx-1" />
 
             {/* Botón de Perfil de Atleta */}
             <button
               onClick={() => setIsAuthModalOpen(true)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] ${
+              className={`saas-btn inline-flex items-center gap-1.5 px-3 min-h-[38px] rounded-lg text-xs font-medium border shadow-2xs ${
                 currentUser
-                  ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200/80 shadow-xs'
-                  : 'bg-muted/70 hover:bg-muted text-foreground border border-border/60'
+                  ? 'bg-card hover:bg-accent text-foreground border-border/90'
+                  : 'bg-muted/60 hover:bg-accent text-foreground border-border/80'
               }`}
             >
               {currentUser ? (
-                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
               ) : (
                 <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               )}
               <span className="truncate max-w-[110px]">
-                {currentUser ? currentUser.display_name : 'Iniciar Sesión'}
+                {currentUser ? currentUser.display_name : 'Cuenta'}
               </span>
             </button>
 
@@ -957,17 +960,16 @@ export default function WorkoutStudioPage() {
             {accountStatus?.authenticated ? (
               <button
                 onClick={() => setIsGarminAuthModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 text-emerald-800 text-xs font-medium transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                className="saas-btn flex items-center gap-1.5 px-3 min-h-[38px] rounded-lg bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/25 text-emerald-800 text-xs font-semibold"
                 title="Cuenta Garmin Connect vinculada (clic para gestionar)"
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="hidden lg:inline">Garmin:</span>
-                <span className="font-semibold truncate max-w-[110px]">{accountStatus.displayName || 'Fénix 8'}</span>
+                <span className="truncate max-w-[115px]">{accountStatus.displayName || 'Garmin'}</span>
               </button>
             ) : (
               <button
                 onClick={() => setIsGarminAuthModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                className="saas-btn btn-glow-blue flex items-center gap-1.5 px-3.5 min-h-[38px] rounded-lg bg-primary hover:bg-blue-700 text-primary-foreground text-xs font-semibold"
                 title="Conectar cuenta de Garmin Connect"
               >
                 <Watch className="w-3.5 h-3.5" />
@@ -979,19 +981,19 @@ export default function WorkoutStudioPage() {
               onClick={() => checkGarminStatus()}
               disabled={isCheckingStatus}
               title="Comprobar estado de conexión"
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-border/60 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+              className="saas-btn min-h-[38px] min-w-[38px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent border border-border/80"
             >
-              <RefreshCw className={`w-4 h-4 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isCheckingStatus ? 'animate-spin' : ''}`} />
             </button>
           </div>
 
-          {/* Barra Móvil Limpia (< 768px): Guía + Estado Garmin + Menú Hamburguesa */}
-          <div className="flex md:hidden items-center gap-1.5 shrink-0">
+          {/* Barra Móvil y Tablet (< 1024px): Guía + Estado Garmin + Menú Cajón */}
+          <div className="flex lg:hidden items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => setIsGuideModalOpen(true)}
               aria-label="Abrir guía interactiva"
-              className="min-h-[40px] px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200/80 text-blue-700 text-xs font-semibold inline-flex items-center gap-1 transition-all active:scale-95"
+              className="min-h-[42px] px-3 py-1.5 rounded-lg bg-card hover:bg-accent border border-border/80 text-foreground text-xs font-medium inline-flex items-center gap-1.5 shadow-2xs transition-all active:scale-[0.98]"
             >
               <BookOpen className="w-3.5 h-3.5 text-blue-600" />
               <span>Guía</span>
@@ -1000,10 +1002,10 @@ export default function WorkoutStudioPage() {
             <button
               type="button"
               onClick={() => setIsGarminAuthModalOpen(true)}
-              className={`min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 border transition-all active:scale-95 ${
+              className={`min-h-[42px] px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 border transition-all active:scale-[0.98] ${
                 accountStatus?.authenticated
-                  ? 'bg-emerald-50 border-emerald-200/80 text-emerald-800'
-                  : 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-800'
+                  : 'bg-primary border-primary text-primary-foreground shadow-xs'
               }`}
             >
               <span
@@ -1018,7 +1020,7 @@ export default function WorkoutStudioPage() {
               type="button"
               onClick={() => setIsMobileMenuOpen(true)}
               aria-label="Abrir menú de navegación"
-              className="min-h-[42px] min-w-[42px] flex items-center justify-center rounded-xl bg-muted/60 hover:bg-muted border border-border/60 text-foreground transition-all active:scale-95"
+              className="min-h-[42px] min-w-[42px] flex items-center justify-center rounded-lg bg-card hover:bg-accent border border-border/80 text-foreground shadow-2xs transition-all active:scale-[0.98]"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -1026,10 +1028,10 @@ export default function WorkoutStudioPage() {
         </div>
       </header>
 
-      {/* Cajón Lateral Móvil (Drawer Off-Canvas) */}
+      {/* Cajón Lateral Móvil y Tablet (Drawer Off-Canvas < 1024px) */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 z-50 md:hidden bg-slate-900/40 backdrop-blur-xs flex justify-end animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 lg:hidden bg-slate-900/40 backdrop-blur-xs flex justify-end animate-in fade-in duration-150"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div
@@ -1160,85 +1162,84 @@ export default function WorkoutStudioPage() {
         </div>
       )}
 
-      {/* Sub-barra de Navegación de Pestañas */}
-      <div className="bg-card/85 backdrop-blur-md border-b border-border/60 sticky top-16 z-20">
-        <div className="max-w-5xl mx-auto px-2 sm:px-6 py-1.5 sm:py-2 flex items-center justify-between gap-3">
-          <nav className="grid grid-cols-5 sm:flex items-center gap-1 sm:gap-2 w-full sm:w-auto">
+      {/* Sub-barra de Navegación Segmentada (Segmented Control) */}
+      <div className="bg-background/85 backdrop-blur-md border-b border-border/80 sticky top-15 sm:top-16 z-20">
+        <div className="max-w-5xl mx-auto px-2 sm:px-6 py-2 flex items-center justify-between gap-3">
+          <nav className="grid grid-cols-5 sm:inline-flex items-center gap-1 p-1 rounded-xl bg-muted/80 border border-border/70 w-full sm:w-auto overflow-x-auto no-scrollbar">
             <button
               onClick={() => setCurrentMainTab('studio')}
-              className={`saas-btn flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-2 px-1 sm:px-3.5 rounded-xl text-[10px] sm:text-sm font-semibold whitespace-nowrap ${
+              className={`saas-btn min-h-[40px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
                 currentMainTab === 'studio'
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-transparent'
+                  ? 'bg-card text-foreground shadow-xs border border-border/80'
+                  : 'text-muted-foreground hover:text-foreground border border-transparent'
               }`}
             >
-              <Dumbbell className="w-4 h-4 shrink-0" />
+              <Dumbbell className={`w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 ${currentMainTab === 'studio' ? 'text-blue-600' : ''}`} />
               <span className="sm:hidden">Rutina</span>
-              <span className="hidden sm:inline">Diseñador de Rutinas</span>
+              <span className="hidden sm:inline">Diseñador</span>
             </button>
 
             <button
               onClick={() => setCurrentMainTab('live')}
-              className={`saas-btn flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-2 px-1 sm:px-3.5 rounded-xl text-[10px] sm:text-sm font-semibold whitespace-nowrap ${
+              className={`saas-btn min-h-[40px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
                 currentMainTab === 'live'
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-transparent'
+                  ? 'bg-card text-foreground shadow-xs border border-border/80'
+                  : 'text-muted-foreground hover:text-foreground border border-transparent'
               }`}
             >
-              <Play className="w-4 h-4 shrink-0" />
+              <Play className={`w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 ${currentMainTab === 'live' ? 'text-emerald-600' : ''}`} />
               <span className="sm:hidden">En Vivo</span>
               <span className="hidden sm:inline">Entreno en Vivo</span>
             </button>
 
             <button
               onClick={() => setCurrentMainTab('guide')}
-              className={`saas-btn flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-2 px-1 sm:px-3.5 rounded-xl text-[10px] sm:text-sm font-semibold whitespace-nowrap ${
+              className={`saas-btn min-h-[40px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
                 currentMainTab === 'guide'
-                  ? 'bg-amber-50 text-amber-800 border border-amber-200/80 shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-transparent'
+                  ? 'bg-card text-foreground shadow-xs border border-border/80'
+                  : 'text-muted-foreground hover:text-foreground border border-transparent'
               }`}
             >
-              <Award className="w-4 h-4 shrink-0" />
+              <Award className={`w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 ${currentMainTab === 'guide' ? 'text-amber-600' : ''}`} />
               <span className="sm:hidden">Top Gym</span>
               <span className="hidden sm:inline">Top Gimnasio</span>
-              <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100/90 text-amber-800 border border-amber-200/80">
-                Pro
+              <span className="hidden lg:inline-block px-1.5 py-0.2 text-[10px] font-bold rounded-md bg-amber-500/15 text-amber-800">
+                S-Tier
               </span>
             </button>
 
             <button
               onClick={() => setCurrentMainTab('progress')}
-              className={`saas-btn flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-2 px-1 sm:px-3.5 rounded-xl text-[10px] sm:text-sm font-semibold whitespace-nowrap ${
+              className={`saas-btn min-h-[40px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
                 currentMainTab === 'progress'
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-transparent'
+                  ? 'bg-card text-foreground shadow-xs border border-border/80'
+                  : 'text-muted-foreground hover:text-foreground border border-transparent'
               }`}
             >
-              <TrendingUp className="w-4 h-4 shrink-0" />
+              <TrendingUp className={`w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 ${currentMainTab === 'progress' ? 'text-blue-600' : ''}`} />
               <span className="sm:hidden">Métricas</span>
               <span className="hidden sm:inline">Progreso &amp; Métricas</span>
             </button>
 
             <button
               onClick={() => setCurrentMainTab('social')}
-              className={`saas-btn flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 sm:py-2 px-1 sm:px-3.5 rounded-xl text-[10px] sm:text-sm font-semibold whitespace-nowrap ${
+              className={`saas-btn min-h-[40px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
                 currentMainTab === 'social'
-                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-transparent'
+                  ? 'bg-card text-foreground shadow-xs border border-border/80'
+                  : 'text-muted-foreground hover:text-foreground border border-transparent'
               }`}
             >
-              <Swords className="w-4 h-4 shrink-0" />
+              <Swords className={`w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 ${currentMainTab === 'social' ? 'text-indigo-600' : ''}`} />
               <span className="sm:hidden">Retos</span>
               <span className="hidden sm:inline">Amigos &amp; Retos</span>
-              <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100/80 text-indigo-700 border border-indigo-200/70">
-                Duelos
-              </span>
             </button>
           </nav>
 
-          <div className="text-xs text-muted-foreground font-mono hidden lg:flex items-center gap-1.5 shrink-0">
-            <Activity className="w-3.5 h-3.5 text-blue-600" />
-            <span>Garmin Connect &bull; Fénix 8</span>
+          <div className="text-xs text-muted-foreground hidden xl:flex items-center gap-2 shrink-0 tabular-nums">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border border-border/80 shadow-2xs font-medium">
+              <Activity className="w-3.5 h-3.5 text-blue-600" />
+              <span>{routine.blocks.length} ej. &middot; {totalSets} series &middot; ~{estimatedMinutes}m</span>
+            </span>
           </div>
         </div>
       </div>
@@ -1295,40 +1296,45 @@ export default function WorkoutStudioPage() {
         ) : (
           <>
 
-        {/* Panel Superior: Título de Rutina, Métricas y Acciones Rápidas */}
-        <section className="bg-card rounded-2xl border border-border/60 p-6 sm:p-8 saas-card">
+        {/* Panel Superior Ejecutivo: Título de Rutina, Métricas y Acciones Rápidas */}
+        <section className="bg-card rounded-xl border border-border/80 p-5 sm:p-7 saas-card">
           <div className="space-y-6">
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
-              <div className="flex-1 min-w-[260px]">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                  Nombre de la Sesión en el Reloj (Máx 16 car.)
-                </label>
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Nombre en el Reloj
+                  </label>
+                  <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
+                    {routine.name.length}/16 car.
+                  </span>
+                </div>
                 <input
                   type="text"
                   maxLength={16}
                   value={routine.name}
                   onChange={e => setRoutine({ ...routine, name: e.target.value })}
-                  className="w-full text-xl sm:text-2xl font-semibold text-foreground bg-muted/40 hover:bg-muted/60 focus:bg-card border border-border/60 rounded-xl px-4 py-3 transition-all duration-200 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  className="w-full text-lg sm:text-xl font-semibold text-foreground bg-muted/45 hover:bg-muted/70 focus:bg-card border border-border/80 rounded-lg px-3.5 py-2.5 transition-all duration-150 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   placeholder="Ej: Push Dia 1 F8"
                 />
               </div>
 
-              {/* Acciones de Sesión */}
-              <div className="flex flex-wrap items-center gap-2.5">
+              {/* Acciones de Sesión con Jerarquía Ejecutiva */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setIsGeneratorModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                  className="saas-btn min-h-[42px] inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-900 hover:bg-slate-800 text-white shadow-xs"
                 >
-                  <Sparkles className="w-4 h-4 text-indigo-600" />
-                  <span>Generador Científico</span>
+                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Generador IA</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsWeeklyPlanOpen(true)}
-                  className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                  className="saas-btn min-h-[42px] inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-card hover:bg-accent text-foreground border border-border/80 shadow-2xs"
                 >
-                  <Calendar className="w-4 h-4 text-blue-600" />
+                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
                   <span>Plan Semanal</span>
                 </button>
 
@@ -1342,35 +1348,35 @@ export default function WorkoutStudioPage() {
                         text: `Sesión de hoy cargada: "${todayPlannedRoutine.name}".`,
                       });
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 text-white shadow-2xs transition-all"
+                    className="saas-btn min-h-[42px] inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-blue-500/10 hover:bg-blue-500/15 text-blue-700 border border-blue-500/25"
                   >
-                    <Play className="w-3.5 h-3.5 text-emerald-400" />
+                    <Play className="w-3.5 h-3.5 text-blue-600" />
                     <span>Hoy: {todayPlannedRoutine.name}</span>
                   </button>
                 )}
 
                 <button
                   onClick={() => setIsHevyModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/80 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                  className="saas-btn min-h-[42px] inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-card hover:bg-accent text-foreground border border-border/80 shadow-2xs"
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-orange-600" />
-                  <span>Cargar de Hevy</span>
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Cargar Hevy</span>
                 </button>
                 <button
                   onClick={handleSaveToCloud}
                   disabled={isCloudSaving || routine.blocks.length === 0}
-                  className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50"
+                  className="saas-btn min-h-[42px] inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-card hover:bg-accent text-foreground border border-border/80 shadow-2xs disabled:opacity-50"
                 >
-                  <Cloud className="w-4 h-4" />
-                  <span>{isCloudSaving ? 'Guardando...' : 'Guardar en Supabase'}</span>
+                  <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{isCloudSaving ? 'Guardando...' : 'Guardar Nube'}</span>
                 </button>
                 {routine.blocks.length > 0 && (
                   <button
                     onClick={resetToNewRoutine}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-muted/60 hover:bg-rose-50 hover:text-rose-700 text-muted-foreground border border-border/60 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                    className="saas-btn min-h-[42px] inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Vaciar sesión</span>
+                    <span>Vaciar</span>
                   </button>
                 )}
               </div>
@@ -1458,40 +1464,34 @@ export default function WorkoutStudioPage() {
             </div>
           </div>
 
-          {/* Estadísticas de la Sesión (3 columnas compactas en móvil y escritorio) */}
-          <div className="grid grid-cols-3 gap-2.5 sm:gap-4 mt-6 pt-6 border-t border-border/60">
-            <div className="bg-gradient-to-br from-blue-50/50 to-card rounded-2xl p-3 sm:p-5 border border-border/60 saas-card saas-card-interactive">
+          {/* Estadísticas de la Sesión (3 columnas ejecutivas) */}
+          <div className="grid grid-cols-3 gap-2.5 sm:gap-4 mt-6 pt-6 border-t border-border/70">
+            <div className="bg-muted/35 rounded-xl p-3.5 sm:p-4 border border-border/70">
               <div className="flex items-center justify-between text-[11px] sm:text-xs text-muted-foreground font-medium">
                 <span>Ejercicios</span>
-                <span className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-blue-100/80 text-blue-600 flex items-center justify-center shrink-0">
-                  <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </span>
+                <Layers className="w-4 h-4 text-blue-600 shrink-0" />
               </div>
-              <div className="text-xl sm:text-3xl font-bold text-foreground tabular-nums mt-1.5 sm:mt-2">
+              <div className="text-xl sm:text-2xl font-semibold text-foreground tabular-nums mt-1.5 tracking-tight">
                 {routine.blocks.length}
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-indigo-50/50 to-card rounded-2xl p-3 sm:p-5 border border-border/60 saas-card saas-card-interactive">
+            <div className="bg-muted/35 rounded-xl p-3.5 sm:p-4 border border-border/70">
               <div className="flex items-center justify-between text-[11px] sm:text-xs text-muted-foreground font-medium">
                 <span>Series</span>
-                <span className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-indigo-100/80 text-indigo-600 flex items-center justify-center shrink-0">
-                  <Repeat className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </span>
+                <Repeat className="w-4 h-4 text-indigo-600 shrink-0" />
               </div>
-              <div className="text-xl sm:text-3xl font-bold text-foreground tabular-nums mt-1.5 sm:mt-2">
+              <div className="text-xl sm:text-2xl font-semibold text-foreground tabular-nums mt-1.5 tracking-tight">
                 {totalSets}
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-emerald-50/50 to-card rounded-2xl p-3 sm:p-5 border border-border/60 saas-card saas-card-interactive">
+            <div className="bg-muted/35 rounded-xl p-3.5 sm:p-4 border border-border/70">
               <div className="flex items-center justify-between text-[11px] sm:text-xs text-muted-foreground font-medium">
-                <span>Tiempo</span>
-                <span className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0">
-                  <Timer className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </span>
+                <span>Duración Est.</span>
+                <Timer className="w-4 h-4 text-emerald-600 shrink-0" />
               </div>
-              <div className="text-xl sm:text-3xl font-bold text-foreground tabular-nums mt-1.5 sm:mt-2">
+              <div className="text-xl sm:text-2xl font-semibold text-foreground tabular-nums mt-1.5 tracking-tight">
                 ~{estimatedMinutes}m
               </div>
             </div>
@@ -2020,15 +2020,15 @@ export default function WorkoutStudioPage() {
           )}
         </section>
 
-        {/* Botón flotante inferior de acción */}
-        <div className="fixed bottom-0 left-0 right-0 z-20 bg-card/95 backdrop-blur-md border-t border-border/60 pt-3 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-lg">
-          <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-            <div className="hidden sm:block">
-              <span className="text-xs text-muted-foreground font-medium block">
-                Sesión: <strong className="text-foreground">{routine.name}</strong>
+        {/* Dock Flotante Ejecutivo de Acción */}
+        <div className="fixed bottom-0 sm:bottom-4 left-0 right-0 z-20 px-0 sm:px-6 pointer-events-none">
+          <div className="max-w-3xl mx-auto pointer-events-auto bg-card/95 backdrop-blur-xl border-t sm:border border-border/90 sm:rounded-2xl pt-3 px-4 sm:px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:py-3 shadow-[0_8px_30px_rgba(15,23,42,0.08)] flex items-center justify-between gap-4">
+            <div className="hidden sm:block min-w-0">
+              <span className="text-xs font-semibold text-foreground truncate block">
+                {routine.name || 'Sesión Actual'}
               </span>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {totalSets} series · ~{estimatedMinutes} min
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {routine.blocks.length} ejercicios &middot; {totalSets} series &middot; ~{estimatedMinutes} min
               </span>
             </div>
 
@@ -2038,7 +2038,7 @@ export default function WorkoutStudioPage() {
                 onClick={() => setIsShareModalOpen(true)}
                 disabled={routine.blocks.length === 0}
                 title="Compartir con un amigo o Apple Watch"
-                className="saas-btn inline-flex items-center justify-center gap-1.5 px-3.5 py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-semibold border border-indigo-200/80 disabled:opacity-50 min-h-[44px] shrink-0"
+                className="saas-btn inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg bg-card hover:bg-accent text-foreground text-xs sm:text-sm font-medium border border-border/80 disabled:opacity-50 min-h-[42px] shrink-0"
               >
                 <Share2 className="w-4 h-4 text-indigo-600" />
                 <span className="hidden sm:inline">Compartir</span>
@@ -2048,10 +2048,9 @@ export default function WorkoutStudioPage() {
               <button
                 onClick={handleDownloadFit}
                 disabled={isDownloading || routine.blocks.length === 0}
-                className="saas-btn inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-3 rounded-xl bg-muted/70 hover:bg-muted text-foreground text-sm font-semibold border border-border/60 disabled:opacity-50 min-h-[44px] whitespace-nowrap shrink-0"
+                className="saas-btn inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg bg-card hover:bg-accent text-foreground text-xs sm:text-sm font-medium border border-border/80 disabled:opacity-50 min-h-[42px] whitespace-nowrap shrink-0"
               >
-                <Download className={`w-4 h-4 ${isDownloading ? 'animate-bounce' : ''}`} />
-                <span className="hidden sm:inline">Descargar</span>
+                <Download className={`w-4 h-4 text-muted-foreground ${isDownloading ? 'animate-bounce' : ''}`} />
                 <span>.FIT</span>
               </button>
 
@@ -2059,19 +2058,19 @@ export default function WorkoutStudioPage() {
               <button
                 onClick={handleSyncToGarmin}
                 disabled={isSyncing || routine.blocks.length === 0}
-                className="saas-btn btn-glow-blue flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50 min-h-[44px] whitespace-nowrap"
+                className="saas-btn btn-glow-blue flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-lg bg-primary hover:bg-blue-700 text-primary-foreground text-xs sm:text-sm font-semibold disabled:opacity-50 min-h-[42px] whitespace-nowrap"
               >
                 {isSyncing ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
                     <span className="sm:hidden">Enviando...</span>
-                    <span className="hidden sm:inline">Sincronizando con Fénix 8...</span>
+                    <span className="hidden sm:inline">Sincronizando con Garmin...</span>
                   </>
                 ) : (
                   <>
                     <CloudUpload className="w-4 h-4 shrink-0" />
                     <span className="sm:hidden">Enviar a Garmin</span>
-                    <span className="hidden sm:inline">Enviar a mi Garmin Fénix 8</span>
+                    <span className="hidden sm:inline">Enviar a mi Garmin</span>
                   </>
                 )}
               </button>
