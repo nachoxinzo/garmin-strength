@@ -33,6 +33,8 @@ import {
 import { analyzeWeeklyMuscleBalance, MuscleVolumeStatus } from '@/lib/weekly-volume-analyzer';
 import { loadProgressionHistory } from '@/lib/progressive-overload-engine';
 import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
+import { EXERCISE_CATALOG } from '@/lib/exercise-catalog';
+import { getSimilarExercises } from '@/lib/exercise-alternatives';
 import { GarminActivityDetail, GarminActivitySummary, GarminWellnessSnapshot } from '@/lib/types';
 import { GarminWellnessCard } from './GarminWellnessCard';
 import { Skeleton } from './ui/skeleton';
@@ -58,6 +60,8 @@ export default function ProgressDashboard() {
   const [hasCloudSource, setHasCloudSource] = useState<boolean>(false);
   const [muscleBalance, setMuscleBalance] = useState<MuscleVolumeStatus[]>([]);
   const [garminActivities, setGarminActivities] = useState<GarminActivitySummary[]>([]);
+  const [garminCardioMinutesWeek, setGarminCardioMinutesWeek] = useState<number>(0);
+  const [garminReadiness, setGarminReadiness] = useState<number | null>(null);
   const [selectedHeatmapDate, setSelectedHeatmapDate] = useState<string | null>(null);
   const [expandedActivityId, setExpandedActivityId] = useState<number | null>(null);
   const [activityDetailsCache, setActivityDetailsCache] = useState<
@@ -72,6 +76,11 @@ export default function ProgressDashboard() {
     const snap = loadGarminWellnessSnapshot();
     if (snap?.recentActivities) {
       setGarminActivities(snap.recentActivities);
+      const w = snap.weeklySportMinutes;
+      const cardioMins =
+        (w?.Running || 0) + (w?.Ciclismo || 0) + (w?.Natación || 0) + (w?.['Cardio / Otros'] || 0);
+      setGarminCardioMinutesWeek(Math.round(cardioMins));
+      setGarminReadiness(snap.readinessIndex);
     }
 
     // Fusionar sesiones registradas en Entreno en Vivo (localStorage)
@@ -198,6 +207,11 @@ export default function ProgressDashboard() {
 
   const handleGarminSynced = (snap: GarminWellnessSnapshot) => {
     setGarminActivities(snap.recentActivities || []);
+    const w = snap.weeklySportMinutes;
+    const cardioMins =
+      (w?.Running || 0) + (w?.Ciclismo || 0) + (w?.Natación || 0) + (w?.['Cardio / Otros'] || 0);
+    setGarminCardioMinutesWeek(Math.round(cardioMins));
+    setGarminReadiness(snap.readinessIndex);
   };
 
   const handleToggleActivityDetail = async (act: GarminActivitySummary) => {
@@ -856,6 +870,33 @@ export default function ProgressDashboard() {
             );
           })()}
         </div>
+
+        {/* Comparativa Semanal de Carga: Fuerza + Garmin Cardio */}
+        {(latestWeek || garminCardioMinutesWeek > 0) && (
+          <div className="lg:col-span-2 bg-card rounded-2xl border border-border/60 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Flame className="w-4 h-4 text-orange-500" />
+                <span>Carga Global Semanal (Fuerza + Garmin Cardio)</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {latestWeek && latestWeek.deltaPct !== null && latestWeek.deltaPct > 15 && garminCardioMinutesWeek > 180
+                  ? 'Alerta de fatiga combinada: subida fuerte de tonelaje junto a alto volumen de cardio esta semana. Valora priorizar sueño o modo Descarga.'
+                  : garminReadiness !== null && garminReadiness < 45
+                  ? `Readiness Garmin bajo (${garminReadiness}/100): conviene moderar la carga combinada hoy.`
+                  : 'Equilibrio saludable entre carga de fuerza semanal y actividad cardiovascular registrada.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0 tabular-nums">
+              <span className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold">
+                Fuerza: {latestWeek ? `${latestWeek.totalVolumeKg.toLocaleString('es-ES')} kg` : '0 kg'}
+              </span>
+              <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
+                Cardio Garmin: {garminCardioMinutesWeek} min/sem
+              </span>
+            </div>
+          </div>
+        )}
       </section>
     );
   };
@@ -1284,6 +1325,45 @@ export default function ProgressDashboard() {
           )}
         </div>
       </div>
+
+      {/* Rotación Inteligente ante Mesetas */}
+      {chartData?.trend?.isPlateau && (() => {
+        const matchedCatalog = EXERCISE_CATALOG.find(
+          (e) => e.name.toLowerCase() === selectedExercise.toLowerCase()
+        );
+        const alternatives = matchedCatalog
+          ? getSimilarExercises(matchedCatalog.id).slice(0, 3)
+          : [];
+        if (alternatives.length === 0) return null;
+        return (
+          <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-4 sm:p-5 space-y-3">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-amber-950">
+                  Meseta detectada en {selectedExercise} (últimas 3 sesiones)
+                </h4>
+                <p className="text-xs text-amber-900/85 mt-0.5">
+                  Según la evidencia de periodización, rotar a una variante biomecánicamente equivalente reactiva la progresión sin perder el estímulo muscular:
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {alternatives.map((alt) => (
+                <div
+                  key={alt.exercise.id}
+                  className="rounded-lg bg-white border border-amber-200/70 p-3 space-y-1"
+                >
+                  <div className="text-xs font-bold text-slate-900">{alt.exercise.name}</div>
+                  <div className="text-[11px] text-slate-500">
+                    {alt.exercise.equipment} &bull; {alt.reason}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Historial Detallado de Sesiones para este Ejercicio */}
       {currentStats && (

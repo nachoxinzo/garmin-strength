@@ -1,9 +1,10 @@
-const CACHE_NAME = 'garmin-strength-v1';
+const CACHE_NAME = 'ironsync-pwa-v2';
 const STATIC_ASSETS = [
   '/',
   '/live',
   '/manifest.json',
   '/icon.svg',
+  '/api/exercises',
 ];
 
 self.addEventListener('install', (event) => {
@@ -35,15 +36,39 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Network-first para APIs para mantener datos frescos
-  if (url.pathname.startsWith('/api/')) {
+  // Navegación HTML: network-first con fallback a caché raíz para modo gimnasio sin cobertura
+  if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match(request))
+      fetch(request)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(request).then((m) => m || caches.match('/')))
     );
     return;
   }
 
-  // Stale-while-revalidate para páginas y assets de la app
+  // Network-first para APIs GET con fallback a caché
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Stale-while-revalidate para assets estáticos (_next/static, iconos, JS/CSS)
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       const fetchPromise = fetch(request)
