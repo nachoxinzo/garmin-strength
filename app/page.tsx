@@ -42,10 +42,12 @@ import {
   SlidersHorizontal,
   Activity,
   Award,
-  Box
+  Box,
+  Calendar
 } from 'lucide-react';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { EnrichedExpertExercise } from '@/lib/expert-gym-guide';
+import { downloadAppleWatchCalendarIcs, formatAppleWatchNotesText } from '@/lib/apple-watch-export';
 import { StrengthRoutine, WorkoutExerciseBlock, GarminAccountStatus } from '@/lib/types';
 import { parseHevyCSV, ParsedHevyWorkout } from '@/lib/hevy-csv-parser';
 import { encodeRoutineToShareUrl } from '@/lib/share-utils';
@@ -118,6 +120,7 @@ export default function WorkoutStudioPage() {
   // Modal para compartir con Apple Watch / Amigo
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedAppleNotes, setCopiedAppleNotes] = useState(false);
 
   // Supabase Cloud Routines
   const [cloudRoutines, setCloudRoutines] = useState<StrengthRoutine[]>([]);
@@ -1595,17 +1598,63 @@ export default function WorkoutStudioPage() {
                 </a>
               </div>
 
-              {/* Explicación Apple Watch */}
-              <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-4 text-xs text-foreground space-y-2">
-                <div className="flex items-center gap-2 font-semibold text-blue-950">
-                  <Watch className="w-4 h-4 text-blue-600" />
-                  <span>¿Cómo lo sigue tu amigo con su Apple Watch?</span>
+              {/* Opciones directas Apple Watch Serie 4 */}
+              <div className="bg-slate-900 text-white rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 font-semibold text-xs">
+                    <Watch className="w-4 h-4 text-blue-400" />
+                    <span>Cargar en Apple Watch (Serie 4 / watchOS)</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold">
+                    3 métodos
+                  </span>
                 </div>
-                <p className="text-muted-foreground">
-                  1. <strong className="text-foreground">En el móvil (Modo Gym Live)</strong>: Al abrir el enlace, tendrá una pantalla táctil para el gimnasio con series, repeticiones y temporizador sonoro/vibratorio de descanso sincronizado.
-                </p>
-                <p className="text-muted-foreground">
-                  2. <strong className="text-foreground">En su Apple Watch Serie 4</strong>: Puede activar el entreno nativo de <em>&quot;Fuerza Tradicional&quot;</em> para registrar pulsaciones y calorías mientras sigue las series en el móvil, o si tiene <strong className="text-foreground">Hevy</strong> en el Apple Watch, importar la rutina directamente.
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <a
+                    href={`${shareUrl}&watch=1`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="py-2.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-center"
+                  >
+                    <Watch className="w-3.5 h-3.5 shrink-0" />
+                    <span>Modo Reloj OLED</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => downloadAppleWatchCalendarIcs(routine)}
+                    className="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Calendario (.ics)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(formatAppleWatchNotesText(routine));
+                      setCopiedAppleNotes(true);
+                      setTimeout(() => setCopiedAppleNotes(false), 2500);
+                    }}
+                    className="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    {copiedAppleNotes ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>¡Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>Notas / Watch</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  <strong>Modo Reloj OLED:</strong> si le envías el enlace por WhatsApp/iMessage y lo toca desde su Apple Watch Serie 4, se abre adaptado a su pantalla OLED con botón gigante de serie y descanso. <strong>Calendario (.ics):</strong> añádelo en el iPhone y aparecerá offline en la app Calendario del reloj.
                 </p>
               </div>
             </div>

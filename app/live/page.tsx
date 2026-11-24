@@ -15,7 +15,8 @@ import {
   ArrowLeft,
   Flame,
   Clock,
-  Sparkles
+  Sparkles,
+  Watch
 } from 'lucide-react';
 import { decodeRoutineFromShareUrl } from '@/lib/share-utils';
 import { StrengthRoutine, WorkoutExerciseBlock } from '@/lib/types';
@@ -69,6 +70,13 @@ function LiveWorkoutContent() {
   const [restSecondsRemaining, setRestSecondsRemaining] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [isWatchMode, setIsWatchMode] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('watch') === '1' || (typeof window !== 'undefined' && window.innerWidth <= 280)) {
+      setIsWatchMode(true);
+    }
+  }, [searchParams]);
 
   // Métricas acumuladas de la sesión
   const [sessionStartTime] = useState<number>(Date.now());
@@ -278,6 +286,84 @@ function LiveWorkoutContent() {
   const currentBlock = routine.blocks[currentBlockIndex];
   const nextBlock = routine.blocks[currentBlockIndex + 1];
 
+  // Vista Ultra-Compacta OLED para Apple Watch Series 4 (watchOS WebKit / pantalla 40-44mm)
+  if (isWatchMode) {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col justify-between p-3 select-none">
+        <div className="flex items-center justify-between gap-1 text-[10px] text-slate-400">
+          <span className="font-semibold text-blue-400 truncate">{routine.name}</span>
+          <button
+            type="button"
+            onClick={() => setIsWatchMode(false)}
+            className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] text-slate-300"
+          >
+            Móvil
+          </button>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-2.5 my-2">
+          {phase === 'finished' ? (
+            <>
+              <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+              <div className="text-sm font-bold">Entreno Completado</div>
+              <div className="text-xs text-slate-400 tabular-nums">
+                {totalCompletedSets} series &bull; {totalVolumeKg} kg
+              </div>
+            </>
+          ) : phase === 'rest' || phase === 'warmup' || phase === 'cooldown' ? (
+            <>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
+                {phase === 'rest' ? 'Descanso' : phase === 'warmup' ? 'Calentamiento' : 'Enfriamiento'}
+              </div>
+              <div className="text-4xl font-mono font-extrabold tabular-nums text-white">
+                {formatTime(restSecondsRemaining)}
+              </div>
+              <div className="flex items-center gap-2 w-full pt-1">
+                <button
+                  type="button"
+                  onClick={() => addRestTime(30)}
+                  className="flex-1 py-2.5 rounded-full bg-slate-900 border border-slate-700 text-xs font-semibold active:scale-95"
+                >
+                  +30s
+                </button>
+                <button
+                  type="button"
+                  onClick={skipRest}
+                  className="flex-1 py-2.5 rounded-full bg-blue-600 text-xs font-bold active:scale-95"
+                >
+                  Seguir
+                </button>
+              </div>
+            </>
+          ) : currentBlock ? (
+            <>
+              <div className="px-2.5 py-0.5 rounded-full bg-blue-950 border border-blue-800 text-[10px] font-bold text-blue-300 tabular-nums">
+                Serie {currentSetIndex}/{currentBlock.sets} &bull; Ej {currentBlockIndex + 1}/{routine.blocks.length}
+              </div>
+              <div className="text-sm font-bold leading-tight line-clamp-2 px-1">
+                {currentBlock.exercise.name}
+              </div>
+              <div className="text-2xl font-extrabold text-emerald-400 tabular-nums">
+                {currentBlock.reps} &times; {currentBlock.weightKg > 0 ? `${currentBlock.weightKg}kg` : 'Libre'}
+              </div>
+              <button
+                type="button"
+                onClick={handleCompleteSet}
+                className="w-full py-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-md active:scale-95 transition-transform"
+              >
+                Serie Hecha
+              </button>
+            </>
+          ) : null}
+        </div>
+
+        <div className="text-center text-[10px] text-slate-500 tabular-nums">
+          {nextBlock ? `Sig: ${nextBlock.exercise.name}` : 'Último bloque'}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between select-none">
       {/* Barra Superior */}
@@ -296,6 +382,16 @@ function LiveWorkoutContent() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setIsWatchMode(true)}
+            title="Modo compacto OLED Apple Watch"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 inline-flex items-center gap-1.5 transition-all"
+          >
+            <Watch className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden sm:inline">Apple Watch</span>
+          </button>
+
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
             className={`p-2 rounded-lg text-xs font-semibold transition-all ${
