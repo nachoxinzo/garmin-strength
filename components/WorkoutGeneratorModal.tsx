@@ -31,6 +31,7 @@ import {
   SmartGenerateResult
 } from '@/lib/smart-workout-engine';
 import { StrengthRoutine } from '@/lib/types';
+import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
 
 interface WorkoutGeneratorModalProps {
   isOpen: boolean;
@@ -113,6 +114,7 @@ export default function WorkoutGeneratorModal({
 
     try {
       const knownWeights = getKnownExerciseWeights();
+      const wellness = loadGarminWellnessSnapshot();
       const res = await fetch('/api/routines/smart-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -121,7 +123,8 @@ export default function WorkoutGeneratorModal({
           gymProfile,
           durationMinutes: duration,
           goal,
-          knownWeights
+          knownWeights,
+          wellness
         })
       });
 

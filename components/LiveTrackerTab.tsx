@@ -25,6 +25,7 @@ import {
   VolumeX
 } from 'lucide-react';
 import { StrengthRoutine } from '@/lib/types';
+import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
 import {
   EffortRating,
   ExerciseProgressRecord,
@@ -730,6 +731,26 @@ export function LiveTrackerTab({
               <div className="text-[11px] text-amber-800/80">1RM o Volumen</div>
             </div>
           </div>
+
+          {(() => {
+            const wellness = loadGarminWellnessSnapshot();
+            if (!wellness) return null;
+            return (
+              <div className="rounded-xl bg-blue-50/70 border border-blue-200/80 p-3.5 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                  <Activity className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Contexto Garmin (Readiness {wellness.readinessIndex}/100)</span>
+                </div>
+                <p className="text-xs text-blue-900/90 leading-relaxed">
+                  {wellness.sleep ? `Sueño anoche: ${wellness.sleep.durationHours}h. ` : ''}
+                  {wellness.recovery.bodyBatteryCurrent !== undefined
+                    ? `Body Battery: ${wellness.recovery.bodyBatteryCurrent}. `
+                    : ''}
+                  {wellness.coachInsights[0] || ''}
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Reparto Muscular + PRs Batidos */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-border/60">

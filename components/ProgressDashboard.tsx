@@ -28,6 +28,7 @@ import {
   ExerciseSessionProgress
 } from '@/lib/progress-analyzer';
 import { analyzeWeeklyMuscleBalance, MuscleVolumeStatus } from '@/lib/weekly-volume-analyzer';
+import { GarminWellnessCard } from './GarminWellnessCard';
 import {
   isSupabaseConfigured,
   getWorkoutLogsCsvFromSupabase,
@@ -332,6 +333,7 @@ export default function ProgressDashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
+      <GarminWellnessCard />
       {renderMuscleBalanceCard()}
       {/* Barra de Origen de Datos */}
       <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">

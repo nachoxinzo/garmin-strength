@@ -1,7 +1,7 @@
 import { CatalogExercise, EquipmentType, EXERCISE_CATALOG, MuscleGroup } from './exercise-catalog';
 import { getExpertGymExercises } from './expert-gym-guide';
 import { getDiscomfortExerciseIds } from './exercise-notes';
-import { StrengthRoutine, WorkoutExerciseBlock } from './types';
+import { GarminWellnessSnapshot, StrengthRoutine, WorkoutExerciseBlock } from './types';
 
 export interface MyGymProfile {
   availableEquipment: EquipmentType[];
@@ -95,6 +95,7 @@ export interface SmartGenerateInput {
   durationMinutes: 45 | 60 | 75 | 90;
   goal: 'hypertrophy' | 'strength' | 'powerbuilding';
   knownWeights?: Record<string, number>;
+  wellness?: GarminWellnessSnapshot | null;
 }
 
 export interface SmartGenerateResult {
@@ -119,8 +120,13 @@ const LOWER_BACK_HEAVY_IDS = new Set([
  * filtra por el equipamiento real del gimnasio del usuario y aplica cargas sugeridas.
  */
 export function generateSmartLocalRoutine(input: SmartGenerateInput): SmartGenerateResult {
-  const { prompt, gymProfile, durationMinutes, goal, knownWeights = {} } = input;
+  const { prompt, gymProfile, durationMinutes, goal, knownWeights = {}, wellness = null } = input;
   const text = prompt.toLowerCase();
+
+  const lowReadiness = Boolean(wellness && wellness.readinessIndex < 45);
+  const highReadiness = Boolean(wellness && wellness.readinessIndex >= 75);
+  const legFatigueHigh = wellness?.lowerBodyFatigue === 'high';
+  const upperFatigueHigh = wellness?.upperBodyFatigue === 'high';
 
   // Detectar duración mencionada en el prompt si el usuario escribió ej. "45 min"
   let targetDuration = durationMinutes;
@@ -237,19 +243,32 @@ export function generateSmartLocalRoutine(input: SmartGenerateInput): SmartGener
   }
 
   const blocks: WorkoutExerciseBlock[] = selected.map(({ ex, expert }, idx) => {
-    const sets = goal === 'strength' && ex.tier === 1 ? 4 : expert?.recommendedSets || 3;
+    let sets = goal === 'strength' && ex.tier === 1 ? 4 : expert?.recommendedSets || 3;
+    if (lowReadiness) {
+      sets = Math.max(2, sets - 1);
+    } else if (legFatigueHigh && ex.muscleGroup === 'Piernas') {
+      sets = Math.max(2, sets - 1);
+    } else if (upperFatigueHigh && (ex.muscleGroup === 'Espalda' || ex.muscleGroup === 'Hombros')) {
+      sets = Math.max(2, sets - 1);
+    }
+
     const reps =
       goal === 'strength'
         ? ex.tier === 1
           ? 5
           : 8
         : expert?.defaultRepsNumber || (ex.tier === 3 ? 12 : 10);
-    const restSeconds =
+    const baseRest =
       goal === 'strength' ? 150 : expert?.recommendedRestSeconds || (ex.tier === 1 ? 120 : 75);
+    const restSeconds = lowReadiness ? baseRest + 15 : baseRest;
 
     // Peso inteligente: historial conocido o peso base realista por equipamiento
+    // Si la recuperación es baja, consolidamos peso sin forzar subida del +2.5%
     const known = knownWeights[ex.id];
-    const suggested = known ? Math.round((known * 1.025) / 2.5) * 2.5 : DEFAULT_WEIGHTS_BY_EQUIPMENT[ex.equipment];
+    const progressionMultiplier = lowReadiness ? 1.0 : highReadiness ? 1.025 : 1.015;
+    const suggested = known
+      ? Math.round((known * progressionMultiplier) / 2.5) * 2.5
+      : DEFAULT_WEIGHTS_BY_EQUIPMENT[ex.equipment];
 
     return {
       id: `smart-${Date.now()}-${idx}`,
@@ -271,9 +290,18 @@ export function generateSmartLocalRoutine(input: SmartGenerateInput): SmartGener
       ? 'Se han excluido ejercicios con alta carga axial lumbar (peso muerto convencional / sentadilla libre pesada), priorizando máquinas y apoyos estables.'
       : 'Se priorizan ejercicios S-Tier por su estabilidad y perfil de resistencia óptimo.',
     Object.keys(knownWeights).length > 0
-      ? 'Cargas ajustadas automáticamente (+2.5% sobrecarga progresiva) según tu historial reciente.'
+      ? lowReadiness
+        ? 'Cargas consolidadas sin sobrecarga agresiva por recuperación reducida.'
+        : 'Cargas ajustadas automáticamente (+2.5% sobrecarga progresiva) según tu historial reciente.'
       : 'Cargas base orientativas listas para calibrar en tu primera serie.',
   ];
+
+  if (wellness) {
+    const sleepTxt = wellness.sleep ? `Sueño ${wellness.sleep.durationHours}h` : 'Sin dato de sueño';
+    rationaleParts.push(
+      `Contexto Garmin: Readiness ${wellness.readinessIndex}/100 (${sleepTxt}, fatiga tren inferior ${wellness.lowerBodyFatigue}, tren superior ${wellness.upperBodyFatigue}).`
+    );
+  }
 
   return {
     routine: {

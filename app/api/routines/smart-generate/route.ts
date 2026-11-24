@@ -41,6 +41,7 @@ export async function POST(req: Request) {
     const goal = (['hypertrophy', 'strength', 'powerbuilding'].includes(body.goal) ? body.goal : 'hypertrophy') as 'hypertrophy' | 'strength' | 'powerbuilding';
     const knownWeights: Record<string, number> =
       body.knownWeights && typeof body.knownWeights === 'object' ? body.knownWeights : {};
+    const wellness = body.wellness && typeof body.wellness === 'object' ? body.wellness : null;
 
     const geminiKey = process.env.GEMINI_API_KEY;
     if (!geminiKey) {
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
         durationMinutes,
         goal,
         knownWeights,
+        wellness,
       });
       return NextResponse.json(localResult);
     }
@@ -69,6 +71,7 @@ Restricciones del gimnasio del usuario ("${gymProfile.gymName}"):
 - Objetivo: ${goal}
 - Duración objetivo: ${durationMinutes} minutos
 - Cargas conocidas del usuario (ID -> kg): ${JSON.stringify(knownWeights)}
+${wellness ? `- Contexto Garmin (Multideporte, Sueño y Recuperación): Readiness ${wellness.readinessIndex}/100, Sueño ${wellness.sleep?.durationHours ?? 'N/D'}h, HRV ${wellness.recovery?.hrvLastNight ?? 'N/D'} ms, Body Battery ${wellness.recovery?.bodyBatteryCurrent ?? 'N/D'}, Fatiga piernas (48h) ${wellness.lowerBodyFatigue}, Fatiga tren superior (48h) ${wellness.upperBodyFatigue}, Minutos semanales por deporte ${JSON.stringify(wellness.weeklySportMinutes)}. Adapta volumen, RIR y selección si la recuperación es baja o hay fatiga acumulada.` : ''}
 
 Responde ÚNICAMENTE con JSON válido con este esquema:
 {
@@ -115,6 +118,7 @@ ${catalogSummary}`;
         durationMinutes,
         goal,
         knownWeights,
+        wellness,
       });
       return NextResponse.json(fallback);
     }
@@ -128,6 +132,7 @@ ${catalogSummary}`;
         durationMinutes,
         goal,
         knownWeights,
+        wellness,
       });
       return NextResponse.json(fallback);
     }
@@ -166,6 +171,7 @@ ${catalogSummary}`;
         durationMinutes,
         goal,
         knownWeights,
+        wellness,
       });
       return NextResponse.json(fallback);
     }

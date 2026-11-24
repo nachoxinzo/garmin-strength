@@ -8,7 +8,15 @@ import {
   workoutFromSpec
 } from 'garminconnect-js';
 import { EXERCISES } from 'garminconnect-js/exercises';
-import { StrengthRoutine, GarminAccountStatus } from './types';
+import {
+  StrengthRoutine,
+  GarminAccountStatus,
+  GarminWellnessSnapshot,
+  GarminActivitySummary,
+  GarminSleepSummary,
+  GarminRecoverySummary,
+  SportCategory,
+} from './types';
 import { EXERCISE_CATALOG } from './exercise-catalog';
 
 export interface GarminTokensPayload {
@@ -371,5 +379,237 @@ export async function syncRoutineToGarmin(
     pushSuccess,
     workoutName: workoutPayload.workoutName,
     tokens: updatedTokens || null
+  };
+}
+
+function classifySportCategory(typeKeyRaw: string): SportCategory {
+  const key = (typeKeyRaw || '').toLowerCase();
+  if (key.includes('strength') || key.includes('weight')) return 'Fuerza';
+  if (key.includes('run') || key.includes('trail') || key.includes('track')) return 'Running';
+  if (key.includes('cycl') || key.includes('biking') || key.includes('ride') || key.includes('mtb')) return 'Ciclismo';
+  if (key.includes('swim')) return 'Natación';
+  return 'Cardio / Otros';
+}
+
+/**
+ * Descarga actividades multideporte (últimos 14 días), sueño de anoche y métricas de recuperación
+ * (Training Readiness, HRV, Body Battery, FC reposo y estrés) desde Garmin Connect.
+ */
+export async function fetchGarminWellnessSnapshot(
+  clientTokens?: GarminTokensPayload | null
+): Promise<{
+  success: boolean;
+  snapshot: GarminWellnessSnapshot;
+  tokens?: GarminTokensPayload | null;
+}> {
+  const session = await getGarminClient(clientTokens);
+  if (!session) {
+    throw new Error('No hay sesión activa de Garmin. Por favor conecta tu cuenta primero.');
+  }
+  const { garmin, client } = session;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const [
+    activitiesRes,
+    sleepRes,
+    readinessRes,
+    hrvRes,
+    batteryRes,
+    rhrRes,
+    stressRes,
+  ] = await Promise.allSettled([
+    garmin.getActivities(0, 25),
+    garmin.getSleepData(todayStr),
+    garmin.getMorningTrainingReadiness(todayStr),
+    garmin.getHrvData(todayStr),
+    garmin.getBodyBattery(todayStr, todayStr),
+    garmin.getRhrDaily(todayStr, todayStr),
+    garmin.getStressData(todayStr),
+  ]);
+
+  // 1. Actividades recientes (últimos 14 días)
+  const cutoffMs = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  const weekCutoffMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const twoDaysCutoffMs = Date.now() - 48 * 60 * 60 * 1000;
+
+  const weeklySportMinutes: Record<SportCategory, number> = {
+    Fuerza: 0,
+    Running: 0,
+    Ciclismo: 0,
+    Natación: 0,
+    'Cardio / Otros': 0,
+  };
+
+  let recentLowerLoad = 0;
+  let recentUpperLoad = 0;
+  const recentActivities: GarminActivitySummary[] = [];
+
+  if (activitiesRes.status === 'fulfilled' && Array.isArray(activitiesRes.value)) {
+    for (const act of activitiesRes.value as any[]) {
+      const startStr = String(act?.startTimeLocal || act?.startTimeGMT || '');
+      const startMs = startStr ? new Date(startStr.replace(' ', 'T')).getTime() : 0;
+      if (startMs && startMs < cutoffMs) continue;
+
+      const typeKey = String(act?.activityType?.typeKey || 'other');
+      const sportCategory = classifySportCategory(typeKey);
+      const durationMinutes = Math.round(((Number(act?.duration) || 0) / 60) * 10) / 10;
+      const distanceKm = Math.round(((Number(act?.distance) || 0) / 1000) * 100) / 100;
+
+      const summary: GarminActivitySummary = {
+        activityId: Number(act?.activityId || 0),
+        name: String(act?.activityName || sportCategory),
+        sportCategory,
+        typeKey,
+        startTimeLocal: startStr,
+        durationMinutes,
+        distanceKm,
+        calories: Math.round(Number(act?.calories) || 0),
+        avgHr: act?.averageHR ? Math.round(Number(act.averageHR)) : undefined,
+        aerobicEffect: act?.aerobicTrainingEffect ? Number(act.aerobicTrainingEffect) : undefined,
+        anaerobicEffect: act?.anaerobicTrainingEffect ? Number(act.anaerobicTrainingEffect) : undefined,
+      };
+      recentActivities.push(summary);
+
+      if (!startMs || startMs >= weekCutoffMs) {
+        weeklySportMinutes[sportCategory] = Math.round(
+          (weeklySportMinutes[sportCategory] + durationMinutes) * 10
+        ) / 10;
+      }
+
+      if (!startMs || startMs >= twoDaysCutoffMs) {
+        const te = Number(act?.aerobicTrainingEffect || 2.5);
+        if (sportCategory === 'Running' || sportCategory === 'Ciclismo') {
+          recentLowerLoad += durationMinutes * (te / 2.5);
+        } else if (sportCategory === 'Natación') {
+          recentUpperLoad += durationMinutes * (te / 2.5);
+        } else if (sportCategory === 'Cardio / Otros') {
+          recentLowerLoad += durationMinutes * 0.5;
+        }
+      }
+    }
+  }
+
+  // 2. Sueño
+  let sleep: GarminSleepSummary | null = null;
+  if (sleepRes.status === 'fulfilled' && sleepRes.value) {
+    const dto = (sleepRes.value as any).dailySleepDTO || (sleepRes.value as any);
+    const totalSec = Number(dto?.sleepTimeSeconds || 0);
+    if (totalSec > 0) {
+      sleep = {
+        date: String(dto?.calendarDate || todayStr),
+        durationHours: Math.round((totalSec / 3600) * 10) / 10,
+        deepHours: Math.round((Number(dto?.deepSleepSeconds || 0) / 3600) * 10) / 10,
+        remHours: Math.round((Number(dto?.remSleepSeconds || 0) / 3600) * 10) / 10,
+        lightHours: Math.round((Number(dto?.lightSleepSeconds || 0) / 3600) * 10) / 10,
+        sleepScore: dto?.sleepScores?.overall?.value
+          ? Number(dto.sleepScores.overall.value)
+          : undefined,
+      };
+    }
+  }
+
+  // 3. Recuperación (Training Readiness, HRV, Body Battery, FC reposo, Estrés)
+  const recovery: GarminRecoverySummary = {};
+
+  if (readinessRes.status === 'fulfilled' && readinessRes.value) {
+    const r = Array.isArray(readinessRes.value) ? readinessRes.value[0] : readinessRes.value;
+    if (r && typeof (r as any).score === 'number') {
+      recovery.trainingReadinessScore = (r as any).score;
+      recovery.trainingReadinessLevel = String((r as any).level || '');
+    }
+  }
+
+  if (hrvRes.status === 'fulfilled' && hrvRes.value) {
+    const hrvSum = (hrvRes.value as any).hrvSummary || hrvRes.value;
+    if (hrvSum?.lastNightAvg) recovery.hrvLastNight = Math.round(Number(hrvSum.lastNightAvg));
+    if (hrvSum?.weeklyAvg) recovery.hrvWeeklyAvg = Math.round(Number(hrvSum.weeklyAvg));
+    if (hrvSum?.status) recovery.hrvStatus = String(hrvSum.status);
+  }
+
+  if (batteryRes.status === 'fulfilled' && Array.isArray(batteryRes.value) && batteryRes.value.length > 0) {
+    const bb = batteryRes.value[batteryRes.value.length - 1] as any;
+    const values = Array.isArray(bb?.bodyBatteryValuesArray) ? bb.bodyBatteryValuesArray : [];
+    const lastValid = [...values].reverse().find((v) => Array.isArray(v) && typeof v[1] === 'number');
+    if (lastValid) recovery.bodyBatteryCurrent = Number(lastValid[1]);
+    if (typeof bb?.charged === 'number') recovery.bodyBatteryCharged = bb.charged;
+    if (typeof bb?.drained === 'number') recovery.bodyBatteryDrained = bb.drained;
+  }
+
+  if (rhrRes.status === 'fulfilled' && Array.isArray(rhrRes.value) && rhrRes.value.length > 0) {
+    const rhrEntry = rhrRes.value[0] as any;
+    const val = rhrEntry?.value ?? rhrEntry?.restingHeartRate;
+    if (typeof val === 'number') recovery.restingHr = Math.round(val);
+  }
+
+  if (stressRes.status === 'fulfilled' && stressRes.value) {
+    const avgS = (stressRes.value as any).avgStressLevel;
+    if (typeof avgS === 'number' && avgS > 0) recovery.avgStress = Math.round(avgS);
+  }
+
+  // 4. Índice unificado de Readiness (0-100) + Fatiga por zona + Insights
+  let readinessIndex = 70;
+  if (typeof recovery.trainingReadinessScore === 'number') {
+    readinessIndex = recovery.trainingReadinessScore;
+  } else {
+    let score = 68;
+    if (sleep) {
+      if (sleep.durationHours >= 7.5) score += 14;
+      else if (sleep.durationHours >= 6.5) score += 5;
+      else if (sleep.durationHours < 6) score -= 18;
+    }
+    if (typeof recovery.bodyBatteryCurrent === 'number') {
+      if (recovery.bodyBatteryCurrent >= 70) score += 10;
+      else if (recovery.bodyBatteryCurrent < 35) score -= 15;
+    }
+    if (recovery.hrvLastNight && recovery.hrvWeeklyAvg) {
+      const ratio = recovery.hrvLastNight / recovery.hrvWeeklyAvg;
+      if (ratio >= 1.0) score += 6;
+      else if (ratio < 0.85) score -= 12;
+    }
+    readinessIndex = Math.max(15, Math.min(100, Math.round(score)));
+  }
+
+  const lowerBodyFatigue: 'low' | 'moderate' | 'high' =
+    recentLowerLoad >= 75 ? 'high' : recentLowerLoad >= 35 ? 'moderate' : 'low';
+  const upperBodyFatigue: 'low' | 'moderate' | 'high' =
+    recentUpperLoad >= 55 ? 'high' : recentUpperLoad >= 25 ? 'moderate' : 'low';
+
+  const coachInsights: string[] = [];
+  if (sleep) {
+    if (sleep.durationHours < 6) {
+      coachInsights.push(`Sueño corto (${sleep.durationHours}h): conviene moderar series pesadas y dejar 2-3 reps en recámara.`);
+    } else if (sleep.durationHours >= 7.5) {
+      coachInsights.push(`Buen descanso (${sleep.durationHours}h): entorno óptimo para buscar progresión de cargas.`);
+    }
+  }
+  if (lowerBodyFatigue === 'high') {
+    coachInsights.push('Alta carga reciente de carrera/ciclismo (48h): prioriza tren superior o reduce volumen de piernas hoy.');
+  } else if (lowerBodyFatigue === 'moderate') {
+    coachInsights.push('Carga moderada de cardio en piernas: ajusta las series de sentadilla/bisagra según sensaciones.');
+  }
+  if (upperBodyFatigue !== 'low') {
+    coachInsights.push('Carga reciente de natación en tren superior: cuida el volumen de hombro y dorsal.');
+  }
+  if (coachInsights.length === 0) {
+    coachInsights.push('Recuperación equilibrada según tus métricas de Garmin Connect.');
+  }
+
+  const updatedTokens = client.getTokens() as GarminTokensPayload | undefined;
+
+  return {
+    success: true,
+    snapshot: {
+      syncedAt: new Date().toISOString(),
+      sleep,
+      recovery,
+      recentActivities: recentActivities.slice(0, 12),
+      weeklySportMinutes,
+      readinessIndex,
+      lowerBodyFatigue,
+      upperBodyFatigue,
+      coachInsights,
+    },
+    tokens: updatedTokens || null,
   };
 }
