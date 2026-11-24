@@ -985,8 +985,18 @@ export default function WorkoutStudioPage() {
             </button>
           </div>
 
-          {/* Barra Móvil Limpia (< 768px): Estado Garmin + Menú Hamburguesa */}
-          <div className="flex md:hidden items-center gap-2 shrink-0">
+          {/* Barra Móvil Limpia (< 768px): Guía + Estado Garmin + Menú Hamburguesa */}
+          <div className="flex md:hidden items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsGuideModalOpen(true)}
+              aria-label="Abrir guía interactiva"
+              className="min-h-[40px] px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200/80 text-blue-700 text-xs font-semibold inline-flex items-center gap-1 transition-all active:scale-95"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+              <span>Guía</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsGarminAuthModalOpen(true)}

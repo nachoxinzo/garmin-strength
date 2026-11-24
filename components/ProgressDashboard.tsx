@@ -33,8 +33,9 @@ import {
 import { analyzeWeeklyMuscleBalance, MuscleVolumeStatus } from '@/lib/weekly-volume-analyzer';
 import { loadProgressionHistory } from '@/lib/progressive-overload-engine';
 import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
-import { GarminActivitySummary, GarminWellnessSnapshot } from '@/lib/types';
+import { GarminActivityDetail, GarminActivitySummary, GarminWellnessSnapshot } from '@/lib/types';
 import { GarminWellnessCard } from './GarminWellnessCard';
+import { Skeleton } from './ui/skeleton';
 import {
   DbWorkoutLog,
   isSupabaseConfigured,
@@ -58,6 +59,12 @@ export default function ProgressDashboard() {
   const [muscleBalance, setMuscleBalance] = useState<MuscleVolumeStatus[]>([]);
   const [garminActivities, setGarminActivities] = useState<GarminActivitySummary[]>([]);
   const [selectedHeatmapDate, setSelectedHeatmapDate] = useState<string | null>(null);
+  const [expandedActivityId, setExpandedActivityId] = useState<number | null>(null);
+  const [activityDetailsCache, setActivityDetailsCache] = useState<
+    Record<number, GarminActivityDetail>
+  >({});
+  const [loadingActivityId, setLoadingActivityId] = useState<number | null>(null);
+  const [activityDetailError, setActivityDetailError] = useState<string | null>(null);
   const [liveVolumeByDate, setLiveVolumeByDate] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -191,6 +198,53 @@ export default function ProgressDashboard() {
 
   const handleGarminSynced = (snap: GarminWellnessSnapshot) => {
     setGarminActivities(snap.recentActivities || []);
+  };
+
+  const handleToggleActivityDetail = async (act: GarminActivitySummary) => {
+    if (expandedActivityId === act.activityId) {
+      setExpandedActivityId(null);
+      return;
+    }
+
+    setExpandedActivityId(act.activityId);
+    setActivityDetailError(null);
+
+    if (activityDetailsCache[act.activityId]) {
+      return;
+    }
+
+    setLoadingActivityId(act.activityId);
+    try {
+      const rawTokens = localStorage.getItem('garmin_oauth_tokens');
+      const garminTokens = rawTokens ? JSON.parse(rawTokens) : null;
+
+      const res = await fetch('/api/garmin/activity-detail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activityId: act.activityId,
+          sportCategory: act.sportCategory,
+          garminTokens,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'No se pudo cargar el detalle de la actividad.');
+      }
+
+      if (data.tokens) {
+        localStorage.setItem('garmin_oauth_tokens', JSON.stringify(data.tokens));
+      }
+
+      setActivityDetailsCache((prev) => ({
+        ...prev,
+        [act.activityId]: data.detail as GarminActivityDetail,
+      }));
+    } catch (err: any) {
+      setActivityDetailError(err?.message || 'Error al cargar el detalle desde Garmin.');
+    } finally {
+      setLoadingActivityId(null);
+    }
   };
 
   const handleImportGarminStrength = async (logs: DbWorkoutLog[]) => {
@@ -584,26 +638,212 @@ export default function ProgressDashboard() {
                   )}
                 </div>
                 {dayActs.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {dayActs.map((act) => (
-                      <div
-                        key={act.activityId}
-                        className="flex flex-wrap items-center justify-between gap-2 text-xs bg-card rounded-lg px-3 py-2 border border-border/50"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold">
-                            {act.sportCategory}
-                          </span>
-                          <span className="font-semibold text-foreground truncate">{act.name}</span>
+                  <div className="space-y-2">
+                    {dayActs.map((act) => {
+                      const isExpanded = expandedActivityId === act.activityId;
+                      const detail = activityDetailsCache[act.activityId];
+                      const isLoadingThis = loadingActivityId === act.activityId;
+
+                      return (
+                        <div
+                          key={act.activityId}
+                          className="rounded-lg bg-card border border-border/60 overflow-hidden"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleToggleActivityDetail(act)}
+                            className="w-full min-h-[44px] px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-left text-xs hover:bg-muted/40 transition-colors"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold shrink-0">
+                                {act.sportCategory}
+                              </span>
+                              <span className="font-semibold text-foreground truncate">
+                                {act.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
+                              <span>
+                                {act.durationMinutes} min
+                                {act.distanceKm > 0 ? ` · ${act.distanceKm} km` : ''}
+                                {act.calories > 0 ? ` · ${act.calories} kcal` : ''}
+                                {act.avgHr ? ` · ${act.avgHr} bpm` : ''}
+                              </span>
+                              <span className="text-[10px] font-bold text-blue-600">
+                                {isExpanded ? 'Ocultar' : 'Ver detalle'}
+                              </span>
+                            </div>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="px-3 pb-3 pt-2 border-t border-border/50 bg-muted/20 space-y-3 text-xs">
+                              {isLoadingThis && (
+                                <div className="space-y-2">
+                                  <Skeleton className="h-4 w-3/4" />
+                                  <Skeleton className="h-12 w-full" />
+                                </div>
+                              )}
+
+                              {!isLoadingThis && activityDetailError && !detail && (
+                                <p className="text-rose-600 text-xs">{activityDetailError}</p>
+                              )}
+
+                              {!isLoadingThis && detail && (
+                                <>
+                                  {/* Métricas fisiológicas */}
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                    {detail.avgPaceMinKm && (
+                                      <div className="rounded-lg bg-card border border-border/50 p-2">
+                                        <div className="text-[10px] text-muted-foreground">Ritmo Medio</div>
+                                        <div className="font-bold text-foreground tabular-nums">
+                                          {detail.avgPaceMinKm}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {!detail.avgPaceMinKm && detail.avgSpeedKmh && (
+                                      <div className="rounded-lg bg-card border border-border/50 p-2">
+                                        <div className="text-[10px] text-muted-foreground">Velocidad Media</div>
+                                        <div className="font-bold text-foreground tabular-nums">
+                                          {detail.avgSpeedKmh} km/h
+                                        </div>
+                                      </div>
+                                    )}
+                                    {(detail.avgHr || detail.maxHr) && (
+                                      <div className="rounded-lg bg-card border border-border/50 p-2">
+                                        <div className="text-[10px] text-muted-foreground">FC Media / Máx</div>
+                                        <div className="font-bold text-foreground tabular-nums">
+                                          {detail.avgHr ?? '—'} / {detail.maxHr ?? '—'} bpm
+                                        </div>
+                                      </div>
+                                    )}
+                                    {detail.elevationGainM !== undefined && detail.elevationGainM > 0 && (
+                                      <div className="rounded-lg bg-card border border-border/50 p-2">
+                                        <div className="text-[10px] text-muted-foreground">Desnivel +</div>
+                                        <div className="font-bold text-foreground tabular-nums">
+                                          {detail.elevationGainM} m
+                                        </div>
+                                      </div>
+                                    )}
+                                    {(detail.aerobicEffect !== undefined ||
+                                      detail.anaerobicEffect !== undefined) && (
+                                      <div className="rounded-lg bg-card border border-border/50 p-2">
+                                        <div className="text-[10px] text-muted-foreground">Training Effect</div>
+                                        <div className="font-bold text-foreground tabular-nums">
+                                          Aer {detail.aerobicEffect ?? '—'} · Ana {detail.anaerobicEffect ?? '—'}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Zonas de FC (Z1-Z5) */}
+                                  {detail.hrZones.length > 0 && (
+                                    <div className="space-y-1.5">
+                                      <div className="text-[11px] font-semibold text-muted-foreground">
+                                        Zonas de Frecuencia Cardíaca
+                                      </div>
+                                      <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-muted">
+                                        {detail.hrZones.map((z) => {
+                                          const zoneColors: Record<number, string> = {
+                                            1: 'bg-slate-400',
+                                            2: 'bg-blue-500',
+                                            3: 'bg-emerald-500',
+                                            4: 'bg-amber-500',
+                                            5: 'bg-rose-500',
+                                          };
+                                          return (
+                                            <div
+                                              key={z.zone}
+                                              style={{ width: `${z.pct}%` }}
+                                              className={zoneColors[z.zone] || 'bg-slate-400'}
+                                              title={`Z${z.zone}: ${Math.round(z.seconds / 60)} min (${z.pct}%)`}
+                                            />
+                                          );
+                                        })}
+                                      </div>
+                                      <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground tabular-nums">
+                                        {detail.hrZones.map((z) => (
+                                          <span key={z.zone}>
+                                            Z{z.zone}: {Math.round(z.seconds / 60)}m ({z.pct}%)
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Series de Fuerza */}
+                                  {detail.strengthExercises.length > 0 && (
+                                    <div className="space-y-1.5">
+                                      <div className="text-[11px] font-semibold text-muted-foreground">
+                                        Ejercicios y Series Registradas
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        {detail.strengthExercises.map((ex, i) => (
+                                          <div
+                                            key={i}
+                                            className="rounded-lg bg-card border border-border/50 p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5"
+                                          >
+                                            <span className="font-semibold text-foreground">
+                                              {ex.name}
+                                            </span>
+                                            <div className="flex flex-wrap gap-1.5 tabular-nums">
+                                              {ex.sets.map((s) => (
+                                                <span
+                                                  key={s.setIndex}
+                                                  className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-semibold"
+                                                >
+                                                  {s.weightKg} kg &times; {s.reps}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Parciales / Vueltas */}
+                                  {detail.splits.length > 0 && (
+                                    <div className="space-y-1.5">
+                                      <div className="text-[11px] font-semibold text-muted-foreground">
+                                        Parciales / Vueltas ({detail.splits.length})
+                                      </div>
+                                      <div className="overflow-x-auto rounded-lg border border-border/50 bg-card">
+                                        <table className="w-full text-[11px] text-left tabular-nums">
+                                          <thead className="bg-muted/40 text-muted-foreground">
+                                            <tr>
+                                              <th className="px-2.5 py-1.5">Vuelta</th>
+                                              <th className="px-2.5 py-1.5">Dist.</th>
+                                              <th className="px-2.5 py-1.5">Tiempo</th>
+                                              {detail.splits.some((s) => s.paceMinKm) && (
+                                                <th className="px-2.5 py-1.5">Ritmo</th>
+                                              )}
+                                              <th className="px-2.5 py-1.5">FC</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-border/40">
+                                            {detail.splits.map((sp) => (
+                                              <tr key={sp.lap}>
+                                                <td className="px-2.5 py-1.5 font-semibold">#{sp.lap}</td>
+                                                <td className="px-2.5 py-1.5">{sp.distanceKm} km</td>
+                                                <td className="px-2.5 py-1.5">{sp.durationMin} min</td>
+                                                {detail.splits.some((s) => s.paceMinKm) && (
+                                                  <td className="px-2.5 py-1.5">{sp.paceMinKm || '—'}</td>
+                                                )}
+                                                <td className="px-2.5 py-1.5">{sp.avgHr ? `${sp.avgHr} bpm` : '—'}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className="text-[11px] text-muted-foreground tabular-nums">
-                          {act.durationMinutes} min
-                          {act.distanceKm > 0 ? ` · ${act.distanceKm} km` : ''}
-                          {act.calories > 0 ? ` · ${act.calories} kcal` : ''}
-                          {act.avgHr ? ` · ${act.avgHr} bpm` : ''}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   dayStrengthVol === 0 && (

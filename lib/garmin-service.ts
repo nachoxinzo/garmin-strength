@@ -13,6 +13,7 @@ import {
   GarminAccountStatus,
   GarminWellnessSnapshot,
   GarminActivitySummary,
+  GarminActivityDetail,
   GarminSleepSummary,
   GarminRecoverySummary,
   SportCategory,
@@ -737,6 +738,154 @@ export async function fetchGarminStrengthLogs(
     success: true,
     activitiesCount: strengthActivities.length,
     logs,
+    tokens: updatedTokens || null,
+  };
+}
+
+function formatPaceMinKm(speedMps: number): string | undefined {
+  if (!speedMps || speedMps <= 0.1) return undefined;
+  const secPerKm = 1000 / speedMps;
+  const mins = Math.floor(secPerKm / 60);
+  const secs = Math.round(secPerKm % 60);
+  return `${mins}:${String(secs === 60 ? 59 : secs).padStart(2, '0')} /km`;
+}
+
+/**
+ * Obtiene el detalle completo bajo demanda de una actividad concreta de Garmin
+ * (resumen fisiológico, zonas de FC, splits o series de fuerza).
+ */
+export async function fetchGarminActivityDetail(
+  activityId: number,
+  sportCategory: SportCategory,
+  clientTokens?: GarminTokensPayload | null
+): Promise<{
+  success: boolean;
+  detail: GarminActivityDetail;
+  tokens?: GarminTokensPayload | null;
+}> {
+  const session = await getGarminClient(clientTokens);
+  if (!session) {
+    throw new Error('No hay sesión activa de Garmin. Por favor conecta tu cuenta primero.');
+  }
+  const { garmin, client } = session;
+
+  const [activityRes, zonesRes, specificRes] = await Promise.allSettled([
+    garmin.getActivity(activityId),
+    garmin.getActivityHrInTimezones(activityId),
+    sportCategory === 'Fuerza'
+      ? garmin.getActivityExerciseSets(activityId)
+      : garmin.getActivitySplits(activityId),
+  ]);
+
+  const act: any = activityRes.status === 'fulfilled' ? activityRes.value : null;
+  const summary: any = act?.summaryDTO || act || {};
+
+  const avgSpeedMps = Number(summary?.averageSpeed || 0);
+  const avgSpeedKmh = avgSpeedMps > 0 ? Math.round(avgSpeedMps * 3.6 * 10) / 10 : undefined;
+
+  // Zonas de FC (Z1-Z5)
+  const rawZones: any[] =
+    zonesRes.status === 'fulfilled' && Array.isArray(zonesRes.value)
+      ? (zonesRes.value as any[])
+      : [];
+  const totalZoneSec = rawZones.reduce(
+    (acc, z) => acc + (Number(z?.secsInZone) || 0),
+    0
+  );
+  const hrZones = rawZones
+    .map((z) => {
+      const secs = Math.round(Number(z?.secsInZone) || 0);
+      return {
+        zone: Number(z?.zoneNumber || 0),
+        seconds: secs,
+        pct: totalZoneSec > 0 ? Math.round((secs / totalZoneSec) * 100) : 0,
+      };
+    })
+    .filter((z) => z.zone >= 1 && z.zone <= 5);
+
+  // Series de Fuerza vs Splits de Cardio
+  const strengthExercises: GarminActivityDetail['strengthExercises'] = [];
+  const splits: GarminActivityDetail['splits'] = [];
+
+  if (sportCategory === 'Fuerza' && specificRes.status === 'fulfilled' && specificRes.value) {
+    const rawSets = Array.isArray((specificRes.value as any).exerciseSets)
+      ? (specificRes.value as any).exerciseSets
+      : [];
+    const grouped = new Map<string, { setIndex: number; weightKg: number; reps: number }[]>();
+
+    for (const s of rawSets) {
+      if (String(s?.setType || '').toUpperCase() === 'REST') continue;
+      const reps = Math.max(0, Math.round(Number(s?.repetitionCount) || 0));
+      if (reps === 0) continue;
+
+      const rawWeight = Number(s?.weight) || 0;
+      const weightKg =
+        rawWeight > 500
+          ? Math.round((rawWeight / 1000) * 10) / 10
+          : Math.round(rawWeight * 10) / 10;
+
+      const firstEx =
+        Array.isArray(s?.exercises) && s.exercises.length > 0 ? s.exercises[0] : null;
+      const garminCat = String(firstEx?.category || '');
+      const garminName = String(firstEx?.name || firstEx?.subCategory || '');
+      const catalogMatch = EXERCISE_CATALOG.find(
+        (e) =>
+          (garminName && e.garminName === garminName) ||
+          (garminCat && e.category === garminCat)
+      );
+      const exName = catalogMatch
+        ? catalogMatch.name
+        : (garminName || garminCat || 'Ejercicio')
+            .toLowerCase()
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+
+      const list = grouped.get(exName) || [];
+      list.push({ setIndex: list.length + 1, weightKg, reps });
+      grouped.set(exName, list);
+    }
+
+    grouped.forEach((sets, name) => {
+      strengthExercises.push({ name, sets });
+    });
+  } else if (specificRes.status === 'fulfilled' && specificRes.value) {
+    const lapDTOs: any[] = Array.isArray((specificRes.value as any).lapDTOs)
+      ? (specificRes.value as any).lapDTOs
+      : [];
+    lapDTOs.slice(0, 20).forEach((lap, idx) => {
+      const distKm = Math.round(((Number(lap?.distance) || 0) / 1000) * 100) / 100;
+      const durMin = Math.round(((Number(lap?.duration) || 0) / 60) * 10) / 10;
+      const lapSpeed = Number(lap?.averageSpeed || 0);
+      splits.push({
+        lap: idx + 1,
+        distanceKm: distKm,
+        durationMin: durMin,
+        paceMinKm: sportCategory === 'Running' ? formatPaceMinKm(lapSpeed) : undefined,
+        avgHr: lap?.averageHR ? Math.round(Number(lap.averageHR)) : undefined,
+      });
+    });
+  }
+
+  const updatedTokens = client.getTokens() as GarminTokensPayload | undefined;
+
+  return {
+    success: true,
+    detail: {
+      activityId,
+      avgHr: summary?.averageHR ? Math.round(Number(summary.averageHR)) : undefined,
+      maxHr: summary?.maxHR ? Math.round(Number(summary.maxHR)) : undefined,
+      calories: summary?.calories ? Math.round(Number(summary.calories)) : undefined,
+      elevationGainM: summary?.elevationGain ? Math.round(Number(summary.elevationGain)) : undefined,
+      avgSpeedKmh,
+      avgPaceMinKm: sportCategory === 'Running' ? formatPaceMinKm(avgSpeedMps) : undefined,
+      aerobicEffect: summary?.trainingEffect ? Number(summary.trainingEffect) : undefined,
+      anaerobicEffect: summary?.anaerobicTrainingEffect
+        ? Number(summary.anaerobicTrainingEffect)
+        : undefined,
+      hrZones,
+      splits,
+      strengthExercises,
+    },
     tokens: updatedTokens || null,
   };
 }

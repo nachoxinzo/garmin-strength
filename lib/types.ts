@@ -77,3 +77,27 @@ export interface GarminWellnessSnapshot {
   upperBodyFatigue: 'low' | 'moderate' | 'high';
   coachInsights: string[];
 }
+
+export interface GarminActivityDetail {
+  activityId: number;
+  avgHr?: number;
+  maxHr?: number;
+  calories?: number;
+  elevationGainM?: number;
+  avgSpeedKmh?: number;
+  avgPaceMinKm?: string;
+  aerobicEffect?: number;
+  anaerobicEffect?: number;
+  hrZones: { zone: number; seconds: number; pct: number }[];
+  splits: {
+    lap: number;
+    distanceKm: number;
+    durationMin: number;
+    paceMinKm?: string;
+    avgHr?: number;
+  }[];
+  strengthExercises: {
+    name: string;
+    sets: { setIndex: number; weightKg: number; reps: number }[];
+  }[];
+}
