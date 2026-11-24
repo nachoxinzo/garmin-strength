@@ -331,7 +331,7 @@ export function LiveTrackerTab({
               ? `Nuevo 1RM estimado: ${current1RM} kg (${targetSet.weightKg} kg × ${targetSet.reps})`
               : `Nuevo récord de volumen en una serie: ${currentVol} kg`,
         });
-        setTimeout(() => setPrToast(null), 4000);
+        setTimeout(() => setPrToast(null), 4500);
       }
     }
 
@@ -726,20 +726,57 @@ export function LiveTrackerTab({
         </div>
       </section>
 
-      {/* Celebración Instantánea de Nuevo PR (B) */}
+      {/* Celebración Emergente Centrada de Nuevo PR con GIF */}
       {prToast && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-slate-950 rounded-2xl p-4 shadow-2xl border-2 border-amber-300 flex items-center gap-3 animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-11 h-11 rounded-xl bg-white/90 text-amber-600 flex items-center justify-center shrink-0 shadow-sm animate-bounce">
-            <Trophy className="w-6 h-6" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 text-xs font-black tracking-wide uppercase">
-              <Sparkles className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{prToast.title}</span>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nuevo récord personal"
+          onClick={() => setPrToast(null)}
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-card border-2 border-amber-400 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+          >
+            <div className="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 px-4 py-3 flex items-center justify-between gap-2 text-slate-950">
+              <div className="flex items-center gap-2 min-w-0">
+                <Trophy className="w-5 h-5 shrink-0 animate-bounce" />
+                <span className="text-xs font-black uppercase tracking-wide truncate">
+                  {prToast.title}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPrToast(null)}
+                aria-label="Cerrar celebración de récord"
+                className="px-2 py-1 rounded-lg bg-slate-950/15 hover:bg-slate-950/25 text-[11px] font-bold shrink-0"
+              >
+                Cerrar
+              </button>
             </div>
-            <p className="text-xs font-semibold text-slate-900/90 mt-0.5 leading-snug">
-              {prToast.subtitle}
-            </p>
+
+            <div className="p-4 space-y-3 text-center">
+              <div className="rounded-xl overflow-hidden border border-border/60 bg-slate-900 max-h-[300px] flex items-center justify-center">
+                <img
+                  src="/pr-celebration.gif"
+                  alt="Celebración de nuevo récord personal"
+                  className="w-full h-full max-h-[300px] object-contain"
+                />
+              </div>
+
+              <p className="text-xs sm:text-sm font-semibold text-foreground leading-snug">
+                {prToast.subtitle}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setPrToast(null)}
+                className="w-full min-h-[42px] rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black uppercase tracking-wide transition-all active:scale-[0.98]"
+              >
+                A seguir
+              </button>
+            </div>
           </div>
         </div>
       )}

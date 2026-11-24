@@ -1,9 +1,10 @@
-const CACHE_NAME = 'ironsync-pwa-v2';
+const CACHE_NAME = 'ironsync-pwa-v3';
 const STATIC_ASSETS = [
   '/',
   '/live',
   '/manifest.json',
   '/icon.svg',
+  '/pr-celebration.gif',
   '/api/exercises',
 ];
 
