@@ -879,10 +879,14 @@ export async function fetchGarminActivityDetail(
       elevationGainM: summary?.elevationGain ? Math.round(Number(summary.elevationGain)) : undefined,
       avgSpeedKmh,
       avgPaceMinKm: sportCategory === 'Running' ? formatPaceMinKm(avgSpeedMps) : undefined,
-      aerobicEffect: summary?.trainingEffect ? Number(summary.trainingEffect) : undefined,
-      anaerobicEffect: summary?.anaerobicTrainingEffect
-        ? Number(summary.anaerobicTrainingEffect)
-        : undefined,
+      aerobicEffect:
+        summary?.trainingEffect !== undefined && summary?.trainingEffect !== null
+          ? Math.round(Number(summary.trainingEffect) * 10) / 10
+          : undefined,
+      anaerobicEffect:
+        summary?.anaerobicTrainingEffect !== undefined && summary?.anaerobicTrainingEffect !== null
+          ? Math.round(Number(summary.anaerobicTrainingEffect) * 10) / 10
+          : undefined,
       hrZones,
       splits,
       strengthExercises,

@@ -219,7 +219,8 @@ export interface WeeklyTonnagePoint {
 export interface HeatmapDay {
   date: string;
   strengthVolume: number;
-  hasGarminSport: boolean;
+  hasStrength: boolean;
+  hasCardio: boolean;
 }
 
 export interface LinearTrendResult {
@@ -285,19 +286,21 @@ export function computeWeeklyTonnageTrend(
 }
 
 /**
- * Construye una matriz de consistencia de los últimos 84 días (12 semanas)
- * combinando entrenos de fuerza y actividades multideporte de Garmin.
+ * Construye una matriz de consistencia de los últimos 84 días (de izquierda a derecha,
+ * Lunes a Domingo, y de arriba hacia abajo) separando Fuerza (local/Hevy/Garmin) y Cardio.
  */
 export function computeConsistencyHeatmap(
   globalVolumeByDate: Record<string, number>,
-  garminActivityDates: string[] = []
+  garminCardioDates: string[] = [],
+  garminStrengthDates: string[] = []
 ): {
-  days: HeatmapDay[];
+  days: (HeatmapDay | null)[];
   activeLast30Days: number;
   avgSessionsPerWeek: number;
 } {
-  const garminSet = new Set(garminActivityDates.map((d) => d.slice(0, 10)));
-  const days: HeatmapDay[] = [];
+  const cardioSet = new Set(garminCardioDates.map((d) => d.slice(0, 10)));
+  const garminStrengthSet = new Set(garminStrengthDates.map((d) => d.slice(0, 10)));
+  const rawDays: HeatmapDay[] = [];
   const today = new Date();
   let activeLast30Days = 0;
   let totalActive84 = 0;
@@ -307,16 +310,25 @@ export function computeConsistencyHeatmap(
     d.setDate(today.getDate() - offset);
     const iso = d.toISOString().slice(0, 10);
     const strengthVolume = Math.round(globalVolumeByDate[iso] || 0);
-    const hasGarminSport = garminSet.has(iso);
-    const isActive = strengthVolume > 0 || hasGarminSport;
+    const hasStrength = strengthVolume > 0 || garminStrengthSet.has(iso);
+    const hasCardio = cardioSet.has(iso);
+    const isActive = hasStrength || hasCardio;
 
     if (isActive) {
       totalActive84++;
       if (offset < 30) activeLast30Days++;
     }
 
-    days.push({ date: iso, strengthVolume, hasGarminSport });
+    rawDays.push({ date: iso, strengthVolume, hasStrength, hasCardio });
   }
+
+  // Alinear la primera fila a Lunes=0 .. Domingo=6 para lectura izquierda->derecha y arriba->abajo
+  const firstDate = rawDays[0] ? new Date(`${rawDays[0].date}T12:00:00Z`) : today;
+  const leadingEmpty = (firstDate.getUTCDay() + 6) % 7;
+  const days: (HeatmapDay | null)[] = [
+    ...Array.from({ length: leadingEmpty }, () => null),
+    ...rawDays,
+  ];
 
   return {
     days,

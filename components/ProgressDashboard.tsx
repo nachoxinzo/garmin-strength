@@ -197,9 +197,19 @@ export default function ProgressDashboard() {
     );
   }, [analytics.exercises, searchExercise]);
 
-  const garminDates = useMemo(
+  const garminCardioDates = useMemo(
     () =>
       garminActivities
+        .filter((a) => a.sportCategory !== 'Fuerza')
+        .map((a) => a.startTimeLocal.slice(0, 10))
+        .filter(Boolean),
+    [garminActivities]
+  );
+
+  const garminStrengthDates = useMemo(
+    () =>
+      garminActivities
+        .filter((a) => a.sportCategory === 'Fuerza')
         .map((a) => a.startTimeLocal.slice(0, 10))
         .filter(Boolean),
     [garminActivities]
@@ -333,8 +343,13 @@ export default function ProgressDashboard() {
   );
 
   const consistency = useMemo(
-    () => computeConsistencyHeatmap(mergedGlobalVolumeByDate, garminDates),
-    [mergedGlobalVolumeByDate, garminDates]
+    () =>
+      computeConsistencyHeatmap(
+        mergedGlobalVolumeByDate,
+        garminCardioDates,
+        garminStrengthDates
+      ),
+    [mergedGlobalVolumeByDate, garminCardioDates, garminStrengthDates]
   );
 
   // Cálculos para la gráfica SVG interactiva con filtro temporal y regresión lineal
@@ -583,36 +598,46 @@ export default function ProgressDashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-12 gap-1.5">
-            {Array.from({ length: 12 }).map((_, weekIdx) => (
-              <div key={weekIdx} className="grid grid-rows-7 gap-1.5">
-                {consistency.days.slice(weekIdx * 7, weekIdx * 7 + 7).map((day) => {
-                  const isSelected = selectedHeatmapDate === day.date;
-                  const colorClass =
-                    day.strengthVolume > 0 && day.hasGarminSport
-                      ? 'bg-indigo-600'
-                      : day.strengthVolume > 0
-                      ? 'bg-blue-500'
-                      : day.hasGarminSport
-                      ? 'bg-emerald-500'
-                      : 'bg-muted';
-                  return (
-                    <button
-                      type="button"
-                      key={day.date}
-                      onClick={() =>
-                        setSelectedHeatmapDate((prev) => (prev === day.date ? null : day.date))
-                      }
-                      aria-label={`Ver actividad del ${day.date}`}
-                      title={`${day.date}${day.strengthVolume > 0 ? ` · Fuerza: ${day.strengthVolume} kg` : ''}${day.hasGarminSport ? ' · Actividad Garmin' : ''}`}
-                      className={`w-full aspect-square rounded-[3px] ${colorClass} transition-transform hover:scale-125 ${
-                        isSelected ? 'ring-2 ring-blue-600 ring-offset-1 scale-110' : ''
-                      }`}
-                    />
-                  );
-                })}
-              </div>
-            ))}
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-semibold text-muted-foreground">
+              <span>L</span>
+              <span>M</span>
+              <span>X</span>
+              <span>J</span>
+              <span>V</span>
+              <span>S</span>
+              <span>D</span>
+            </div>
+            <div className="grid grid-cols-7 gap-1.5">
+              {consistency.days.map((day, idx) => {
+                if (!day) {
+                  return <div key={`pad-${idx}`} className="w-full h-5 sm:h-6 rounded-[4px]" />;
+                }
+                const isSelected = selectedHeatmapDate === day.date;
+                const colorClass =
+                  day.hasStrength && day.hasCardio
+                    ? 'bg-indigo-600'
+                    : day.hasStrength
+                    ? 'bg-blue-500'
+                    : day.hasCardio
+                    ? 'bg-emerald-500'
+                    : 'bg-muted';
+                return (
+                  <button
+                    type="button"
+                    key={day.date}
+                    onClick={() =>
+                      setSelectedHeatmapDate((prev) => (prev === day.date ? null : day.date))
+                    }
+                    aria-label={`Ver actividad del ${day.date}`}
+                    title={`${day.date}${day.hasStrength ? (day.strengthVolume > 0 ? ` · Fuerza: ${day.strengthVolume} kg` : ' · Fuerza (Garmin)') : ''}${day.hasCardio ? ' · Cardio (Garmin)' : ''}`}
+                    className={`w-full h-5 sm:h-6 rounded-[4px] ${colorClass} transition-transform hover:scale-110 ${
+                      isSelected ? 'ring-2 ring-blue-600 ring-offset-1 scale-105' : ''
+                    }`}
+                  />
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
@@ -621,13 +646,13 @@ export default function ProgressDashboard() {
                 <span className="w-2.5 h-2.5 rounded-[2px] bg-blue-500" /> Fuerza
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-[2px] bg-emerald-500" /> Cardio / Garmin
+                <span className="w-2.5 h-2.5 rounded-[2px] bg-emerald-500" /> Cardio
               </span>
               <span className="inline-flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-[2px] bg-indigo-600" /> Doble sesión
               </span>
             </div>
-            <span>Pulsa un día para ver el detalle</span>
+            <span>Izquierda → derecha (L–D) · Pulsa un día</span>
           </div>
 
           {selectedHeatmapDate && (() => {
@@ -669,7 +694,13 @@ export default function ProgressDashboard() {
                             className="w-full min-h-[44px] px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-left text-xs hover:bg-muted/40 transition-colors"
                           >
                             <div className="flex items-center gap-2 min-w-0">
-                              <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold shrink-0">
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${
+                                  act.sportCategory === 'Fuerza'
+                                    ? 'bg-blue-50 text-blue-700'
+                                    : 'bg-emerald-50 text-emerald-700'
+                                }`}
+                              >
                                 {act.sportCategory}
                               </span>
                               <span className="font-semibold text-foreground truncate">
@@ -743,7 +774,7 @@ export default function ProgressDashboard() {
                                       <div className="rounded-lg bg-card border border-border/50 p-2">
                                         <div className="text-[10px] text-muted-foreground">Training Effect</div>
                                         <div className="font-bold text-foreground tabular-nums">
-                                          Aer {detail.aerobicEffect ?? '—'} · Ana {detail.anaerobicEffect ?? '—'}
+                                          Aer {detail.aerobicEffect !== undefined ? detail.aerobicEffect.toFixed(1) : '—'} &middot; Ana {detail.anaerobicEffect !== undefined ? detail.anaerobicEffect.toFixed(1) : '—'}
                                         </div>
                                       </div>
                                     )}
