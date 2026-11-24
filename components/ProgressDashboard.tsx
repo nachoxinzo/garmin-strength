@@ -33,8 +33,10 @@ import {
 import { analyzeWeeklyMuscleBalance, MuscleVolumeStatus } from '@/lib/weekly-volume-analyzer';
 import { loadProgressionHistory } from '@/lib/progressive-overload-engine';
 import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
+import { GarminActivitySummary, GarminWellnessSnapshot } from '@/lib/types';
 import { GarminWellnessCard } from './GarminWellnessCard';
 import {
+  DbWorkoutLog,
   isSupabaseConfigured,
   getWorkoutLogsCsvFromSupabase,
   syncWorkoutLogsToSupabase,
@@ -54,18 +56,15 @@ export default function ProgressDashboard() {
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
   const [hasCloudSource, setHasCloudSource] = useState<boolean>(false);
   const [muscleBalance, setMuscleBalance] = useState<MuscleVolumeStatus[]>([]);
-  const [garminDates, setGarminDates] = useState<string[]>([]);
+  const [garminActivities, setGarminActivities] = useState<GarminActivitySummary[]>([]);
+  const [selectedHeatmapDate, setSelectedHeatmapDate] = useState<string | null>(null);
   const [liveVolumeByDate, setLiveVolumeByDate] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setMuscleBalance(analyzeWeeklyMuscleBalance());
     const snap = loadGarminWellnessSnapshot();
     if (snap?.recentActivities) {
-      setGarminDates(
-        snap.recentActivities
-          .map((a) => a.startTimeLocal.slice(0, 10))
-          .filter(Boolean)
-      );
+      setGarminActivities(snap.recentActivities);
     }
 
     // Fusionar sesiones registradas en Entreno en Vivo (localStorage)
@@ -181,6 +180,72 @@ export default function ProgressDashboard() {
       ex.toLowerCase().includes(searchExercise.toLowerCase())
     );
   }, [analytics.exercises, searchExercise]);
+
+  const garminDates = useMemo(
+    () =>
+      garminActivities
+        .map((a) => a.startTimeLocal.slice(0, 10))
+        .filter(Boolean),
+    [garminActivities]
+  );
+
+  const handleGarminSynced = (snap: GarminWellnessSnapshot) => {
+    setGarminActivities(snap.recentActivities || []);
+  };
+
+  const handleImportGarminStrength = async (logs: DbWorkoutLog[]) => {
+    if (logs.length === 0) return { added: 0, total: 0 };
+
+    const existingKeys = new Set<string>();
+    const existingLogs = csvRaw ? parseCsvToDbLogs(csvRaw) : [];
+    for (const row of existingLogs) {
+      const k = `${String(row.performed_at || '').slice(0, 10)}|${String(
+        row.exercise_title || ''
+      )
+        .trim()
+        .toLowerCase()}|${Number(row.set_index) || 0}`;
+      existingKeys.add(k);
+    }
+
+    const newRows: DbWorkoutLog[] = [];
+    for (const log of logs) {
+      const k = `${String(log.performed_at || '').slice(0, 10)}|${String(
+        log.exercise_title || ''
+      )
+        .trim()
+        .toLowerCase()}|${Number(log.set_index) || 0}`;
+      if (existingKeys.has(k)) continue;
+      existingKeys.add(k);
+      newRows.push(log);
+    }
+
+    if (newRows.length > 0) {
+      const header =
+        'title,start_time,end_time,description,exercise_title,superset_id,exercise_notes,set_index,set_type,weight_kg,reps,distance_km,duration_seconds,rpe';
+      const formattedNewLines = newRows.map((r) => {
+        const t = `"${(r.workout_title || 'Fuerza Garmin').replace(/"/g, '""')}"`;
+        const d = `"${r.performed_at}"`;
+        const ex = `"${(r.exercise_title || '').replace(/"/g, '""')}"`;
+        return `${t},${d},${d},"",${ex},,"",${r.set_index},"normal",${r.weight_kg || 0},${r.reps || 0},,,,`;
+      });
+
+      const baseLines = csvRaw && csvRaw.trim().length > 0 ? csvRaw.trim().split(/\r?\n/) : [header];
+      const nextCsv = [...baseLines, ...formattedNewLines].join('\n');
+      setCsvRaw(nextCsv);
+      try {
+        localStorage.setItem('hevy_raw_csv_cache', nextCsv);
+      } catch {
+        // ignore
+      }
+
+      if (isSupabaseConfigured()) {
+        await syncWorkoutLogsToSupabase(newRows);
+        setHasCloudSource(true);
+      }
+    }
+
+    return { added: newRows.length, total: logs.length };
+  };
 
   // Fusionar volumen de Hevy/Supabase con sesiones registradas en Entreno en Vivo
   const mergedGlobalVolumeByDate = useMemo(() => {
@@ -454,6 +519,7 @@ export default function ProgressDashboard() {
             {Array.from({ length: 12 }).map((_, weekIdx) => (
               <div key={weekIdx} className="grid grid-rows-7 gap-1.5">
                 {consistency.days.slice(weekIdx * 7, weekIdx * 7 + 7).map((day) => {
+                  const isSelected = selectedHeatmapDate === day.date;
                   const colorClass =
                     day.strengthVolume > 0 && day.hasGarminSport
                       ? 'bg-indigo-600'
@@ -463,10 +529,17 @@ export default function ProgressDashboard() {
                       ? 'bg-emerald-500'
                       : 'bg-muted';
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={day.date}
+                      onClick={() =>
+                        setSelectedHeatmapDate((prev) => (prev === day.date ? null : day.date))
+                      }
+                      aria-label={`Ver actividad del ${day.date}`}
                       title={`${day.date}${day.strengthVolume > 0 ? ` · Fuerza: ${day.strengthVolume} kg` : ''}${day.hasGarminSport ? ' · Actividad Garmin' : ''}`}
-                      className={`w-full aspect-square rounded-[3px] ${colorClass} transition-transform hover:scale-125`}
+                      className={`w-full aspect-square rounded-[3px] ${colorClass} transition-transform hover:scale-125 ${
+                        isSelected ? 'ring-2 ring-blue-600 ring-offset-1 scale-110' : ''
+                      }`}
                     />
                   );
                 })}
@@ -474,17 +547,74 @@ export default function ProgressDashboard() {
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-[2px] bg-blue-500" /> Fuerza
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-[2px] bg-emerald-500" /> Cardio / Garmin
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-[2px] bg-indigo-600" /> Doble sesión
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-[2px] bg-blue-500" /> Fuerza
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-[2px] bg-emerald-500" /> Cardio / Garmin
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-[2px] bg-indigo-600" /> Doble sesión
+              </span>
+            </div>
+            <span>Pulsa un día para ver el detalle</span>
           </div>
+
+          {selectedHeatmapDate && (() => {
+            const dayActs = garminActivities.filter(
+              (a) => a.startTimeLocal.slice(0, 10) === selectedHeatmapDate
+            );
+            const dayStrengthVol = Math.round(mergedGlobalVolumeByDate[selectedHeatmapDate] || 0);
+            const formattedDay = new Date(`${selectedHeatmapDate}T12:00:00Z`).toLocaleDateString(
+              'es-ES',
+              { weekday: 'long', day: 'numeric', month: 'short' }
+            );
+            return (
+              <div className="rounded-xl bg-muted/40 border border-border/60 p-3.5 space-y-2 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-foreground capitalize">
+                    {formattedDay}
+                  </span>
+                  {dayStrengthVol > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-bold tabular-nums">
+                      Fuerza: {dayStrengthVol.toLocaleString('es-ES')} kg
+                    </span>
+                  )}
+                </div>
+                {dayActs.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {dayActs.map((act) => (
+                      <div
+                        key={act.activityId}
+                        className="flex flex-wrap items-center justify-between gap-2 text-xs bg-card rounded-lg px-3 py-2 border border-border/50"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold">
+                            {act.sportCategory}
+                          </span>
+                          <span className="font-semibold text-foreground truncate">{act.name}</span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground tabular-nums">
+                          {act.durationMinutes} min
+                          {act.distanceKm > 0 ? ` · ${act.distanceKm} km` : ''}
+                          {act.calories > 0 ? ` · ${act.calories} kcal` : ''}
+                          {act.avgHr ? ` · ${act.avgHr} bpm` : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  dayStrengthVol === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Sin actividades registradas este día.
+                    </p>
+                  )
+                )}
+              </div>
+            );
+          })()}
         </div>
       </section>
     );
@@ -493,7 +623,10 @@ export default function ProgressDashboard() {
   if (!csvRaw || analytics.exercises.length === 0) {
     return (
       <div className="space-y-6">
-        <GarminWellnessCard />
+        <GarminWellnessCard
+        onSynced={handleGarminSynced}
+        onImportStrengthLogs={handleImportGarminStrength}
+      />
         {renderGlobalTrendsSection()}
         {renderMuscleBalanceCard()}
         <div className="bg-white rounded-2xl border border-slate-200/90 p-8 sm:p-12 text-center shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] max-w-xl mx-auto my-4 animate-in fade-in duration-150">
@@ -540,7 +673,10 @@ export default function ProgressDashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
-      <GarminWellnessCard />
+      <GarminWellnessCard
+        onSynced={handleGarminSynced}
+        onImportStrengthLogs={handleImportGarminStrength}
+      />
       {renderGlobalTrendsSection()}
       {renderMuscleBalanceCard()}
       {/* Barra de Origen de Datos */}

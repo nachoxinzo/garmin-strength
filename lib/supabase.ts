@@ -127,15 +127,49 @@ export async function deleteRoutineFromSupabase(routineId: string): Promise<bool
 }
 
 /**
- * Sincronizar un lote de registros de entrenamiento a Supabase
+ * Sincronizar un lote de registros de entrenamiento a Supabase sin duplicados
+ * (deduplicando por fecha del día + ejercicio + índice de serie)
  */
 export async function syncWorkoutLogsToSupabase(logs: DbWorkoutLog[]): Promise<boolean> {
   if (!supabase || logs.length === 0) return false;
 
+  const existingKeys = new Set<string>();
+  try {
+    const { data: existing } = await supabase
+      .from('workout_logs')
+      .select('performed_at, exercise_title, set_index');
+    if (Array.isArray(existing)) {
+      for (const row of existing) {
+        const key = `${String(row.performed_at || '').slice(0, 10)}|${String(
+          row.exercise_title || ''
+        )
+          .trim()
+          .toLowerCase()}|${Number(row.set_index) || 0}`;
+        existingKeys.add(key);
+      }
+    }
+  } catch {
+    // continuar con deduplicación local del lote si falla la lectura previa
+  }
+
+  const uniqueLogs: DbWorkoutLog[] = [];
+  for (const log of logs) {
+    const key = `${String(log.performed_at || '').slice(0, 10)}|${String(
+      log.exercise_title || ''
+    )
+      .trim()
+      .toLowerCase()}|${Number(log.set_index) || 0}`;
+    if (existingKeys.has(key)) continue;
+    existingKeys.add(key);
+    uniqueLogs.push(log);
+  }
+
+  if (uniqueLogs.length === 0) return true;
+
   // Insertar en bloques de 100 para evitar timeouts
   const chunkSize = 100;
-  for (let i = 0; i < logs.length; i += chunkSize) {
-    const chunk = logs.slice(i, i + chunkSize);
+  for (let i = 0; i < uniqueLogs.length; i += chunkSize) {
+    const chunk = uniqueLogs.slice(i, i + chunkSize);
     const { error } = await supabase.from('workout_logs').insert(chunk);
     if (error) {
       console.error('Error al insertar historial en Supabase:', error.message);

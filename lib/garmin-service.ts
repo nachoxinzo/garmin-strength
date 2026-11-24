@@ -419,7 +419,7 @@ export async function fetchGarminWellnessSnapshot(
     rhrRes,
     stressRes,
   ] = await Promise.allSettled([
-    garmin.getActivities(0, 25),
+    garmin.getActivities(0, 100),
     garmin.getSleepData(todayStr),
     garmin.getMorningTrainingReadiness(todayStr),
     garmin.getHrvData(todayStr),
@@ -428,8 +428,8 @@ export async function fetchGarminWellnessSnapshot(
     garmin.getStressData(todayStr),
   ]);
 
-  // 1. Actividades recientes (últimos 14 días)
-  const cutoffMs = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  // 1. Actividades recientes (últimos 84 días para alimentar el mapa de consistencia de 12 semanas)
+  const cutoffMs = Date.now() - 84 * 24 * 60 * 60 * 1000;
   const weekCutoffMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const twoDaysCutoffMs = Date.now() - 48 * 60 * 60 * 1000;
 
@@ -603,13 +603,140 @@ export async function fetchGarminWellnessSnapshot(
       syncedAt: new Date().toISOString(),
       sleep,
       recovery,
-      recentActivities: recentActivities.slice(0, 12),
+      recentActivities,
       weeklySportMinutes,
       readinessIndex,
       lowerBodyFatigue,
       upperBodyFatigue,
       coachInsights,
     },
+    tokens: updatedTokens || null,
+  };
+}
+
+/**
+ * Importa las series de fuerza registradas en el reloj desde Garmin Connect (últimos 84 días)
+ * para construir/completar la base de datos de ejercicios y tonelaje sin duplicados.
+ */
+export async function fetchGarminStrengthLogs(
+  clientTokens?: GarminTokensPayload | null,
+  maxActivities = 20
+): Promise<{
+  success: boolean;
+  activitiesCount: number;
+  logs: {
+    workout_title: string;
+    performed_at: string;
+    exercise_title: string;
+    set_index: number;
+    weight_kg: number;
+    reps: number;
+  }[];
+  tokens?: GarminTokensPayload | null;
+}> {
+  const session = await getGarminClient(clientTokens);
+  if (!session) {
+    throw new Error('No hay sesión activa de Garmin. Por favor conecta tu cuenta primero.');
+  }
+  const { garmin, client } = session;
+
+  const cutoffMs = Date.now() - 84 * 24 * 60 * 60 * 1000;
+  const activities = await garmin.getActivities(0, 100);
+  const strengthActivities = (Array.isArray(activities) ? activities : [])
+    .filter((act: any) => {
+      const typeKey = String(act?.activityType?.typeKey || '');
+      if (classifySportCategory(typeKey) !== 'Fuerza') return false;
+      const startStr = String(act?.startTimeLocal || act?.startTimeGMT || '');
+      const startMs = startStr ? new Date(startStr.replace(' ', 'T')).getTime() : 0;
+      return !startMs || startMs >= cutoffMs;
+    })
+    .slice(0, maxActivities);
+
+  const setsResults = await Promise.allSettled(
+    strengthActivities.map((act: any) => garmin.getActivityExerciseSets(Number(act.activityId)))
+  );
+
+  const logs: {
+    workout_title: string;
+    performed_at: string;
+    exercise_title: string;
+    set_index: number;
+    weight_kg: number;
+    reps: number;
+  }[] = [];
+
+  const seenKeys = new Set<string>();
+
+  strengthActivities.forEach((act: any, idx: number) => {
+    const res = setsResults[idx];
+    if (res.status !== 'fulfilled' || !res.value) return;
+    const rawSets = Array.isArray((res.value as any).exerciseSets)
+      ? (res.value as any).exerciseSets
+      : [];
+
+    const startStr = String(act?.startTimeLocal || act?.startTimeGMT || new Date().toISOString());
+    const performedAt = new Date(startStr.replace(' ', 'T')).toISOString();
+    const dateKey = performedAt.slice(0, 10);
+    const workoutTitle = String(act?.activityName || 'Fuerza Garmin');
+
+    const perExerciseCounter = new Map<string, number>();
+
+    for (const s of rawSets) {
+      if (String(s?.setType || '').toUpperCase() === 'REST') continue;
+      const reps = Math.max(0, Math.round(Number(s?.repetitionCount) || 0));
+      if (reps === 0) continue;
+
+      const rawWeight = Number(s?.weight) || 0;
+      // Garmin Connect devuelve el peso en gramos (ej. 60000 = 60 kg)
+      const weightKg = rawWeight > 500 ? Math.round((rawWeight / 1000) * 10) / 10 : Math.round(rawWeight * 10) / 10;
+
+      const firstEx = Array.isArray(s?.exercises) && s.exercises.length > 0 ? s.exercises[0] : null;
+      const garminCat = String(firstEx?.category || '');
+      const garminName = String(firstEx?.name || firstEx?.subCategory || '');
+
+      const catalogMatch = EXERCISE_CATALOG.find(
+        (e) =>
+          (garminName && e.garminName === garminName) ||
+          (garminCat && e.category === garminCat)
+      );
+
+      const exerciseTitle = catalogMatch
+        ? catalogMatch.name
+        : garminName
+        ? garminName
+            .toLowerCase()
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (c) => c.toUpperCase())
+        : garminCat
+        ? garminCat
+            .toLowerCase()
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (c) => c.toUpperCase())
+        : 'Ejercicio de Fuerza';
+
+      const setIdx = perExerciseCounter.get(exerciseTitle) || 0;
+      perExerciseCounter.set(exerciseTitle, setIdx + 1);
+
+      const dedupKey = `${dateKey}|${exerciseTitle.toLowerCase()}|${setIdx}`;
+      if (seenKeys.has(dedupKey)) continue;
+      seenKeys.add(dedupKey);
+
+      logs.push({
+        workout_title: workoutTitle,
+        performed_at: performedAt,
+        exercise_title: exerciseTitle,
+        set_index: setIdx,
+        weight_kg: weightKg,
+        reps,
+      });
+    }
+  });
+
+  const updatedTokens = client.getTokens() as GarminTokensPayload | undefined;
+  return {
+    success: true,
+    activitiesCount: strengthActivities.length,
+    logs,
     tokens: updatedTokens || null,
   };
 }
