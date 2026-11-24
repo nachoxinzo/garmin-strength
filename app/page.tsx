@@ -40,14 +40,17 @@ import {
   Repeat,
   Timer,
   SlidersHorizontal,
-  Activity
+  Activity,
+  Award
 } from 'lucide-react';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
+import { EnrichedExpertExercise } from '@/lib/expert-gym-guide';
 import { StrengthRoutine, WorkoutExerciseBlock, GarminAccountStatus } from '@/lib/types';
 import { parseHevyCSV, ParsedHevyWorkout } from '@/lib/hevy-csv-parser';
 import { encodeRoutineToShareUrl } from '@/lib/share-utils';
 import ProgressDashboard from '@/components/ProgressDashboard';
 import SocialDashboard from '@/components/SocialDashboard';
+import { GymExerciseGuide } from '@/components/GymExerciseGuide';
 import AuthModal from '@/components/AuthModal';
 import GarminAuthModal from '@/components/GarminAuthModal';
 import ExerciseSwapModal from '@/components/ExerciseSwapModal';
@@ -70,7 +73,7 @@ const DEFAULT_ROUTINE: StrengthRoutine = {
 };
 
 export default function WorkoutStudioPage() {
-  const [currentMainTab, setCurrentMainTab] = useState<'studio' | 'progress' | 'social'>('studio');
+  const [currentMainTab, setCurrentMainTab] = useState<'studio' | 'guide' | 'progress' | 'social'>('studio');
   const [routine, setRoutine] = useState<StrengthRoutine>(DEFAULT_ROUTINE);
   const [accountStatus, setAccountStatus] = useState<GarminAccountStatus | null>(null);
   const [garminTokens, setGarminTokens] = useState<any>(null);
@@ -413,6 +416,25 @@ export default function WorkoutStudioPage() {
       blocks: [...prev.blocks, newBlock]
     }));
     setIsSelectorOpen(false);
+  };
+
+  const handleAddExpertExercise = (item: EnrichedExpertExercise) => {
+    const newBlock: WorkoutExerciseBlock = {
+      id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      exercise: item.catalogExercise,
+      sets: item.recommendedSets,
+      reps: item.defaultRepsNumber,
+      weightKg: 20,
+      restSeconds: item.recommendedRestSeconds
+    };
+    setRoutine(prev => ({
+      ...prev,
+      blocks: [...prev.blocks, newBlock]
+    }));
+    setStatusMessage({
+      type: 'success',
+      text: `"${item.catalogExercise.name}" añadido a tu sesión (${item.recommendedSets}×${item.defaultRepsNumber} reps · ${item.recommendedRestSeconds}s descanso).`
+    });
   };
 
   const resetToNewRoutine = () => {
@@ -871,6 +893,21 @@ export default function WorkoutStudioPage() {
             </button>
 
             <button
+              onClick={() => setCurrentMainTab('guide')}
+              className={`flex items-center gap-2 py-3.5 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap ${
+                currentMainTab === 'guide'
+                  ? 'border-amber-600 text-amber-700'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+              }`}
+            >
+              <Award className="w-4 h-4" />
+              <span>Top Gimnasio</span>
+              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-800 border border-amber-200/70">
+                Pro
+              </span>
+            </button>
+
+            <button
               onClick={() => setCurrentMainTab('progress')}
               className={`flex items-center gap-2 py-3.5 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap ${
                 currentMainTab === 'progress'
@@ -898,7 +935,7 @@ export default function WorkoutStudioPage() {
             </button>
           </nav>
 
-          <div className="text-xs text-muted-foreground font-mono hidden md:flex items-center gap-1.5">
+          <div className="text-xs text-muted-foreground font-mono hidden lg:flex items-center gap-1.5 shrink-0">
             <Activity className="w-3.5 h-3.5 text-blue-600" />
             <span>Garmin Connect &bull; Fénix 8</span>
           </div>
@@ -932,7 +969,12 @@ export default function WorkoutStudioPage() {
           </div>
         )}
 
-        {currentMainTab === 'progress' ? (
+        {currentMainTab === 'guide' ? (
+          <GymExerciseGuide
+            onAddToRoutine={handleAddExpertExercise}
+            currentRoutineExerciseIds={routine.blocks.map(b => b.exercise.id)}
+          />
+        ) : currentMainTab === 'progress' ? (
           <ProgressDashboard />
         ) : currentMainTab === 'social' ? (
           <SocialDashboard onOpenAuth={() => setIsAuthModalOpen(true)} />
