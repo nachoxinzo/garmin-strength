@@ -62,7 +62,7 @@ const GUIDE_MODULES: GuideModule[] = [
       'Crea tus propias rutinas bloque a bloque o deja que el Generador Científico diseñe una sesión a medida usando solo las máquinas y pesas disponibles en tu gimnasio.',
     steps: [
       'Pulsa "Generador Científico" para describir qué quieres entrenar hoy (ej. "Pecho y espalda en 60 min") o configurar tu perfil en "Mi Gimnasio".',
-      'Usa los botones de adaptación rápida (100% Hevy, 85% Amigo, 75%, +5 kg, -5 kg) para escalar todos los pesos al instante.',
+      'Usa los botones de adaptación rápida (100% Hevy, 85%, 75%, +5 kg, -5 kg) para escalar todos los pesos al instante.',
       'Agrupa ejercicios seguidos en superserie o descarga el archivo .FIT / envíalo directo a tu reloj Garmin.',
     ],
     proTip:

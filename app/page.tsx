@@ -1299,8 +1299,8 @@ export default function WorkoutStudioPage() {
         {/* Panel Superior Ejecutivo: Título de Rutina, Métricas y Acciones Rápidas */}
         <section className="bg-card rounded-xl border border-border/80 p-5 sm:p-7 saas-card">
           <div className="space-y-6">
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
-              <div className="flex-1 min-w-0">
+            <div className="flex flex-col gap-4">
+              <div className="w-full max-w-md">
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Nombre en el Reloj
@@ -1410,10 +1410,10 @@ export default function WorkoutStudioPage() {
               </button>
               <button
                 onClick={() => scaleRoutineWeights(0.85)}
-                title="Ajustar al 85% para un compañero"
+                title="Escalar todas las cargas al 85%"
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/70 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
               >
-                85% (Amigo)
+                85%
               </button>
               <button
                 onClick={() => scaleRoutineWeights(0.75)}
