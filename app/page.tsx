@@ -48,6 +48,11 @@ import {
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { EnrichedExpertExercise } from '@/lib/expert-gym-guide';
 import { downloadAppleWatchCalendarIcs, formatAppleWatchNotesText } from '@/lib/apple-watch-export';
+import {
+  computeProgressiveOverload,
+  EffortRating,
+  recordWorkoutCompletion
+} from '@/lib/progressive-overload-engine';
 import { StrengthRoutine, WorkoutExerciseBlock, GarminAccountStatus } from '@/lib/types';
 import { parseHevyCSV, ParsedHevyWorkout } from '@/lib/hevy-csv-parser';
 import { encodeRoutineToShareUrl } from '@/lib/share-utils';
@@ -440,6 +445,35 @@ export default function WorkoutStudioPage() {
     setStatusMessage({
       type: 'success',
       text: `"${item.catalogExercise.name}" añadido a tu sesión (${item.recommendedSets}×${item.defaultRepsNumber} reps · ${item.recommendedRestSeconds}s descanso).`
+    });
+  };
+
+  const handleApplyProgressiveOverload = (fallbackEffort: EffortRating = 'optimal') => {
+    if (routine.blocks.length === 0) return;
+    const { updatedRoutine, changes } = computeProgressiveOverload(routine, fallbackEffort);
+    setRoutine(updatedRoutine);
+
+    const preview = changes
+      .slice(0, 2)
+      .map(c => `${c.exerciseName}: ${c.summary}`)
+      .join(' | ');
+    const extraCount = changes.length > 2 ? ` (+${changes.length - 2} más)` : '';
+
+    setStatusMessage({
+      type: 'success',
+      text:
+        changes.length > 0
+          ? `Sobrecarga progresiva aplicada (${changes.length} ejercicios): ${preview}${extraCount}`
+          : 'Rutina revisada: las cargas actuales se mantienen para consolidar técnica.'
+    });
+  };
+
+  const handleLogCompletedInStudio = (effort: EffortRating) => {
+    if (routine.blocks.length === 0) return;
+    recordWorkoutCompletion(routine, effort);
+    setStatusMessage({
+      type: 'success',
+      text: `Entreno registrado como "${effort === 'easy' ? 'Fácil' : effort === 'optimal' ? 'Óptimo' : 'Al límite'}". Pulsa "Progresión Auto" cuando quieras subir el nivel de la próxima sesión.`
     });
   };
 
@@ -1083,6 +1117,30 @@ export default function WorkoutStudioPage() {
               >
                 -5 kg
               </button>
+
+              {routine.blocks.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleLogCompletedInStudio('optimal')}
+                    title="Registrar sesión completada hoy para calcular la próxima progresión"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Registrar Hecho</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleApplyProgressiveOverload('optimal')}
+                    title="Ajusta automáticamente pesos, series, repeticiones y descansos según tu historial"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>Progresión Auto</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

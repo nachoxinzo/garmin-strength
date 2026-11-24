@@ -21,6 +21,7 @@ import {
 import { decodeRoutineFromShareUrl } from '@/lib/share-utils';
 import { StrengthRoutine, WorkoutExerciseBlock } from '@/lib/types';
 import { useWakeLock } from '@/lib/use-wake-lock';
+import { EffortRating, recordWorkoutCompletion } from '@/lib/progressive-overload-engine';
 
 // Reproduce un pitido sintético mediante Web Audio API (compatible con Safari iOS y Android)
 function playBeep(frequency = 880, duration = 0.15) {
@@ -82,6 +83,7 @@ function LiveWorkoutContent() {
   const [sessionStartTime] = useState<number>(Date.now());
   const [totalCompletedSets, setTotalCompletedSets] = useState(0);
   const [totalVolumeKg, setTotalVolumeKg] = useState(0);
+  const [recordedEffort, setRecordedEffort] = useState<EffortRating | null>(null);
 
   // Mantener pantalla encendida en modo gimnasio mientras la sesión está activa
   const { isActive: wakeLockActive } = useWakeLock(phase !== 'finished');
@@ -590,6 +592,55 @@ function LiveWorkoutContent() {
                 <div className="text-xs text-slate-400 font-semibold uppercase">Volumen Movido</div>
                 <div className="text-2xl font-bold text-white mt-1">{totalVolumeKg} kg</div>
               </div>
+            </div>
+
+            {/* Feedback rápido de esfuerzo para Sobrecarga Progresiva */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 max-w-sm mx-auto space-y-3">
+              <div className="text-xs font-bold text-slate-200">
+                ¿Cómo ha sido la dificultad de hoy?
+              </div>
+              <p className="text-[11px] text-slate-400">
+                La app ajustará automáticamente tus pesos, series y descansos para la próxima sesión.
+              </p>
+
+              {recordedEffort ? (
+                <div className="py-2 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
+                  Progreso guardado ({recordedEffort === 'easy' ? 'Fácil · Subiremos carga' : recordedEffort === 'optimal' ? 'Óptimo · Doble progresión' : 'Al límite · Consolidación'}).
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      recordWorkoutCompletion(routine, 'easy');
+                      setRecordedEffort('easy');
+                    }}
+                    className="py-2.5 px-2 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-700/60 text-emerald-300 text-xs font-bold transition-all active:scale-95"
+                  >
+                    Fácil
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      recordWorkoutCompletion(routine, 'optimal');
+                      setRecordedEffort('optimal');
+                    }}
+                    className="py-2.5 px-2 rounded-xl bg-blue-950/60 hover:bg-blue-900/60 border border-blue-700/60 text-blue-300 text-xs font-bold transition-all active:scale-95"
+                  >
+                    Óptimo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      recordWorkoutCompletion(routine, 'hard');
+                      setRecordedEffort('hard');
+                    }}
+                    className="py-2.5 px-2 rounded-xl bg-amber-950/60 hover:bg-amber-900/60 border border-amber-700/60 text-amber-300 text-xs font-bold transition-all active:scale-95"
+                  >
+                    Al límite
+                  </button>
+                </div>
+              )}
             </div>
 
             <button
