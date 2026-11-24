@@ -21,7 +21,10 @@ import {
 import { decodeRoutineFromShareUrl } from '@/lib/share-utils';
 import { StrengthRoutine, WorkoutExerciseBlock } from '@/lib/types';
 import { useWakeLock } from '@/lib/use-wake-lock';
-import { EffortRating, recordWorkoutCompletion } from '@/lib/progressive-overload-engine';
+import {
+  EffortRating,
+  recordSingleExerciseCompletion
+} from '@/lib/progressive-overload-engine';
 
 // Reproduce un pitido sintético mediante Web Audio API (compatible con Safari iOS y Android)
 function playBeep(frequency = 880, duration = 0.15) {
@@ -83,7 +86,7 @@ function LiveWorkoutContent() {
   const [sessionStartTime] = useState<number>(Date.now());
   const [totalCompletedSets, setTotalCompletedSets] = useState(0);
   const [totalVolumeKg, setTotalVolumeKg] = useState(0);
-  const [recordedEffort, setRecordedEffort] = useState<EffortRating | null>(null);
+  const [exerciseEfforts, setExerciseEfforts] = useState<Record<string, EffortRating>>({});
 
   // Mantener pantalla encendida en modo gimnasio mientras la sesión está activa
   const { isActive: wakeLockActive } = useWakeLock(phase !== 'finished');
@@ -594,53 +597,62 @@ function LiveWorkoutContent() {
               </div>
             </div>
 
-            {/* Feedback rápido de esfuerzo para Sobrecarga Progresiva */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 max-w-sm mx-auto space-y-3">
-              <div className="text-xs font-bold text-slate-200">
-                ¿Cómo ha sido la dificultad de hoy?
+            {/* Feedback de dificultad individual por ejercicio */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 max-w-md mx-auto space-y-3 text-left">
+              <div className="text-center space-y-1">
+                <div className="text-xs font-bold text-slate-200">
+                  ¿Cómo te ha costado cada ejercicio hoy?
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Puntúa cada ejercicio por separado para ajustar la carga progresiva individualmente.
+                </p>
               </div>
-              <p className="text-[11px] text-slate-400">
-                La app ajustará automáticamente tus pesos, series y descansos para la próxima sesión.
-              </p>
 
-              {recordedEffort ? (
-                <div className="py-2 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
-                  Progreso guardado ({recordedEffort === 'easy' ? 'Fácil · Subiremos carga' : recordedEffort === 'optimal' ? 'Óptimo · Doble progresión' : 'Al límite · Consolidación'}).
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      recordWorkoutCompletion(routine, 'easy');
-                      setRecordedEffort('easy');
-                    }}
-                    className="py-2.5 px-2 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-700/60 text-emerald-300 text-xs font-bold transition-all active:scale-95"
-                  >
-                    Fácil
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      recordWorkoutCompletion(routine, 'optimal');
-                      setRecordedEffort('optimal');
-                    }}
-                    className="py-2.5 px-2 rounded-xl bg-blue-950/60 hover:bg-blue-900/60 border border-blue-700/60 text-blue-300 text-xs font-bold transition-all active:scale-95"
-                  >
-                    Óptimo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      recordWorkoutCompletion(routine, 'hard');
-                      setRecordedEffort('hard');
-                    }}
-                    className="py-2.5 px-2 rounded-xl bg-amber-950/60 hover:bg-amber-900/60 border border-amber-700/60 text-amber-300 text-xs font-bold transition-all active:scale-95"
-                  >
-                    Al límite
-                  </button>
-                </div>
-              )}
+              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                {routine.blocks.map((block) => {
+                  const selected = exerciseEfforts[block.id];
+                  return (
+                    <div
+                      key={block.id}
+                      className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-semibold text-white truncate">
+                          {block.exercise.name}
+                        </span>
+                        <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
+                          {block.sets}&times;{block.reps} &bull; {block.weightKg}kg
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {(
+                          [
+                            { id: 'easy', label: 'Fácil', active: 'bg-emerald-600 text-white border-emerald-500' },
+                            { id: 'optimal', label: 'Óptimo', active: 'bg-blue-600 text-white border-blue-500' },
+                            { id: 'hard', label: 'Al límite', active: 'bg-amber-600 text-white border-amber-500' }
+                          ] as const
+                        ).map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              recordSingleExerciseCompletion(block, opt.id);
+                              setExerciseEfforts(prev => ({ ...prev, [block.id]: opt.id }));
+                            }}
+                            className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border transition-all active:scale-95 ${
+                              selected === opt.id
+                                ? opt.active
+                                : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <button

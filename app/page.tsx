@@ -51,6 +51,8 @@ import { downloadAppleWatchCalendarIcs, formatAppleWatchNotesText } from '@/lib/
 import {
   computeProgressiveOverload,
   EffortRating,
+  loadProgressionHistory,
+  recordSingleExerciseCompletion,
   recordWorkoutCompletion
 } from '@/lib/progressive-overload-engine';
 import { StrengthRoutine, WorkoutExerciseBlock, GarminAccountStatus } from '@/lib/types';
@@ -101,6 +103,16 @@ export default function WorkoutStudioPage() {
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [swappingBlockIndex, setSwappingBlockIndex] = useState<number | null>(null);
   const [active3DExercise, setActive3DExercise] = useState<CatalogExercise | null>(null);
+  const [exerciseEffortMap, setExerciseEffortMap] = useState<Record<string, EffortRating>>({});
+
+  useEffect(() => {
+    const history = loadProgressionHistory();
+    const initialMap: Record<string, EffortRating> = {};
+    Object.values(history).forEach((rec) => {
+      initialMap[rec.exerciseId] = rec.effort;
+    });
+    setExerciseEffortMap(initialMap);
+  }, []);
 
   // Selector modal de ejercicios
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
@@ -1510,6 +1522,41 @@ export default function WorkoutStudioPage() {
                         />
                         <span className="text-xs text-muted-foreground font-medium">s</span>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Registro de dificultad individual por ejercicio para Sobrecarga Progresiva */}
+                  <div className="mt-3 pt-3 border-t border-border/60 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-muted-foreground">
+                      Dificultad en este ejercicio:
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {(
+                        [
+                          { id: 'easy', label: 'Fácil', activeClass: 'bg-emerald-600 text-white border-emerald-600' },
+                          { id: 'optimal', label: 'Óptimo', activeClass: 'bg-blue-600 text-white border-blue-600' },
+                          { id: 'hard', label: 'Al límite', activeClass: 'bg-amber-600 text-white border-amber-600' }
+                        ] as const
+                      ).map((opt) => {
+                        const isSelected = exerciseEffortMap[block.exercise.id] === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              recordSingleExerciseCompletion(block, opt.id);
+                              setExerciseEffortMap(prev => ({ ...prev, [block.exercise.id]: opt.id }));
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all active:scale-95 ${
+                              isSelected
+                                ? opt.activeClass
+                                : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/60'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

@@ -42,17 +42,51 @@ export function saveProgressionHistory(map: Record<string, ExerciseProgressRecor
 }
 
 /**
- * Registra una sesión completada con la percepción de esfuerzo (RPE/RIR simplificado)
- * para que la app adapte automáticamente pesos, series, repeticiones y descansos.
+ * Registra el resultado de un único ejercicio (permite puntuar cada ejercicio por separado).
+ */
+export function recordSingleExerciseCompletion(
+  block: WorkoutExerciseBlock,
+  effort: EffortRating
+): Record<string, ExerciseProgressRecord> {
+  const history = loadProgressionHistory();
+  const today = new Date().toISOString().slice(0, 10);
+  const prev = history[block.exercise.id];
+  const consecutiveHardCount =
+    effort === 'hard' ? (prev?.consecutiveHardCount || 0) + 1 : 0;
+
+  history[block.exercise.id] = {
+    exerciseId: block.exercise.id,
+    lastDate: today,
+    lastWeightKg: block.weightKg,
+    lastReps: block.reps,
+    lastSets: block.sets,
+    lastRestSeconds: block.restSeconds,
+    effort,
+    consecutiveHardCount,
+    sessionsCompleted: (prev?.sessionsCompleted || 0) + 1,
+  };
+
+  saveProgressionHistory(history);
+  return history;
+}
+
+/**
+ * Registra una sesión completada con la percepción de esfuerzo individual por ejercicio
+ * (o un valor por defecto si algún bloque no se puntuó).
  */
 export function recordWorkoutCompletion(
   routine: StrengthRoutine,
-  effort: EffortRating
+  effortOrMap: EffortRating | Record<string, EffortRating>
 ): Record<string, ExerciseProgressRecord> {
   const history = loadProgressionHistory();
   const today = new Date().toISOString().slice(0, 10);
 
   for (const block of routine.blocks) {
+    const effort: EffortRating =
+      typeof effortOrMap === 'string'
+        ? effortOrMap
+        : effortOrMap[block.id] || effortOrMap[block.exercise.id] || 'optimal';
+
     const prev = history[block.exercise.id];
     const consecutiveHardCount =
       effort === 'hard' ? (prev?.consecutiveHardCount || 0) + 1 : 0;
