@@ -7,8 +7,8 @@ import { PwaManager } from "@/components/PwaManager";
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
-  title: 'Garmin Strength Studio | Fénix 8 Workouts',
-  description: 'Diseña rutinas de fuerza estructuradas, consulta técnica en 3D y sincronízalas directamente a tu Garmin Fénix 8',
+  title: 'IronSync | Smart Strength & Watch Sync',
+  description: 'Entrenamiento de fuerza inteligente, biomecánica 3D, sobrecarga progresiva y sincronización con Garmin y Apple Watch.',
   manifest: '/manifest.json',
   icons: {
     icon: '/icon.svg',
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Strength Studio',
+    title: 'IronSync',
   },
 };
 
@@ -27,7 +27,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#2563eb',
+  themeColor: '#0f172a',
 };
 
 export default function RootLayout({

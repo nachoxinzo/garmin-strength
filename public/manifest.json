@@ -1,12 +1,12 @@
 {
-  "name": "Garmin Strength Studio",
-  "short_name": "Strength Studio",
-  "description": "Diseña rutinas de fuerza, consulta técnica 3D y sincroniza directamente con tu Garmin Fénix 8.",
+  "name": "IronSync",
+  "short_name": "IronSync",
+  "description": "Entrenamiento de fuerza inteligente, biomecánica 3D, sobrecarga progresiva y sincronización con Garmin y Apple Watch.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#f8fafc",
-  "theme_color": "#2563eb",
+  "theme_color": "#0f172a",
   "categories": ["fitness", "health", "sports"],
   "icons": [
     {
@@ -18,8 +18,8 @@
   ],
   "shortcuts": [
     {
-      "name": "Modo Entreno en Vivo",
-      "short_name": "Entreno Live",
+      "name": "Entreno en Vivo",
+      "short_name": "En Vivo",
       "url": "/live",
       "icons": [{ "src": "/icon.svg", "sizes": "any" }]
     }

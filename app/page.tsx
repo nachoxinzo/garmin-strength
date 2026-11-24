@@ -858,20 +858,20 @@ export default function WorkoutStudioPage() {
       <header className="sticky top-0 z-30 bg-card/90 backdrop-blur-xl border-b border-border/60 shadow-[0_1px_12px_-2px_rgba(15,23,42,0.05)]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-600/25 shrink-0 transition-transform duration-200 hover:scale-105">
-              <Dumbbell className="w-5 h-5" strokeWidth={2} />
+            <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-md shadow-slate-900/20 shrink-0 transition-transform duration-200 hover:scale-105 overflow-hidden border border-slate-700/60">
+              <img src="/icon.svg" alt="IronSync" className="w-full h-full object-cover" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground tracking-tight text-base sm:text-lg truncate">
-                  Garmin Strength Studio
+                <span className="font-bold text-foreground tracking-tight text-base sm:text-lg truncate">
+                  IronSync
                 </span>
                 <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border/60 shrink-0">
                   <Watch className="w-3 h-3 text-blue-600" />
-                  Fénix 8
+                  Garmin &amp; Watch
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground truncate">Planificador de entrenamientos nativos</p>
+              <p className="text-xs text-muted-foreground truncate">Smart Strength &amp; Watch Sync</p>
             </div>
           </div>
 
