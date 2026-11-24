@@ -1,10 +1,23 @@
 import { NextResponse } from 'next/server';
 import { loginToGarminAccount, resumeGarminMfaLogin } from '@/lib/garmin-service';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    const clientIp = getClientIp(req);
+    const rate = checkRateLimit(`garmin-auth:${clientIp}`, 10, 15 * 60 * 1000);
+    if (!rate.success) {
+      return NextResponse.json(
+        {
+          authenticated: false,
+          error: `Demasiados intentos de inicio de sesión. Espera ${rate.resetSeconds} segundos.`,
+        },
+        { status: 429, headers: { 'Retry-After': String(rate.resetSeconds) } }
+      );
+    }
+
     const body = await req.json();
     const { email, password, mfaCode, mfaState } = body;
 

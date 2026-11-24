@@ -698,8 +698,11 @@ export default function WorkoutStudioPage() {
         }
       }
 
-      const query = keyToUse ? `?apiKey=${encodeURIComponent(keyToUse)}` : '';
-      const res = await fetch(`/api/hevy/routines${query}`);
+      const res = await fetch('/api/hevy/routines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: keyToUse || undefined })
+      });
       const data = await res.json();
 
       if (!res.ok) {

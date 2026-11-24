@@ -56,27 +56,20 @@ class HybridGarminTokenStore {
 
   async load(): Promise<GarminTokensPayload | null> {
     if (isValidTokensPayload(this.clientTokens)) {
-      globalMemoryTokens = this.clientTokens;
       return this.clientTokens;
+    }
+
+    // En producción (Serverless multi-usuario), exigir tokens explícitos por petición
+    // para evitar contaminación cruzada entre usuarios en instancias calientes.
+    if (process.env.NODE_ENV === 'production') {
+      return null;
     }
 
     if (isValidTokensPayload(globalMemoryTokens)) {
       return globalMemoryTokens;
     }
 
-    // Intentar cargar desde /tmp (Vercel)
-    try {
-      const tmpStore = new FileTokenStore(getTmpTokensPath());
-      const tmpTokens = await tmpStore.load();
-      if (isValidTokensPayload(tmpTokens)) {
-        globalMemoryTokens = tmpTokens;
-        return tmpTokens;
-      }
-    } catch {
-      // ignore
-    }
-
-    // Intentar cargar desde ./tokens (Local)
+    // Intentar cargar desde ./tokens (Solo desarrollo local)
     try {
       const localStore = new FileTokenStore(getLocalTokensPath());
       const localTokens = await localStore.load();

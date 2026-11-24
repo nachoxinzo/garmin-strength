@@ -6,11 +6,21 @@ import {
   MyGymProfile,
 } from '@/lib/smart-workout-engine';
 import { WorkoutExerciseBlock } from '@/lib/types';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    const clientIp = getClientIp(req);
+    const rate = checkRateLimit(`smart-gen:${clientIp}`, 20, 10 * 60 * 1000);
+    if (!rate.success) {
+      return NextResponse.json(
+        { error: `Límite de generaciones alcanzado. Espera ${rate.resetSeconds} segundos.` },
+        { status: 429, headers: { 'Retry-After': String(rate.resetSeconds) } }
+      );
+    }
+
     const body = await req.json().catch(() => null);
     if (!body || typeof body.prompt !== 'string' || !body.prompt.trim()) {
       return NextResponse.json(

@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { mapHevyToGarminCatalog } from '@/lib/hevy-mapper';
 import { StrengthRoutine, WorkoutExerciseBlock } from '@/lib/types';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 const HEVY_API_BASE = 'https://api.hevyapp.com/v1';
 
@@ -11,19 +12,22 @@ function getHevyTokenFile() {
 }
 
 function getHevyApiKey(): string | null {
-  try {
-    const file = getHevyTokenFile();
-    if (fs.existsSync(file)) {
-      const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
-      if (data.apiKey) return data.apiKey;
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const file = getHevyTokenFile();
+      if (fs.existsSync(file)) {
+        const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        if (data.apiKey) return data.apiKey;
+      }
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore
   }
   return process.env.HEVY_API_KEY || null;
 }
 
 function saveHevyApiKey(apiKey: string) {
+  if (process.env.NODE_ENV === 'production') return;
   try {
     const dir = path.join(process.cwd(), 'tokens');
     if (!fs.existsSync(dir)) {
@@ -31,7 +35,7 @@ function saveHevyApiKey(apiKey: string) {
     }
     fs.writeFileSync(getHevyTokenFile(), JSON.stringify({ apiKey: apiKey.trim() }, null, 2));
   } catch {
-    // En entornos serverless (Vercel) el sistema de archivos es de solo lectura; el cliente persiste en Supabase + localStorage
+    // En entornos serverless el cliente persiste en Supabase + localStorage
   }
 }
 
@@ -97,11 +101,20 @@ function extractWorkingSetMetrics(
   };
 }
 
-export async function GET(req: Request) {
+async function handleFetchHevyRoutines(req: Request, bodyKey?: string | null) {
   try {
-    const { searchParams } = new URL(req.url);
-    const queryKey = searchParams.get('apiKey');
-    const apiKey = (queryKey && queryKey.trim()) || getHevyApiKey();
+    const clientIp = getClientIp(req);
+    const rate = checkRateLimit(`hevy-routines:${clientIp}`, 30, 10 * 60 * 1000);
+    if (!rate.success) {
+      return NextResponse.json(
+        { error: `Demasiadas solicitudes a Hevy. Espera ${rate.resetSeconds} segundos.` },
+        { status: 429, headers: { 'Retry-After': String(rate.resetSeconds) } }
+      );
+    }
+
+    const headerKey = req.headers.get('x-hevy-api-key');
+    const providedKey = (bodyKey && bodyKey.trim()) || (headerKey && headerKey.trim()) || null;
+    const apiKey = providedKey || getHevyApiKey();
 
     if (!apiKey) {
       return NextResponse.json(
@@ -113,9 +126,9 @@ export async function GET(req: Request) {
       );
     }
 
-    // Guardar en disco si es posible (entorno local)
-    if (queryKey && queryKey.trim()) {
-      saveHevyApiKey(queryKey.trim());
+    // Guardar en disco solo en desarrollo local
+    if (providedKey) {
+      saveHevyApiKey(providedKey);
     }
 
     const headers = {
@@ -304,16 +317,12 @@ export async function GET(req: Request) {
   }
 }
 
+export async function GET(req: Request) {
+  return handleFetchHevyRoutines(req, null);
+}
+
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const { apiKey } = body;
-    if (!apiKey || typeof apiKey !== 'string') {
-      return NextResponse.json({ error: 'API Key requerida' }, { status: 400 });
-    }
-    saveHevyApiKey(apiKey);
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message }, { status: 500 });
-  }
+  const body = await req.json().catch(() => ({}));
+  const bodyKey = typeof body?.apiKey === 'string' ? body.apiKey : null;
+  return handleFetchHevyRoutines(req, bodyKey);
 }
