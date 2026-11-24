@@ -33,7 +33,8 @@ import {
   recordSingleExerciseCompletion
 } from '@/lib/progressive-overload-engine';
 import { getExpertGymExercises } from '@/lib/expert-gym-guide';
-import { generateWarmupRamp } from '@/lib/warmup-calculator';
+import { generateSingleWarmupSet, generateWarmupRamp } from '@/lib/warmup-calculator';
+import { calculateBarbellPlates } from '@/lib/plate-calculator';
 import { ExerciseNoteRecord, loadExerciseNotes } from '@/lib/exercise-notes';
 import { Exercise3DModal } from './Exercise3DModal';
 import { useWakeLock } from '@/lib/use-wake-lock';
@@ -378,16 +379,25 @@ export function LiveTrackerTab({
     );
   };
 
-  const addWarmupRampToExercise = (exIndex: number) => {
+  const [dismissedWarmupExercises, setDismissedWarmupExercises] = useState<Record<number, boolean>>({});
+
+  const addWarmupRampToExercise = (exIndex: number, mode: 'single' | 'ramp' = 'single') => {
     setLiveExercises((prev) =>
       prev.map((ex, eIdx) => {
         if (eIdx !== exIndex) return ex;
         // Evitar duplicar si ya tiene calentamiento
         if (ex.sets.some((s) => s.isWarmup)) return ex;
         const targetWeight = Math.max(...ex.sets.map((s) => s.weightKg), 0);
-        const ramp = generateWarmupRamp(targetWeight, ex.exercise.equipment === 'Barra');
-        if (ramp.length === 0) return ex;
-        const warmupRows: LiveSetRow[] = ramp.map((r, i) => ({
+        const isBarbell = ex.exercise.equipment === 'Barra';
+        const setsToInsert =
+          mode === 'single'
+            ? (() => {
+                const single = generateSingleWarmupSet(targetWeight, isBarbell);
+                return single ? [single] : [];
+              })()
+            : generateWarmupRamp(targetWeight, isBarbell);
+        if (setsToInsert.length === 0) return ex;
+        const warmupRows: LiveSetRow[] = setsToInsert.map((r, i) => ({
           id: `${ex.blockId}-wu-${Date.now()}-${i}`,
           weightKg: r.weightKg,
           reps: r.reps,
@@ -877,6 +887,64 @@ export function LiveTrackerTab({
                 </div>
               </div>
 
+              {/* Píldora Contextual de Calentamiento (Opción B) encima de Serie 1 */}
+              {(() => {
+                const targetWeight = Math.max(...ex.sets.map((s) => s.weightKg), 0);
+                const hasWarmup = ex.sets.some((s) => s.isWarmup);
+                const isBarbell = ex.exercise.equipment === 'Barra';
+                const singleWarmup =
+                  !hasWarmup && !dismissedWarmupExercises[exIndex] && targetWeight >= 25
+                    ? generateSingleWarmupSet(targetWeight, isBarbell)
+                    : null;
+                if (!singleWarmup) return null;
+                const plateInfo = isBarbell ? calculateBarbellPlates(singleWarmup.weightKg) : null;
+                const plateText =
+                  plateInfo && plateInfo.perSide.length > 0
+                    ? plateInfo.perSide.map((p) => `${p.count}×${p.weightKg}kg`).join('+') + '/lado'
+                    : null;
+
+                return (
+                  <div className="rounded-xl bg-amber-50/70 border border-amber-200/80 px-3 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="text-amber-950 tabular-nums">
+                      <span className="font-bold">Calentamiento sugerido:</span>{' '}
+                      <span className="font-semibold">
+                        {singleWarmup.weightKg} kg &times; {singleWarmup.reps}
+                      </span>
+                      {plateText && (
+                        <span className="text-[11px] text-amber-800 ml-1.5">
+                          ({plateText})
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => addWarmupRampToExercise(exIndex, 'single')}
+                        className="min-h-[36px] px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition-all active:scale-95"
+                      >
+                        + 1 serie
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addWarmupRampToExercise(exIndex, 'ramp')}
+                        className="min-h-[36px] px-2.5 py-1 rounded-lg bg-card hover:bg-amber-100/60 border border-amber-300 text-amber-900 text-[11px] font-semibold transition-all"
+                      >
+                        Rampa &times;3
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDismissedWarmupExercises((prev) => ({ ...prev, [exIndex]: true }))
+                        }
+                        className="min-h-[36px] px-2 py-1 rounded-lg text-[11px] font-medium text-amber-800 hover:text-amber-950"
+                      >
+                        Omitir
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Tabla de Series Interactiva */}
               <div className="space-y-2">
                 <div className="grid grid-cols-12 gap-2 px-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -904,7 +972,7 @@ export function LiveTrackerTab({
                   >
                     <div className="col-span-2 flex items-center justify-center gap-1">
                       <span
-                        className={`w-7 h-7 rounded-lg border text-[10px] font-bold flex items-center justify-center tabular-nums ${
+                        className={`px-1.5 min-w-[28px] h-7 rounded-lg border text-[10px] font-bold flex items-center justify-center tabular-nums ${
                           setRow.prType
                             ? 'bg-amber-500 border-amber-400 text-white animate-pulse'
                             : setRow.isWarmup
@@ -913,7 +981,7 @@ export function LiveTrackerTab({
                         }`}
                         title={setRow.prType ? '¡Nuevo PR!' : setRow.isWarmup ? 'Serie de calentamiento' : undefined}
                       >
-                        {setRow.prType ? <Trophy className="w-3.5 h-3.5" /> : setRow.isWarmup ? 'CAL' : workingSetNumber}
+                        {setRow.prType ? <Trophy className="w-3.5 h-3.5" /> : setRow.isWarmup ? 'Calentamiento' : workingSetNumber}
                       </span>
                       {ex.sets.length > 1 && !setRow.completed && (
                         <button

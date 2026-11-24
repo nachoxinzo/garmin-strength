@@ -52,3 +52,30 @@ export function generateWarmupRamp(
 
   return ramp;
 }
+
+/**
+ * Calcula 1 única serie óptima de calentamiento (~65-70% a 5 reps, o barra vacía en cargas ligeras)
+ * para activar sin generar fatiga previa.
+ */
+export function generateSingleWarmupSet(
+  targetWeightKg: number,
+  isBarbell: boolean
+): WarmupRampSet | null {
+  if (targetWeightKg < 25) return null;
+
+  if (isBarbell && targetWeightKg <= 35) {
+    return {
+      weightKg: 20,
+      reps: 6,
+      label: 'Barra vacía',
+    };
+  }
+
+  const raw = roundTo2_5(targetWeightKg * 0.68);
+  const weightKg = isBarbell ? Math.max(20, Math.min(raw, targetWeightKg - 2.5)) : Math.min(raw, targetWeightKg - 2.5);
+  return {
+    weightKg: Math.max(0, weightKg),
+    reps: 5,
+    label: 'Calentamiento (~68%)',
+  };
+}
