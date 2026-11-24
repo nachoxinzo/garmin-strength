@@ -1,5 +1,6 @@
 import { CatalogExercise, EquipmentType, EXERCISE_CATALOG, MuscleGroup } from './exercise-catalog';
 import { getExpertGymExercises } from './expert-gym-guide';
+import { getDiscomfortExerciseIds } from './exercise-notes';
 import { StrengthRoutine, WorkoutExerciseBlock } from './types';
 
 export interface MyGymProfile {
@@ -168,14 +169,16 @@ export function generateSmartLocalRoutine(input: SmartGenerateInput): SmartGener
   }
 
   const availableSet = new Set(gymProfile.availableEquipment);
+  const discomfortSet = new Set(getDiscomfortExerciseIds());
   const expertList = getExpertGymExercises();
   const expertMap = new Map(expertList.map((e) => [e.exerciseId, e]));
 
-  // Filtrar catálogo disponible según Mi Gimnasio y protección lumbar
+  // Filtrar catálogo disponible según Mi Gimnasio, protección lumbar y alertas articulares
   let candidates = EXERCISE_CATALOG.filter((ex) => {
     if (!availableSet.has(ex.equipment)) return false;
     if (!requestedMuscles.includes(ex.muscleGroup)) return false;
     if (spareLowerBack && LOWER_BACK_HEAVY_IDS.has(ex.id)) return false;
+    if (discomfortSet.has(ex.id)) return false;
     return true;
   });
 

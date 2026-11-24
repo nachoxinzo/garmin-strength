@@ -32,6 +32,8 @@ import {
   recordSingleExerciseCompletion
 } from '@/lib/progressive-overload-engine';
 import { getExpertGymExercises } from '@/lib/expert-gym-guide';
+import { generateWarmupRamp } from '@/lib/warmup-calculator';
+import { ExerciseNoteRecord, loadExerciseNotes } from '@/lib/exercise-notes';
 import { Exercise3DModal } from './Exercise3DModal';
 import { useWakeLock } from '@/lib/use-wake-lock';
 
@@ -43,6 +45,7 @@ interface LiveSetRow {
   reps: number;
   completed: boolean;
   prType?: PrBadgeType;
+  isWarmup?: boolean;
 }
 
 interface WorkoutObjectiveReport {
@@ -131,6 +134,7 @@ export function LiveTrackerTab({
   onApplyNextProgression
 }: LiveTrackerTabProps) {
   const [history, setHistory] = useState<Record<string, ExerciseProgressRecord>>({});
+  const [notesMap, setNotesMap] = useState<Record<string, ExerciseNoteRecord>>({});
   const [liveExercises, setLiveExercises] = useState<LiveExerciseState[]>([]);
 
   // Mapa de fichas expertas para enriquecer el visor 3D contextual
@@ -160,9 +164,10 @@ export function LiveTrackerTab({
   // Mantener pantalla encendida mientras el entreno está activo
   useWakeLock(isSessionActive && !isFinished);
 
-  // Cargar historial previo y sincronizar con los bloques de la rutina actual
+  // Cargar historial previo y notas técnicas
   useEffect(() => {
     setHistory(loadProgressionHistory());
+    setNotesMap(loadExerciseNotes());
   }, []);
 
   useEffect(() => {
@@ -367,6 +372,30 @@ export function LiveTrackerTab({
           sets: ex.sets.map((s, sIdx) =>
             sIdx === setIndex ? { ...s, [field]: Math.max(0, value) } : s
           ),
+        };
+      })
+    );
+  };
+
+  const addWarmupRampToExercise = (exIndex: number) => {
+    setLiveExercises((prev) =>
+      prev.map((ex, eIdx) => {
+        if (eIdx !== exIndex) return ex;
+        // Evitar duplicar si ya tiene calentamiento
+        if (ex.sets.some((s) => s.isWarmup)) return ex;
+        const targetWeight = Math.max(...ex.sets.map((s) => s.weightKg), 0);
+        const ramp = generateWarmupRamp(targetWeight, ex.exercise.equipment === 'Barra');
+        if (ramp.length === 0) return ex;
+        const warmupRows: LiveSetRow[] = ramp.map((r, i) => ({
+          id: `${ex.blockId}-wu-${Date.now()}-${i}`,
+          weightKg: r.weightKg,
+          reps: r.reps,
+          completed: false,
+          isWarmup: true,
+        }));
+        return {
+          ...ex,
+          sets: [...warmupRows, ...ex.sets],
         };
       })
     );
@@ -802,6 +831,11 @@ export function LiveTrackerTab({
                   <h3 className="text-base sm:text-lg font-bold text-foreground">
                     {exIndex + 1}. {ex.exercise.name}
                   </h3>
+                  {notesMap[ex.exercise.id]?.setupNote && (
+                    <p className="text-xs text-blue-700 bg-blue-50/70 border border-blue-200/60 px-2.5 py-1 rounded-lg inline-block">
+                      Ajuste: {notesMap[ex.exercise.id].setupNote}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -832,7 +866,9 @@ export function LiveTrackerTab({
                   <div className="col-span-2 text-center">Hecho</div>
                 </div>
 
-                {ex.sets.map((setRow, setIndex) => (
+                {ex.sets.map((setRow, setIndex) => {
+                  const workingSetNumber = ex.sets.slice(0, setIndex + 1).filter((s) => !s.isWarmup).length;
+                  return (
                   <div
                     key={setRow.id}
                     className={`grid grid-cols-12 gap-2 items-center p-2 rounded-xl border transition-all duration-300 ${
@@ -840,19 +876,23 @@ export function LiveTrackerTab({
                         ? 'bg-gradient-to-r from-amber-50/90 via-yellow-50/70 to-emerald-50/80 border-amber-300 ring-2 ring-amber-400/50 shadow-sm'
                         : setRow.completed
                         ? 'bg-emerald-50/70 border-emerald-200/90'
+                        : setRow.isWarmup
+                        ? 'bg-amber-50/40 border-amber-200/60'
                         : 'bg-muted/25 border-border/60 hover:bg-muted/40'
                     }`}
                   >
                     <div className="col-span-2 flex items-center justify-center gap-1">
                       <span
-                        className={`w-7 h-7 rounded-lg border text-xs font-bold flex items-center justify-center tabular-nums ${
+                        className={`w-7 h-7 rounded-lg border text-[10px] font-bold flex items-center justify-center tabular-nums ${
                           setRow.prType
                             ? 'bg-amber-500 border-amber-400 text-white animate-pulse'
-                            : 'bg-card border-border/60 text-foreground'
+                            : setRow.isWarmup
+                            ? 'bg-amber-100 border-amber-300 text-amber-800'
+                            : 'bg-card border-border/60 text-foreground text-xs'
                         }`}
-                        title={setRow.prType ? '¡Nuevo PR!' : undefined}
+                        title={setRow.prType ? '¡Nuevo PR!' : setRow.isWarmup ? 'Serie de calentamiento' : undefined}
                       >
-                        {setRow.prType ? <Trophy className="w-3.5 h-3.5" /> : setIndex + 1}
+                        {setRow.prType ? <Trophy className="w-3.5 h-3.5" /> : setRow.isWarmup ? 'CAL' : workingSetNumber}
                       </span>
                       {ex.sets.length > 1 && !setRow.completed && (
                         <button
@@ -912,19 +952,34 @@ export function LiveTrackerTab({
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
-              {/* Pie del ejercicio: Añadir serie + Selector de dificultad */}
+              {/* Pie del ejercicio: Añadir serie + Rampa Calentamiento + Selector de dificultad */}
               <div className="pt-2 border-t border-border/60 flex flex-wrap items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => addSetToExercise(exIndex)}
-                  className="saas-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 hover:bg-muted text-foreground border border-border/60 text-xs font-semibold"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Añadir Serie</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => addSetToExercise(exIndex)}
+                    className="saas-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 hover:bg-muted text-foreground border border-border/60 text-xs font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Añadir Serie</span>
+                  </button>
+
+                  {!ex.sets.some((s) => s.isWarmup) && Math.max(...ex.sets.map((s) => s.weightKg), 0) >= 25 && (
+                    <button
+                      type="button"
+                      onClick={() => addWarmupRampToExercise(exIndex)}
+                      title="Generar series progresivas de aproximación (sin fatiga)"
+                      className="saas-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 text-xs font-semibold"
+                    >
+                      <Flame className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Rampa Calent.</span>
+                    </button>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-1.5">
                   <span className="text-[11px] font-semibold text-muted-foreground mr-1">

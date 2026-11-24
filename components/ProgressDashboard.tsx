@@ -18,13 +18,16 @@ import {
   Info,
   Trash2,
   FileSpreadsheet,
-  Cloud
+  Cloud,
+  AlertTriangle,
+  CheckCircle2
 } from 'lucide-react';
 import {
   extractProgressFromHevyCSV,
   ExerciseStatsSummary,
   ExerciseSessionProgress
 } from '@/lib/progress-analyzer';
+import { analyzeWeeklyMuscleBalance, MuscleVolumeStatus } from '@/lib/weekly-volume-analyzer';
 import {
   isSupabaseConfigured,
   getWorkoutLogsCsvFromSupabase,
@@ -42,6 +45,11 @@ export default function ProgressDashboard() {
   const [searchExercise, setSearchExercise] = useState<string>('');
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
   const [hasCloudSource, setHasCloudSource] = useState<boolean>(false);
+  const [muscleBalance, setMuscleBalance] = useState<MuscleVolumeStatus[]>([]);
+
+  useEffect(() => {
+    setMuscleBalance(analyzeWeeklyMuscleBalance());
+  }, []);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -208,9 +216,79 @@ export default function ProgressDashboard() {
     }
   };
 
+  const renderMuscleBalanceCard = () => {
+    if (muscleBalance.length === 0) return null;
+    const deficitMuscles = muscleBalance.filter((m) => m.status === 'deficit');
+
+    return (
+      <section className="bg-card rounded-2xl border border-border/60 p-5 sm:p-6 saas-card space-y-4 text-left">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+              <Zap className="w-4 h-4 text-blue-600" />
+              <span>Balance de Volumen Semanal (Series Efectivas)</span>
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Comparativa entre tus series semanales (Plan Semanal + Entreno en Vivo) y el rango óptimo de hipertrofia.
+            </p>
+          </div>
+          {deficitMuscles.length > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold shrink-0">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+              <span>{deficitMuscles.length} grupos con margen de estímulo</span>
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {muscleBalance.map((m) => {
+            const effective = Math.max(m.plannedSets, m.recordedSets);
+            const pct = Math.min(100, Math.round((effective / m.targetMax) * 100));
+            return (
+              <div
+                key={m.muscle}
+                className="p-3.5 rounded-xl bg-muted/25 border border-border/60 space-y-2"
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-foreground">{m.muscle}</span>
+                  <span
+                    className={`font-semibold tabular-nums inline-flex items-center gap-1 ${
+                      m.status === 'deficit'
+                        ? 'text-amber-700'
+                        : m.status === 'optimal'
+                        ? 'text-emerald-700'
+                        : 'text-blue-700'
+                    }`}
+                  >
+                    {m.status === 'optimal' && <CheckCircle2 className="w-3 h-3" />}
+                    {effective} / {m.targetMin}-{m.targetMax} series
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      m.status === 'deficit'
+                        ? 'bg-amber-500'
+                        : m.status === 'optimal'
+                        ? 'bg-emerald-500'
+                        : 'bg-blue-600'
+                    }`}
+                    style={{ width: `${Math.max(4, pct)}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
   if (!csvRaw || analytics.exercises.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-8 sm:p-12 text-center shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] max-w-xl mx-auto my-8 animate-in fade-in duration-150">
+      <div className="space-y-6">
+        {renderMuscleBalanceCard()}
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-8 sm:p-12 text-center shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] max-w-xl mx-auto my-4 animate-in fade-in duration-150">
         <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-5 border border-blue-100 shadow-xs">
           <TrendingUp className="w-8 h-8" />
         </div>
@@ -247,12 +325,14 @@ export default function ProgressDashboard() {
           accept=".csv,text/csv"
           className="hidden"
         />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
+      {renderMuscleBalanceCard()}
       {/* Barra de Origen de Datos */}
       <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">

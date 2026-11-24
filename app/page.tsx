@@ -47,12 +47,17 @@ import {
   Link2,
   Trophy,
   Play,
-  Menu
+  Menu,
+  StickyNote,
+  AlertTriangle
 } from 'lucide-react';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { EnrichedExpertExercise } from '@/lib/expert-gym-guide';
 import { downloadAppleWatchCalendarIcs, formatAppleWatchNotesText } from '@/lib/apple-watch-export';
 import { calculateBarbellPlates } from '@/lib/plate-calculator';
+import { ExerciseNoteRecord, loadExerciseNotes, saveExerciseNote } from '@/lib/exercise-notes';
+import { getTodayWeekKey, loadWeeklyPlan } from '@/lib/weekly-planner';
+import { WeeklyPlanModal } from '@/components/WeeklyPlanModal';
 import {
   computeProgressiveOverload,
   EffortRating,
@@ -112,6 +117,10 @@ export default function WorkoutStudioPage() {
   const [active3DExercise, setActive3DExercise] = useState<CatalogExercise | null>(null);
   const [exerciseEffortMap, setExerciseEffortMap] = useState<Record<string, EffortRating>>({});
   const [exerciseRecordMap, setExerciseRecordMap] = useState<Record<string, ExerciseProgressRecord>>({});
+  const [isWeeklyPlanOpen, setIsWeeklyPlanOpen] = useState(false);
+  const [todayPlannedRoutine, setTodayPlannedRoutine] = useState<StrengthRoutine | null>(null);
+  const [exerciseNotesMap, setExerciseNotesMap] = useState<Record<string, ExerciseNoteRecord>>({});
+  const [openNoteBlockId, setOpenNoteBlockId] = useState<string | null>(null);
 
   useEffect(() => {
     const history = loadProgressionHistory();
@@ -121,6 +130,11 @@ export default function WorkoutStudioPage() {
       initialMap[rec.exerciseId] = rec.effort;
     });
     setExerciseEffortMap(initialMap);
+
+    setExerciseNotesMap(loadExerciseNotes());
+    const plan = loadWeeklyPlan();
+    const todayPlan = plan[getTodayWeekKey()];
+    if (todayPlan) setTodayPlannedRoutine(todayPlan);
   }, []);
 
   // Selector modal de ejercicios
@@ -1271,6 +1285,32 @@ export default function WorkoutStudioPage() {
                 </button>
 
                 <button
+                  type="button"
+                  onClick={() => setIsWeeklyPlanOpen(true)}
+                  className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                >
+                  <Calendar className="w-4 h-4 text-blue-600" />
+                  <span>Plan Semanal</span>
+                </button>
+
+                {todayPlannedRoutine && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRoutine(todayPlannedRoutine);
+                      setStatusMessage({
+                        type: 'success',
+                        text: `Sesión de hoy cargada: "${todayPlannedRoutine.name}".`,
+                      });
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold rounded-xl bg-slate-900 hover:bg-slate-800 text-white shadow-2xs transition-all"
+                  >
+                    <Play className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Hoy: {todayPlannedRoutine.name}</span>
+                  </button>
+                )}
+
+                <button
                   onClick={() => setIsHevyModalOpen(true)}
                   className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/80 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
                 >
@@ -1810,40 +1850,106 @@ export default function WorkoutStudioPage() {
                     </div>
                   </div>
 
-                  {/* Registro de dificultad individual por ejercicio para Sobrecarga Progresiva */}
-                  <div className="mt-3 pt-3 border-t border-border/60 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold text-muted-foreground">
-                      Dificultad en este ejercicio:
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      {(
-                        [
-                          { id: 'easy', label: 'Fácil', activeClass: 'bg-emerald-600 text-white border-emerald-600' },
-                          { id: 'optimal', label: 'Óptimo', activeClass: 'bg-blue-600 text-white border-blue-600' },
-                          { id: 'hard', label: 'Al límite', activeClass: 'bg-amber-600 text-white border-amber-600' }
-                        ] as const
-                      ).map((opt) => {
-                        const isSelected = exerciseEffortMap[block.exercise.id] === opt.id;
-                        return (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => {
-                              const updatedHistory = recordSingleExerciseCompletion(block, opt.id);
-                              setExerciseRecordMap(updatedHistory);
-                              setExerciseEffortMap(prev => ({ ...prev, [block.exercise.id]: opt.id }));
-                            }}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all active:scale-95 ${
-                              isSelected
-                                ? opt.activeClass
-                                : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/60'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
+                  {/* Registro de dificultad individual + Nota Técnica / Alerta Articular (F4) */}
+                  <div className="mt-3 pt-3 border-t border-border/60 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-semibold text-muted-foreground">
+                          Dificultad:
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {(
+                            [
+                              { id: 'easy', label: 'Fácil', activeClass: 'bg-emerald-600 text-white border-emerald-600' },
+                              { id: 'optimal', label: 'Óptimo', activeClass: 'bg-blue-600 text-white border-blue-600' },
+                              { id: 'hard', label: 'Al límite', activeClass: 'bg-amber-600 text-white border-amber-600' }
+                            ] as const
+                          ).map((opt) => {
+                            const isSelected = exerciseEffortMap[block.exercise.id] === opt.id;
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => {
+                                  const updatedHistory = recordSingleExerciseCompletion(block, opt.id);
+                                  setExerciseRecordMap(updatedHistory);
+                                  setExerciseEffortMap(prev => ({ ...prev, [block.exercise.id]: opt.id }));
+                                }}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all active:scale-95 ${
+                                  isSelected
+                                    ? opt.activeClass
+                                    : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/60'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenNoteBlockId((curr) => (curr === block.id ? null : block.id))
+                        }
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
+                          exerciseNotesMap[block.exercise.id]?.hasJointDiscomfort
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : exerciseNotesMap[block.exercise.id]?.setupNote
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-muted/40 text-muted-foreground border-border/60 hover:text-foreground'
+                        }`}
+                      >
+                        {exerciseNotesMap[block.exercise.id]?.hasJointDiscomfort ? (
+                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                        ) : (
+                          <StickyNote className="w-3 h-3" />
+                        )}
+                        <span>
+                          {exerciseNotesMap[block.exercise.id]?.hasJointDiscomfort
+                            ? 'Alerta Articular'
+                            : exerciseNotesMap[block.exercise.id]?.setupNote
+                            ? 'Nota guardada'
+                            : 'Nota / Ajuste'}
+                        </span>
+                      </button>
                     </div>
+
+                    {openNoteBlockId === block.id && (
+                      <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2.5 animate-in fade-in duration-150">
+                        <input
+                          type="text"
+                          value={exerciseNotesMap[block.exercise.id]?.setupNote || ''}
+                          onChange={(e) => {
+                            const updated = saveExerciseNote(
+                              block.exercise.id,
+                              e.target.value,
+                              Boolean(exerciseNotesMap[block.exercise.id]?.hasJointDiscomfort)
+                            );
+                            setExerciseNotesMap(updated);
+                          }}
+                          placeholder="Ej: Asiento al 4, agarre medio, controlar 3s bajada..."
+                          className="w-full px-3 py-2 text-xs bg-card border border-border/70 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                        <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(exerciseNotesMap[block.exercise.id]?.hasJointDiscomfort)}
+                            onChange={(e) => {
+                              const updated = saveExerciseNote(
+                                block.exercise.id,
+                                exerciseNotesMap[block.exercise.id]?.setupNote || '',
+                                e.target.checked
+                              );
+                              setExerciseNotesMap(updated);
+                            }}
+                            className="w-4 h-4 rounded border-border text-rose-600"
+                          />
+                          <span>Me produce molestia articular (la IA lo evitará automáticamente)</span>
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   {/* Calculadora automática de discos para barra olímpica (P1) */}
@@ -2649,6 +2755,24 @@ export default function WorkoutStudioPage() {
       <Exercise3DModal
         exercise={active3DExercise}
         onClose={() => setActive3DExercise(null)}
+      />
+
+      {/* Planificador Semanal de Mesociclo (F1) */}
+      <WeeklyPlanModal
+        isOpen={isWeeklyPlanOpen}
+        onClose={() => {
+          setIsWeeklyPlanOpen(false);
+          const plan = loadWeeklyPlan();
+          setTodayPlannedRoutine(plan[getTodayWeekKey()] || null);
+        }}
+        currentRoutine={routine}
+        onLoadRoutine={(loaded) => {
+          setRoutine(loaded);
+          setStatusMessage({
+            type: 'success',
+            text: `Rutina del plan semanal cargada: "${loaded.name}".`,
+          });
+        }}
       />
     </div>
   );
