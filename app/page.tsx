@@ -873,7 +873,7 @@ export default function WorkoutStudioPage() {
   const muscleGroups = ['Todos', 'Pecho', 'Espalda', 'Piernas', 'Hombros', 'Brazos', 'Core'];
 
   return (
-    <div className="min-h-screen pb-28 ambient-canvas text-foreground">
+    <div className="min-h-screen pb-28 ambient-canvas text-foreground overflow-x-hidden">
       {/* Barra de Navegación Superior */}
       <header className="sticky top-0 z-30 bg-card/90 backdrop-blur-xl border-b border-border/60 shadow-[0_1px_12px_-2px_rgba(15,23,42,0.05)]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
@@ -1635,13 +1635,13 @@ export default function WorkoutStudioPage() {
                       : 'border-border/60 hover:border-blue-200/80'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
                       <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0 border border-blue-200/70 tabular-nums shadow-2xs">
                         {String(index + 1).padStart(2, '0')}
                       </span>
-                      <div>
-                        <h3 className="font-semibold text-foreground text-base sm:text-lg">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-foreground text-base sm:text-lg leading-snug">
                           {block.exercise.name}
                         </h3>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -1660,7 +1660,7 @@ export default function WorkoutStudioPage() {
                               <span>PR: {record.bestWeightKg}kg &bull; 1RM: {record.bestEstimated1RM}kg</span>
                             </span>
                           ) : null}
-                          <span className="text-[11px] text-muted-foreground font-mono">
+                          <span className="text-[11px] text-muted-foreground font-mono break-all">
                             {block.exercise.garminName}
                           </span>
                         </div>
@@ -1668,7 +1668,7 @@ export default function WorkoutStudioPage() {
                     </div>
 
                     {/* Acciones de bloque */}
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground shrink-0">
                       {index < routine.blocks.length - 1 && (
                         <button
                           type="button"
