@@ -49,8 +49,10 @@ import {
   Play,
   Menu,
   StickyNote,
-  AlertTriangle
+  AlertTriangle,
+  BookOpen
 } from 'lucide-react';
+import { InteractiveGuideModal, GuideTargetAction } from '@/components/InteractiveGuideModal';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { EnrichedExpertExercise } from '@/lib/expert-gym-guide';
 import { downloadAppleWatchCalendarIcs, formatAppleWatchNotesText } from '@/lib/apple-watch-export';
@@ -163,6 +165,7 @@ export default function WorkoutStudioPage() {
   const [copiedAppleNotes, setCopiedAppleNotes] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileLoadToolsOpen, setIsMobileLoadToolsOpen] = useState(false);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
 
   // Supabase Cloud Routines
   const [cloudRoutines, setCloudRoutines] = useState<StrengthRoutine[]>([]);
@@ -908,6 +911,14 @@ export default function WorkoutStudioPage() {
             )}
 
             <button
+              onClick={() => setIsGuideModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+              <span>Guía</span>
+            </button>
+
+            <button
               onClick={() => setIsShareModalOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
             >
@@ -1099,6 +1110,21 @@ export default function WorkoutStudioPage() {
                     <span>Compartir / Apple Watch</span>
                   </span>
                   <ArrowRight className="w-4 h-4 text-indigo-600" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    setIsGuideModalOpen(true);
+                  }}
+                  className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-blue-50/70 hover:bg-blue-100/70 border border-blue-200/80 flex items-center justify-between text-sm font-semibold text-blue-900"
+                >
+                  <span className="flex items-center gap-3">
+                    <BookOpen className="w-4 h-4 text-blue-600" />
+                    <span>Guía Interactiva</span>
+                  </span>
+                  <ArrowRight className="w-4 h-4 text-blue-600" />
                 </button>
 
                 <button
@@ -2775,6 +2801,27 @@ export default function WorkoutStudioPage() {
             type: 'success',
             text: `Rutina del plan semanal cargada: "${loaded.name}".`,
           });
+        }}
+      />
+
+      {/* Guía Interactiva Completa */}
+      <InteractiveGuideModal
+        isOpen={isGuideModalOpen}
+        onClose={() => setIsGuideModalOpen(false)}
+        onNavigate={(target: GuideTargetAction) => {
+          if (target === 'builder') setCurrentMainTab('studio');
+          else if (target === 'live') setCurrentMainTab('live');
+          else if (target === 'progress') setCurrentMainTab('progress');
+          else if (target === 'social') setCurrentMainTab('social');
+          else if (target === 'generator') {
+            setCurrentMainTab('studio');
+            setIsGeneratorModalOpen(true);
+          } else if (target === 'weekly_plan') {
+            setCurrentMainTab('studio');
+            setIsWeeklyPlanOpen(true);
+          } else if (target === 'garmin_auth') {
+            setIsGarminAuthModalOpen(true);
+          }
         }}
       />
     </div>
