@@ -19,7 +19,7 @@ const nextConfig = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
           {
             key: 'Content-Security-Policy',
-            value: `default-src 'self'; ${cspScriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co https://api.hevyapp.com; font-src 'self' data:; object-src 'none'; frame-ancestors 'none';`,
+            value: `default-src 'self'; ${cspScriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.hevyapp.com; font-src 'self' data:; object-src 'none'; frame-ancestors 'none';`,
           },
         ],
       },

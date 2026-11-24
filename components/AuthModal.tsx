@@ -75,7 +75,14 @@ export default function AuthModal({
         }, 1000);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Error en la autenticación');
+      const rawMessage = String(err?.message || '');
+      if (/failed to fetch|networkerror|load failed|fetch/i.test(rawMessage)) {
+        setErrorMessage(
+          'No se pudo conectar con el servidor de Supabase. Es posible que el proyecto esté pausado o sin conexión; mientras tanto tus rutinas y progreso siguen guardándose en modo local.'
+        );
+      } else {
+        setErrorMessage(rawMessage || 'Error en la autenticación');
+      }
     } finally {
       setIsLoading(false);
     }
