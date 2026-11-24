@@ -12,6 +12,9 @@ export interface ExerciseProgressRecord {
   effort: EffortRating;
   consecutiveHardCount: number;
   sessionsCompleted: number;
+  bestWeightKg?: number;
+  bestReps?: number;
+  bestEstimated1RM?: number;
 }
 
 export interface ProgressionChange {
@@ -41,6 +44,12 @@ export function saveProgressionHistory(map: Record<string, ExerciseProgressRecor
   }
 }
 
+function computeEpley1RM(weightKg: number, reps: number): number {
+  if (weightKg <= 0) return 0;
+  if (reps <= 1) return weightKg;
+  return Math.round(weightKg * (1 + reps / 30) * 10) / 10;
+}
+
 /**
  * Registra el resultado de un único ejercicio (permite puntuar cada ejercicio por separado).
  */
@@ -54,6 +63,10 @@ export function recordSingleExerciseCompletion(
   const consecutiveHardCount =
     effort === 'hard' ? (prev?.consecutiveHardCount || 0) + 1 : 0;
 
+  const current1RM = computeEpley1RM(block.weightKg, block.reps);
+  const prevBest1RM = prev?.bestEstimated1RM || 0;
+  const isNew1RM = current1RM >= prevBest1RM;
+
   history[block.exercise.id] = {
     exerciseId: block.exercise.id,
     lastDate: today,
@@ -64,6 +77,9 @@ export function recordSingleExerciseCompletion(
     effort,
     consecutiveHardCount,
     sessionsCompleted: (prev?.sessionsCompleted || 0) + 1,
+    bestWeightKg: isNew1RM ? block.weightKg : prev?.bestWeightKg ?? block.weightKg,
+    bestReps: isNew1RM ? block.reps : prev?.bestReps ?? block.reps,
+    bestEstimated1RM: Math.max(prevBest1RM, current1RM),
   };
 
   saveProgressionHistory(history);
@@ -90,6 +106,9 @@ export function recordWorkoutCompletion(
     const prev = history[block.exercise.id];
     const consecutiveHardCount =
       effort === 'hard' ? (prev?.consecutiveHardCount || 0) + 1 : 0;
+    const current1RM = computeEpley1RM(block.weightKg, block.reps);
+    const prevBest1RM = prev?.bestEstimated1RM || 0;
+    const isNew1RM = current1RM >= prevBest1RM;
 
     history[block.exercise.id] = {
       exerciseId: block.exercise.id,
@@ -101,6 +120,9 @@ export function recordWorkoutCompletion(
       effort,
       consecutiveHardCount,
       sessionsCompleted: (prev?.sessionsCompleted || 0) + 1,
+      bestWeightKg: isNew1RM ? block.weightKg : prev?.bestWeightKg ?? block.weightKg,
+      bestReps: isNew1RM ? block.reps : prev?.bestReps ?? block.reps,
+      bestEstimated1RM: Math.max(prevBest1RM, current1RM),
     };
   }
 

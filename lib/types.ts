@@ -8,6 +8,7 @@ export interface WorkoutExerciseBlock {
   weightKg: number;
   suggestedWeightKg?: number; // Peso sugerido original de Hevy
   restSeconds: number;
+  supersetGroupId?: string; // Agrupa ejercicios consecutivos en superserie/biserie
 }
 
 export interface StrengthRoutine {

@@ -43,14 +43,18 @@ import {
   Activity,
   Award,
   Box,
-  Calendar
+  Calendar,
+  Link2,
+  Trophy
 } from 'lucide-react';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { EnrichedExpertExercise } from '@/lib/expert-gym-guide';
 import { downloadAppleWatchCalendarIcs, formatAppleWatchNotesText } from '@/lib/apple-watch-export';
+import { calculateBarbellPlates } from '@/lib/plate-calculator';
 import {
   computeProgressiveOverload,
   EffortRating,
+  ExerciseProgressRecord,
   loadProgressionHistory,
   recordSingleExerciseCompletion,
   recordWorkoutCompletion
@@ -104,9 +108,11 @@ export default function WorkoutStudioPage() {
   const [swappingBlockIndex, setSwappingBlockIndex] = useState<number | null>(null);
   const [active3DExercise, setActive3DExercise] = useState<CatalogExercise | null>(null);
   const [exerciseEffortMap, setExerciseEffortMap] = useState<Record<string, EffortRating>>({});
+  const [exerciseRecordMap, setExerciseRecordMap] = useState<Record<string, ExerciseProgressRecord>>({});
 
   useEffect(() => {
     const history = loadProgressionHistory();
+    setExerciseRecordMap(history);
     const initialMap: Record<string, EffortRating> = {};
     Object.values(history).forEach((rec) => {
       initialMap[rec.exerciseId] = rec.effort;
@@ -482,10 +488,30 @@ export default function WorkoutStudioPage() {
 
   const handleLogCompletedInStudio = (effort: EffortRating) => {
     if (routine.blocks.length === 0) return;
-    recordWorkoutCompletion(routine, effort);
+    const updatedHistory = recordWorkoutCompletion(routine, effort);
+    setExerciseRecordMap(updatedHistory);
     setStatusMessage({
       type: 'success',
       text: `Entreno registrado como "${effort === 'easy' ? 'Fácil' : effort === 'optimal' ? 'Óptimo' : 'Al límite'}". Pulsa "Progresión Auto" cuando quieras subir el nivel de la próxima sesión.`
+    });
+  };
+
+  const toggleSupersetWithNext = (index: number) => {
+    setRoutine(prev => {
+      if (index < 0 || index >= prev.blocks.length - 1) return prev;
+      const blocks = [...prev.blocks];
+      const current = blocks[index];
+      const next = blocks[index + 1];
+
+      if (current.supersetGroupId && current.supersetGroupId === next.supersetGroupId) {
+        blocks[index] = { ...current, supersetGroupId: undefined };
+        blocks[index + 1] = { ...next, supersetGroupId: undefined };
+      } else {
+        const groupId = current.supersetGroupId || `ss-${Date.now()}`;
+        blocks[index] = { ...current, supersetGroupId: groupId };
+        blocks[index + 1] = { ...next, supersetGroupId: groupId };
+      }
+      return { ...prev, blocks };
     });
   };
 
@@ -1307,10 +1333,31 @@ export default function WorkoutStudioPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {routine.blocks.map((block, index) => (
+              {routine.blocks.map((block, index) => {
+                const nextBlock = routine.blocks[index + 1];
+                const prevBlock = routine.blocks[index - 1];
+                const isInSuperset = Boolean(
+                  block.supersetGroupId &&
+                    ((nextBlock && nextBlock.supersetGroupId === block.supersetGroupId) ||
+                      (prevBlock && prevBlock.supersetGroupId === block.supersetGroupId))
+                );
+                const isLinkedToNext = Boolean(
+                  block.supersetGroupId && nextBlock && nextBlock.supersetGroupId === block.supersetGroupId
+                );
+                const record = exerciseRecordMap[block.exercise.id];
+                const plateBreakdown =
+                  block.exercise.equipment === 'Barra'
+                    ? calculateBarbellPlates(block.weightKg, 20)
+                    : null;
+
+                return (
                 <div
                   key={block.id}
-                  className="bg-card rounded-2xl border border-border/60 p-6 saas-card saas-card-interactive hover:border-blue-200/80"
+                  className={`bg-card rounded-2xl border p-6 saas-card saas-card-interactive ${
+                    isInSuperset
+                      ? 'border-indigo-300 border-l-4 border-l-indigo-600'
+                      : 'border-border/60 hover:border-blue-200/80'
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-3.5">
@@ -1325,6 +1372,18 @@ export default function WorkoutStudioPage() {
                           <span className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/60">
                             {block.exercise.muscleGroup}
                           </span>
+                          {isInSuperset && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/80">
+                              <Link2 className="w-3 h-3" />
+                              <span>Superserie</span>
+                            </span>
+                          )}
+                          {record?.bestEstimated1RM ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 tabular-nums">
+                              <Trophy className="w-3 h-3 text-amber-600" />
+                              <span>PR: {record.bestWeightKg}kg &bull; 1RM: {record.bestEstimated1RM}kg</span>
+                            </span>
+                          ) : null}
                           <span className="text-[11px] text-muted-foreground font-mono">
                             {block.exercise.garminName}
                           </span>
@@ -1334,6 +1393,22 @@ export default function WorkoutStudioPage() {
 
                     {/* Acciones de bloque */}
                     <div className="flex items-center gap-1.5 text-muted-foreground">
+                      {index < routine.blocks.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => toggleSupersetWithNext(index)}
+                          title={isLinkedToNext ? 'Desvincular superserie' : 'Enlazar en superserie con el siguiente ejercicio'}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-95 ${
+                            isLinkedToNext
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-muted/40 hover:bg-indigo-50 text-muted-foreground hover:text-indigo-700 border-border/60'
+                          }`}
+                        >
+                          <Link2 className="w-3.5 h-3.5" />
+                          <span className="hidden md:inline">{isLinkedToNext ? 'Enlazado' : 'Superserie'}</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => setActive3DExercise(block.exercise)}
@@ -1557,7 +1632,8 @@ export default function WorkoutStudioPage() {
                             key={opt.id}
                             type="button"
                             onClick={() => {
-                              recordSingleExerciseCompletion(block, opt.id);
+                              const updatedHistory = recordSingleExerciseCompletion(block, opt.id);
+                              setExerciseRecordMap(updatedHistory);
                               setExerciseEffortMap(prev => ({ ...prev, [block.exercise.id]: opt.id }));
                             }}
                             className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all active:scale-95 ${
@@ -1572,8 +1648,32 @@ export default function WorkoutStudioPage() {
                       })}
                     </div>
                   </div>
+
+                  {/* Calculadora automática de discos para barra olímpica (P1) */}
+                  {plateBreakdown && (
+                    <div className="mt-3 pt-3 border-t border-border/60 flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="font-semibold text-muted-foreground">
+                        Discos por lado (barra {plateBreakdown.barWeightKg}kg):
+                      </span>
+                      {plateBreakdown.perSide.length === 0 ? (
+                        <span className="px-2 py-0.5 rounded bg-muted text-foreground font-medium">
+                          Solo barra vacía
+                        </span>
+                      ) : (
+                        plateBreakdown.perSide.map((p) => (
+                          <span
+                            key={p.weightKg}
+                            className={`px-2 py-0.5 rounded-md font-bold tabular-nums shadow-2xs ${p.colorClass}`}
+                          >
+                            {p.weightKg}kg &times;{p.count}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
