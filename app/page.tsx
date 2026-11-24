@@ -45,7 +45,8 @@ import {
   Box,
   Calendar,
   Link2,
-  Trophy
+  Trophy,
+  Play
 } from 'lucide-react';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { EnrichedExpertExercise } from '@/lib/expert-gym-guide';
@@ -66,6 +67,7 @@ import ProgressDashboard from '@/components/ProgressDashboard';
 import SocialDashboard from '@/components/SocialDashboard';
 import { GymExerciseGuide } from '@/components/GymExerciseGuide';
 import { Exercise3DModal } from '@/components/Exercise3DModal';
+import { LiveTrackerTab } from '@/components/LiveTrackerTab';
 import AuthModal from '@/components/AuthModal';
 import GarminAuthModal from '@/components/GarminAuthModal';
 import ExerciseSwapModal from '@/components/ExerciseSwapModal';
@@ -88,7 +90,7 @@ const DEFAULT_ROUTINE: StrengthRoutine = {
 };
 
 export default function WorkoutStudioPage() {
-  const [currentMainTab, setCurrentMainTab] = useState<'studio' | 'guide' | 'progress' | 'social'>('studio');
+  const [currentMainTab, setCurrentMainTab] = useState<'studio' | 'live' | 'guide' | 'progress' | 'social'>('studio');
   const [routine, setRoutine] = useState<StrengthRoutine>(DEFAULT_ROUTINE);
   const [accountStatus, setAccountStatus] = useState<GarminAccountStatus | null>(null);
   const [garminTokens, setGarminTokens] = useState<any>(null);
@@ -971,6 +973,18 @@ export default function WorkoutStudioPage() {
             </button>
 
             <button
+              onClick={() => setCurrentMainTab('live')}
+              className={`saas-btn flex items-center gap-2 py-2 px-3.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap ${
+                currentMainTab === 'live'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-transparent'
+              }`}
+            >
+              <Play className="w-4 h-4" />
+              <span>Entreno en Vivo</span>
+            </button>
+
+            <button
               onClick={() => setCurrentMainTab('guide')}
               className={`saas-btn flex items-center gap-2 py-2 px-3.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap ${
                 currentMainTab === 'guide'
@@ -1047,7 +1061,19 @@ export default function WorkoutStudioPage() {
           </div>
         )}
 
-        {currentMainTab === 'guide' ? (
+        {currentMainTab === 'live' ? (
+          <LiveTrackerTab
+            routine={routine}
+            onOpenCatalog={() => {
+              setCurrentMainTab('studio');
+              setIsSelectorOpen(true);
+            }}
+            onWorkoutSaved={(updatedHistory, summaryText) => {
+              setExerciseRecordMap(updatedHistory);
+              setStatusMessage({ type: 'success', text: summaryText });
+            }}
+          />
+        ) : currentMainTab === 'guide' ? (
           <GymExerciseGuide
             onAddToRoutine={handleAddExpertExercise}
             currentRoutineExerciseIds={routine.blocks.map(b => b.exercise.id)}
