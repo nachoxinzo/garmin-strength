@@ -822,12 +822,12 @@ export default function WorkoutStudioPage() {
   const muscleGroups = ['Todos', 'Pecho', 'Espalda', 'Piernas', 'Hombros', 'Brazos', 'Core'];
 
   return (
-    <div className="min-h-screen pb-28 bg-background text-foreground">
+    <div className="min-h-screen pb-28 ambient-canvas text-foreground">
       {/* Barra de Navegación Superior */}
-      <header className="sticky top-0 z-30 bg-card/95 backdrop-blur-md border-b border-border/60 shadow-sm">
+      <header className="sticky top-0 z-30 bg-card/90 backdrop-blur-xl border-b border-border/60 shadow-[0_1px_12px_-2px_rgba(15,23,42,0.05)]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-600/25 shrink-0 transition-transform duration-200 hover:scale-105">
               <Dumbbell className="w-5 h-5" strokeWidth={2} />
             </div>
             <div className="min-w-0">
@@ -929,15 +929,15 @@ export default function WorkoutStudioPage() {
       </header>
 
       {/* Sub-barra de Navegación de Pestañas */}
-      <div className="bg-card border-b border-border/60 shadow-xs sticky top-16 z-20">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between">
-          <nav className="flex items-center gap-2 sm:gap-4 overflow-x-auto">
+      <div className="bg-card/85 backdrop-blur-md border-b border-border/60 sticky top-16 z-20">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2 flex items-center justify-between gap-3">
+          <nav className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar">
             <button
               onClick={() => setCurrentMainTab('studio')}
-              className={`flex items-center gap-2 py-3.5 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap ${
+              className={`saas-btn flex items-center gap-2 py-2 px-3.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap ${
                 currentMainTab === 'studio'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-transparent'
               }`}
             >
               <Dumbbell className="w-4 h-4" />
@@ -946,42 +946,42 @@ export default function WorkoutStudioPage() {
 
             <button
               onClick={() => setCurrentMainTab('guide')}
-              className={`flex items-center gap-2 py-3.5 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap ${
+              className={`saas-btn flex items-center gap-2 py-2 px-3.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap ${
                 currentMainTab === 'guide'
-                  ? 'border-amber-600 text-amber-700'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200/80 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-transparent'
               }`}
             >
               <Award className="w-4 h-4" />
               <span>Top Gimnasio</span>
-              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-800 border border-amber-200/70">
+              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100/90 text-amber-800 border border-amber-200/80">
                 Pro
               </span>
             </button>
 
             <button
               onClick={() => setCurrentMainTab('progress')}
-              className={`flex items-center gap-2 py-3.5 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap ${
+              className={`saas-btn flex items-center gap-2 py-2 px-3.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap ${
                 currentMainTab === 'progress'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-transparent'
               }`}
             >
               <TrendingUp className="w-4 h-4" />
-              <span>Progreso & Métricas</span>
+              <span>Progreso &amp; Métricas</span>
             </button>
 
             <button
               onClick={() => setCurrentMainTab('social')}
-              className={`flex items-center gap-2 py-3.5 px-3.5 border-b-2 text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap ${
+              className={`saas-btn flex items-center gap-2 py-2 px-3.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap ${
                 currentMainTab === 'social'
-                  ? 'border-indigo-600 text-indigo-600'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-transparent'
               }`}
             >
               <Swords className="w-4 h-4" />
-              <span>Amigos & Retos</span>
-              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+              <span>Amigos &amp; Retos</span>
+              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100/80 text-indigo-700 border border-indigo-200/70">
                 Duelos
               </span>
             </button>
@@ -1034,7 +1034,7 @@ export default function WorkoutStudioPage() {
           <>
 
         {/* Panel Superior: Título de Rutina, Métricas y Acciones Rápidas */}
-        <section className="bg-card rounded-2xl border border-border/60 p-6 sm:p-8 shadow-sm transition-all duration-200">
+        <section className="bg-card rounded-2xl border border-border/60 p-6 sm:p-8 saas-card">
           <div className="space-y-6">
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
               <div className="flex-1 min-w-[260px]">
@@ -1158,32 +1158,38 @@ export default function WorkoutStudioPage() {
 
           {/* Estadísticas de la Sesión */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-border/60">
-            <div className="bg-muted/30 hover:bg-muted/50 rounded-xl p-4 sm:p-5 border border-border/60 transition-all duration-200">
+            <div className="bg-gradient-to-br from-blue-50/50 to-card rounded-2xl p-4 sm:p-5 border border-border/60 saas-card saas-card-interactive">
               <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
                 <span>Ejercicios</span>
-                <Layers className="w-4 h-4 text-blue-600" />
+                <span className="w-8 h-8 rounded-xl bg-blue-100/80 text-blue-600 flex items-center justify-center">
+                  <Layers className="w-4 h-4" />
+                </span>
               </div>
-              <div className="text-2xl font-semibold text-foreground tabular-nums mt-1">
+              <div className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums mt-2">
                 {routine.blocks.length}
               </div>
             </div>
 
-            <div className="bg-muted/30 hover:bg-muted/50 rounded-xl p-4 sm:p-5 border border-border/60 transition-all duration-200">
+            <div className="bg-gradient-to-br from-indigo-50/50 to-card rounded-2xl p-4 sm:p-5 border border-border/60 saas-card saas-card-interactive">
               <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
                 <span>Series Totales</span>
-                <Repeat className="w-4 h-4 text-indigo-600" />
+                <span className="w-8 h-8 rounded-xl bg-indigo-100/80 text-indigo-600 flex items-center justify-center">
+                  <Repeat className="w-4 h-4" />
+                </span>
               </div>
-              <div className="text-2xl font-semibold text-foreground tabular-nums mt-1">
+              <div className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums mt-2">
                 {totalSets}
               </div>
             </div>
 
-            <div className="bg-muted/30 hover:bg-muted/50 rounded-xl p-4 sm:p-5 border border-border/60 transition-all duration-200">
+            <div className="bg-gradient-to-br from-emerald-50/50 to-card rounded-2xl p-4 sm:p-5 border border-border/60 saas-card saas-card-interactive">
               <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
                 <span>Tiempo Estimado</span>
-                <Timer className="w-4 h-4 text-emerald-600" />
+                <span className="w-8 h-8 rounded-xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center">
+                  <Timer className="w-4 h-4" />
+                </span>
               </div>
-              <div className="text-2xl font-semibold text-foreground tabular-nums mt-1">
+              <div className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums mt-2">
                 ~{estimatedMinutes} min
               </div>
             </div>
@@ -1260,28 +1266,35 @@ export default function WorkoutStudioPage() {
           </div>
 
           {routine.blocks.length === 0 ? (
-            <div className="bg-card rounded-2xl border border-dashed border-border p-12 text-center shadow-sm">
-              <div className="w-12 h-12 rounded-2xl bg-muted/60 border border-border/60 flex items-center justify-center mx-auto mb-4 text-muted-foreground">
-                <Dumbbell className="w-6 h-6" />
+            <div className="bg-card rounded-2xl border border-dashed border-border/80 p-10 sm:p-12 text-center saas-card">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200/70 flex items-center justify-center mx-auto mb-4 text-blue-600 shadow-xs">
+                <Dumbbell className="w-7 h-7" />
               </div>
-              <p className="text-base font-semibold text-foreground">No hay ejercicios en la rutina</p>
-              <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-                Añade ejercicios del catálogo oficial de Garmin, genera una sesión científica o importa tus entrenamientos desde Hevy.
+              <p className="text-lg font-bold text-foreground tracking-tight">No hay ejercicios en la rutina</p>
+              <p className="text-sm text-muted-foreground mt-1.5 max-w-md mx-auto leading-relaxed">
+                Añade ejercicios del catálogo oficial de Garmin, diseña una sesión con el Asistente IA o explora los mejores ejercicios en Top Gimnasio.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
                 <button
                   onClick={() => setIsGeneratorModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition-all duration-200 hover:-translate-y-0.5"
+                  className="saas-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 shadow-xs"
                 >
                   <Sparkles className="w-4 h-4" />
-                  <span>Generador Científico</span>
+                  <span>Generador Inteligente</span>
                 </button>
                 <button
                   onClick={() => setIsHevyModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-xs font-semibold hover:bg-orange-100 transition-all duration-200 hover:-translate-y-0.5"
+                  className="saas-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-50 border border-orange-200/80 text-orange-700 text-xs font-semibold hover:bg-orange-100 shadow-xs"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
                   <span>Importar desde Hevy</span>
+                </button>
+                <button
+                  onClick={() => setCurrentMainTab('guide')}
+                  className="saas-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-800 text-xs font-semibold hover:bg-amber-100 shadow-xs"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>Top Gimnasio</span>
                 </button>
                 <button
                   onClick={() => setIsSelectorOpen(true)}
@@ -1297,12 +1310,12 @@ export default function WorkoutStudioPage() {
               {routine.blocks.map((block, index) => (
                 <div
                   key={block.id}
-                  className="bg-card rounded-2xl border border-border/60 p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-border"
+                  className="bg-card rounded-2xl border border-border/60 p-6 saas-card saas-card-interactive hover:border-blue-200/80"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-3.5">
-                      <span className="w-8 h-8 rounded-xl bg-muted text-foreground font-semibold text-xs flex items-center justify-center shrink-0 border border-border/60 tabular-nums">
-                        {index + 1}
+                      <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0 border border-blue-200/70 tabular-nums shadow-2xs">
+                        {String(index + 1).padStart(2, '0')}
                       </span>
                       <div>
                         <h3 className="font-semibold text-foreground text-base sm:text-lg">
