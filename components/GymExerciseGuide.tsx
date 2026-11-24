@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   Award,
+  Box,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -26,6 +27,7 @@ import {
   EXPERT_MUSCLE_GROUPS,
   getExpertGymExercises
 } from '@/lib/expert-gym-guide';
+import { Exercise3DModal } from './Exercise3DModal';
 
 interface GymExerciseGuideProps {
   onAddToRoutine: (item: EnrichedExpertExercise) => void;
@@ -44,6 +46,7 @@ export function GymExerciseGuide({
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedTips, setExpandedTips] = useState<Record<string, boolean>>({});
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
+  const [active3DItem, setActive3DItem] = useState<EnrichedExpertExercise | null>(null);
 
   const filteredExercises = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -391,33 +394,52 @@ export function GymExerciseGuide({
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleAdd(item)}
-                    className={`w-full min-h-[42px] px-4 py-2.5 rounded-lg text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 transition-all duration-200 active:scale-[0.98] ${
-                      wasJustAdded
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
-                    }`}
-                  >
-                    {wasJustAdded ? (
-                      <>
-                        <Check className="w-4 h-4" />
-                        <span>Añadido a Rutina</span>
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-4 h-4" />
-                        <span>Añadir a mi Rutina</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActive3DItem(item)}
+                      className="min-h-[42px] px-3.5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 transition-all duration-200 active:scale-[0.98] shrink-0"
+                    >
+                      <Box className="w-4 h-4 text-blue-400" />
+                      <span>Ver 3D</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAdd(item)}
+                      className={`flex-1 min-h-[42px] px-4 py-2.5 rounded-lg text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 transition-all duration-200 active:scale-[0.98] ${
+                        wasJustAdded
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
+                      }`}
+                    >
+                      {wasJustAdded ? (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>Añadido a Rutina</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4" />
+                          <span>Añadir a mi Rutina</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </article>
             );
           })}
         </div>
       )}
+
+      {/* Visor 3D Biomecánico Interactivo */}
+      <Exercise3DModal
+        exercise={active3DItem?.catalogExercise || null}
+        cues={active3DItem?.executionCues}
+        machineLabel={active3DItem?.machineLabel}
+        onClose={() => setActive3DItem(null)}
+      />
     </div>
   );
 }

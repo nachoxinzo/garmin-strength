@@ -1,0 +1,27 @@
+{
+  "name": "Garmin Strength Studio",
+  "short_name": "Strength Studio",
+  "description": "Diseña rutinas de fuerza, consulta técnica 3D y sincroniza directamente con tu Garmin Fénix 8.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "categories": ["fitness", "health", "sports"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Modo Entreno en Vivo",
+      "short_name": "Entreno Live",
+      "url": "/live",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    }
+  ]
+}

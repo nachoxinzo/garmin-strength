@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { decodeRoutineFromShareUrl } from '@/lib/share-utils';
 import { StrengthRoutine, WorkoutExerciseBlock } from '@/lib/types';
+import { useWakeLock } from '@/lib/use-wake-lock';
 
 // Reproduce un pitido sintético mediante Web Audio API (compatible con Safari iOS y Android)
 function playBeep(frequency = 880, duration = 0.15) {
@@ -73,6 +74,9 @@ function LiveWorkoutContent() {
   const [sessionStartTime] = useState<number>(Date.now());
   const [totalCompletedSets, setTotalCompletedSets] = useState(0);
   const [totalVolumeKg, setTotalVolumeKg] = useState(0);
+
+  // Mantener pantalla encendida en modo gimnasio mientras la sesión está activa
+  const { isActive: wakeLockActive } = useWakeLock(phase !== 'finished');
 
   // Cargar rutina desde el parámetro de URL
   useEffect(() => {

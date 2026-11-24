@@ -41,7 +41,8 @@ import {
   Timer,
   SlidersHorizontal,
   Activity,
-  Award
+  Award,
+  Box
 } from 'lucide-react';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { EnrichedExpertExercise } from '@/lib/expert-gym-guide';
@@ -51,6 +52,7 @@ import { encodeRoutineToShareUrl } from '@/lib/share-utils';
 import ProgressDashboard from '@/components/ProgressDashboard';
 import SocialDashboard from '@/components/SocialDashboard';
 import { GymExerciseGuide } from '@/components/GymExerciseGuide';
+import { Exercise3DModal } from '@/components/Exercise3DModal';
 import AuthModal from '@/components/AuthModal';
 import GarminAuthModal from '@/components/GarminAuthModal';
 import ExerciseSwapModal from '@/components/ExerciseSwapModal';
@@ -91,6 +93,7 @@ export default function WorkoutStudioPage() {
   const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState(false);
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [swappingBlockIndex, setSwappingBlockIndex] = useState<number | null>(null);
+  const [active3DExercise, setActive3DExercise] = useState<CatalogExercise | null>(null);
 
   // Selector modal de ejercicios
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
@@ -1246,6 +1249,16 @@ export default function WorkoutStudioPage() {
                     {/* Acciones de bloque */}
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <button
+                        type="button"
+                        onClick={() => setActive3DExercise(block.exercise)}
+                        title="Ver demostración biomecánica 3D"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                      >
+                        <Box className="w-3.5 h-3.5 text-blue-600" />
+                        <span className="hidden sm:inline">3D</span>
+                      </button>
+
+                      <button
                         onClick={() => {
                           setSwappingBlockIndex(index);
                           setIsSwapModalOpen(true);
@@ -2164,6 +2177,12 @@ export default function WorkoutStudioPage() {
           onSelectAlternative={handleSwapExercise}
         />
       )}
+
+      {/* Visor 3D Biomecánico de Ejercicios */}
+      <Exercise3DModal
+        exercise={active3DExercise}
+        onClose={() => setActive3DExercise(null)}
+      />
     </div>
   );
 }
