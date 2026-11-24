@@ -1072,6 +1072,7 @@ export default function WorkoutStudioPage() {
               setExerciseRecordMap(updatedHistory);
               setStatusMessage({ type: 'success', text: summaryText });
             }}
+            onApplyNextProgression={() => handleApplyProgressiveOverload('optimal')}
           />
         ) : currentMainTab === 'guide' ? (
           <GymExerciseGuide

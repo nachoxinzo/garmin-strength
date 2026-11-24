@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
+  Award,
+  Box,
   Check,
   CheckCircle2,
   Clock,
@@ -13,8 +15,11 @@ import {
   Plus,
   RotateCcw,
   SkipForward,
+  Sparkles,
+  Target,
   Timer,
   Trash2,
+  TrendingUp,
   Trophy,
   Volume2,
   VolumeX
@@ -26,13 +31,31 @@ import {
   loadProgressionHistory,
   recordSingleExerciseCompletion
 } from '@/lib/progressive-overload-engine';
+import { getExpertGymExercises } from '@/lib/expert-gym-guide';
+import { Exercise3DModal } from './Exercise3DModal';
 import { useWakeLock } from '@/lib/use-wake-lock';
+
+type PrBadgeType = '1rm' | 'volume' | 'both';
 
 interface LiveSetRow {
   id: string;
   weightKg: number;
   reps: number;
   completed: boolean;
+  prType?: PrBadgeType;
+}
+
+interface WorkoutObjectiveReport {
+  durationSeconds: number;
+  completionPct: number;
+  completedSets: number;
+  totalSets: number;
+  volumeKg: number;
+  densityKgPerMin: number;
+  prsBeaten: { exerciseName: string; detail: string }[];
+  muscleBreakdown: { muscle: string; sets: number }[];
+  verdictTitle: string;
+  verdictBody: string;
 }
 
 interface LiveExerciseState {
@@ -48,6 +71,19 @@ interface LiveTrackerTabProps {
   routine: StrengthRoutine;
   onOpenCatalog: () => void;
   onWorkoutSaved: (updatedHistory: Record<string, ExerciseProgressRecord>, summaryText: string) => void;
+  onApplyNextProgression?: () => void;
+}
+
+function computeEpley1RM(weightKg: number, reps: number): number {
+  if (weightKg <= 0) return 0;
+  if (reps <= 1) return weightKg;
+  return Math.round(weightKg * (1 + reps / 30) * 10) / 10;
+}
+
+function playPrCelebrationChime() {
+  playRestBeep(523.25, 0.12); // C5
+  setTimeout(() => playRestBeep(659.25, 0.12), 110); // E5
+  setTimeout(() => playRestBeep(783.99, 0.25), 220); // G5
 }
 
 function playRestBeep(frequency = 880, duration = 0.2) {
@@ -91,10 +127,23 @@ function formatDuration(totalSeconds: number): string {
 export function LiveTrackerTab({
   routine,
   onOpenCatalog,
-  onWorkoutSaved
+  onWorkoutSaved,
+  onApplyNextProgression
 }: LiveTrackerTabProps) {
   const [history, setHistory] = useState<Record<string, ExerciseProgressRecord>>({});
   const [liveExercises, setLiveExercises] = useState<LiveExerciseState[]>([]);
+
+  // Mapa de fichas expertas para enriquecer el visor 3D contextual
+  const expertMap = useMemo(() => {
+    const list = getExpertGymExercises();
+    return new Map(list.map((e) => [e.exerciseId, e]));
+  }, []);
+
+  // Estados de Visor 3D, Celebración de PR y Reporte Objetivo
+  const [active3DExercise, setActive3DExercise] = useState<StrengthRoutine['blocks'][number]['exercise'] | null>(null);
+  const [prToast, setPrToast] = useState<{ title: string; subtitle: string } | null>(null);
+  const [objectiveReport, setObjectiveReport] = useState<WorkoutObjectiveReport | null>(null);
+  const [progressionApplied, setProgressionApplied] = useState(false);
 
   // Cronómetro global de la sesión
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -197,6 +246,9 @@ export function LiveTrackerTab({
     setIsFinished(false);
     setIsRestRunning(false);
     setRestRemaining(0);
+    setObjectiveReport(null);
+    setPrToast(null);
+    setProgressionApplied(false);
     setLiveExercises(
       routine.blocks.map((block) => ({
         blockId: block.id,
@@ -225,6 +277,50 @@ export function LiveTrackerTab({
     if (!targetExercise || !targetSet) return;
 
     const willComplete = !targetSet.completed;
+    let detectedPrType: PrBadgeType | undefined = undefined;
+
+    if (willComplete && targetSet.weightKg > 0 && targetSet.reps > 0) {
+      const prevRecord = history[targetExercise.exercise.id];
+      const current1RM = computeEpley1RM(targetSet.weightKg, targetSet.reps);
+      const currentVol = targetSet.weightKg * targetSet.reps;
+
+      // Máximos ya logrados en series anteriores de esta misma sesión
+      const sessionCompletedSets = targetExercise.sets.filter((s, idx) => idx !== setIndex && s.completed);
+      const sessionBest1RM = sessionCompletedSets.reduce(
+        (max, s) => Math.max(max, computeEpley1RM(s.weightKg, s.reps)),
+        0
+      );
+      const sessionBestVol = sessionCompletedSets.reduce(
+        (max, s) => Math.max(max, s.weightKg * s.reps),
+        0
+      );
+
+      const prevBest1RM = Math.max(prevRecord?.bestEstimated1RM || 0, sessionBest1RM);
+      const prevBestVol = Math.max(
+        (prevRecord?.bestWeightKg || 0) * (prevRecord?.bestReps || 0),
+        sessionBestVol
+      );
+
+      const beat1RM = prevBest1RM > 0 && current1RM > prevBest1RM;
+      const beatVolume = prevBestVol > 0 && currentVol > prevBestVol;
+
+      if (beat1RM && beatVolume) detectedPrType = 'both';
+      else if (beat1RM) detectedPrType = '1rm';
+      else if (beatVolume) detectedPrType = 'volume';
+
+      if (detectedPrType) {
+        setPrToast({
+          title: `¡NUEVO RÉCORD EN ${targetExercise.exercise.name.toUpperCase()}!`,
+          subtitle:
+            detectedPrType === 'both'
+              ? `Superaste tu mejor 1RM (${current1RM} kg) y volumen de serie (${currentVol} kg)`
+              : detectedPrType === '1rm'
+              ? `Nuevo 1RM estimado: ${current1RM} kg (${targetSet.weightKg} kg × ${targetSet.reps})`
+              : `Nuevo récord de volumen en una serie: ${currentVol} kg`,
+        });
+        setTimeout(() => setPrToast(null), 4000);
+      }
+    }
 
     setLiveExercises((prev) =>
       prev.map((ex, eIdx) => {
@@ -232,15 +328,20 @@ export function LiveTrackerTab({
         return {
           ...ex,
           sets: ex.sets.map((s, sIdx) =>
-            sIdx === setIndex ? { ...s, completed: willComplete } : s
+            sIdx === setIndex
+              ? { ...s, completed: willComplete, prType: willComplete ? detectedPrType : undefined }
+              : s
           ),
         };
       })
     );
 
     if (willComplete) {
-      if (soundEnabled) playRestBeep(784, 0.14);
-      triggerVibration([80]);
+      if (soundEnabled) {
+        if (detectedPrType) playPrCelebrationChime();
+        else playRestBeep(784, 0.14);
+      }
+      triggerVibration(detectedPrType ? [120, 60, 120, 60, 220] : [80]);
 
       // Lanzar descanso automáticamente al marcar la serie como realizada
       const restSecs = targetExercise.restSeconds || 90;
@@ -317,12 +418,34 @@ export function LiveTrackerTab({
 
     let latestHistory = loadProgressionHistory();
     let loggedCount = 0;
+    const prsBeaten: { exerciseName: string; detail: string }[] = [];
+    const muscleMap = new Map<string, number>();
+    let easyCount = 0;
+    let hardCount = 0;
 
     for (const ex of liveExercises) {
       const doneSets = ex.sets.filter((s) => s.completed);
       if (doneSets.length === 0) continue;
 
       loggedCount += 1;
+      if (ex.effort === 'easy') easyCount += 1;
+      if (ex.effort === 'hard') hardCount += 1;
+
+      muscleMap.set(
+        ex.exercise.muscleGroup,
+        (muscleMap.get(ex.exercise.muscleGroup) || 0) + doneSets.length
+      );
+
+      // Detectar si se batió PR en este ejercicio
+      const prSet = doneSets.find((s) => s.prType);
+      if (prSet) {
+        const best1RM = Math.max(...doneSets.map((s) => computeEpley1RM(s.weightKg, s.reps)));
+        prsBeaten.push({
+          exerciseName: ex.exercise.name,
+          detail: `1RM est. ${best1RM} kg (${prSet.weightKg}kg × ${prSet.reps})`,
+        });
+      }
+
       const maxWeight = Math.max(...doneSets.map((s) => s.weightKg));
       const avgReps = Math.round(
         doneSets.reduce((acc, s) => acc + s.reps, 0) / doneSets.length
@@ -340,6 +463,43 @@ export function LiveTrackerTab({
         ex.effort
       );
     }
+
+    const completionPct =
+      stats.totalSets > 0 ? Math.round((stats.completedSets / stats.totalSets) * 100) : 0;
+    const durationMinutes = Math.max(1, elapsedSeconds / 60);
+    const densityKgPerMin = Math.round(stats.volumeKg / durationMinutes);
+
+    const muscleBreakdown = Array.from(muscleMap.entries())
+      .map(([muscle, sets]) => ({ muscle, sets }))
+      .sort((a, b) => b.sets - a.sets);
+
+    // Diagnóstico objetivo del entrenador según cumplimiento, PRs y esfuerzo
+    let verdictTitle = 'Sesión Sólida de Mantenimiento y Progreso';
+    let verdictBody = `Has completado el ${completionPct}% de las series planificadas con una densidad de ${densityKgPerMin} kg/min.`;
+
+    if (completionPct === 100 && prsBeaten.length > 0) {
+      verdictTitle = 'Rendimiento Sobresaliente · Récords Batidos';
+      verdictBody = `Completaste el 100% del volumen (${stats.volumeKg} kg) batiendo ${prsBeaten.length} ${prsBeaten.length === 1 ? 'récord personal' : 'récords personales'} a una densidad de ${densityKgPerMin} kg/min. Estás listo para aplicar Progresión Automática en la próxima sesión.`;
+    } else if (completionPct >= 85 && easyCount > hardCount) {
+      verdictTitle = 'Margen de Carga Disponible';
+      verdictBody = `Completaste el ${completionPct}% de la sesión percibiendo varios ejercicios como "Fácil". Recomendación objetiva: aplica Progresión Auto para subir +2.5 kg o +1-2 reps en la siguiente sesión.`;
+    } else if (hardCount >= Math.max(2, Math.ceil(loggedCount / 2))) {
+      verdictTitle = 'Alta Exigencia Neural y Muscular';
+      verdictBody = `Terminaste con ${stats.volumeKg} kg movidos y varios bloques al límite. Recomendación objetiva: consolida estas cargas y respeta tus descansos antes de volver a subir peso.`;
+    }
+
+    setObjectiveReport({
+      durationSeconds: elapsedSeconds,
+      completionPct,
+      completedSets: stats.completedSets,
+      totalSets: stats.totalSets,
+      volumeKg: stats.volumeKg,
+      densityKgPerMin,
+      prsBeaten,
+      muscleBreakdown,
+      verdictTitle,
+      verdictBody,
+    });
 
     setHistory(latestHistory);
     onWorkoutSaved(
@@ -463,21 +623,153 @@ export function LiveTrackerTab({
         </div>
       </section>
 
-      {/* Banner de resumen si finalizó */}
-      {isFinished && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-emerald-950 saas-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-              <Trophy className="w-5 h-5" />
+      {/* Celebración Instantánea de Nuevo PR (B) */}
+      {prToast && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-slate-950 rounded-2xl p-4 shadow-2xl border-2 border-amber-300 flex items-center gap-3 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-11 h-11 rounded-xl bg-white/90 text-amber-600 flex items-center justify-center shrink-0 shadow-sm animate-bounce">
+            <Trophy className="w-6 h-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-xs font-black tracking-wide uppercase">
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{prToast.title}</span>
             </div>
-            <div>
-              <h3 className="font-bold text-base">¡Entrenamiento Registrado con Éxito!</h3>
-              <p className="text-xs text-emerald-800 mt-0.5">
-                Se han guardado tus pesos y repeticiones reales para calcular tu próxima Sobrecarga Progresiva y actualizar tus récords (PR).
-              </p>
-            </div>
+            <p className="text-xs font-semibold text-slate-900/90 mt-0.5 leading-snug">
+              {prToast.subtitle}
+            </p>
           </div>
         </div>
+      )}
+
+      {/* Informe de Feedback Objetivo Post-Sesión (C) */}
+      {isFinished && objectiveReport && (
+        <section className="bg-card border border-emerald-200/80 rounded-2xl p-6 sm:p-7 saas-card space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-600/20">
+                <Award className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+                  Análisis Objetivo Post-Sesión
+                </span>
+                <h3 className="font-bold text-lg text-foreground leading-snug">
+                  {objectiveReport.verdictTitle}
+                </h3>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
+                  {objectiveReport.verdictBody}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Métricas Clave */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-muted/30 border border-border/60 rounded-xl p-3.5">
+              <div className="text-[11px] font-semibold text-muted-foreground">Cumplimiento</div>
+              <div className="text-xl font-black text-foreground tabular-nums mt-0.5">
+                {objectiveReport.completionPct}%
+              </div>
+              <div className="text-[11px] text-muted-foreground tabular-nums">
+                {objectiveReport.completedSets}/{objectiveReport.totalSets} series
+              </div>
+            </div>
+
+            <div className="bg-muted/30 border border-border/60 rounded-xl p-3.5">
+              <div className="text-[11px] font-semibold text-muted-foreground">Tonelaje Total</div>
+              <div className="text-xl font-black text-blue-600 tabular-nums mt-0.5">
+                {objectiveReport.volumeKg} kg
+              </div>
+              <div className="text-[11px] text-muted-foreground tabular-nums">
+                {formatDuration(objectiveReport.durationSeconds)}
+              </div>
+            </div>
+
+            <div className="bg-muted/30 border border-border/60 rounded-xl p-3.5">
+              <div className="text-[11px] font-semibold text-muted-foreground">Densidad</div>
+              <div className="text-xl font-black text-indigo-600 tabular-nums mt-0.5">
+                {objectiveReport.densityKgPerMin} kg/m
+              </div>
+              <div className="text-[11px] text-muted-foreground">Ritmo de trabajo</div>
+            </div>
+
+            <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5">
+              <div className="text-[11px] font-semibold text-amber-800">Récords Hoy</div>
+              <div className="text-xl font-black text-amber-700 tabular-nums mt-0.5">
+                {objectiveReport.prsBeaten.length} PR
+              </div>
+              <div className="text-[11px] text-amber-800/80">1RM o Volumen</div>
+            </div>
+          </div>
+
+          {/* Reparto Muscular + PRs Batidos */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-border/60">
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                <Target className="w-3.5 h-3.5 text-blue-600" />
+                <span>Estímulo por Grupo Muscular</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {objectiveReport.muscleBreakdown.map((m) => (
+                  <span
+                    key={m.muscle}
+                    className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-200/70 text-xs font-semibold tabular-nums"
+                  >
+                    {m.muscle}: {m.sets} series
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                <Trophy className="w-3.5 h-3.5 text-amber-600" />
+                <span>Marcas Superadas Hoy</span>
+              </div>
+              {objectiveReport.prsBeaten.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Sin nuevos récords hoy; sesión sólida de consolidación.
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {objectiveReport.prsBeaten.map((pr, idx) => (
+                    <li key={idx} className="text-xs text-amber-900 font-medium flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3 text-amber-600 shrink-0" />
+                      <span className="truncate">
+                        <strong>{pr.exerciseName}:</strong> {pr.detail}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {onApplyNextProgression && (
+            <div className="pt-3 border-t border-border/60 flex justify-end">
+              <button
+                type="button"
+                disabled={progressionApplied}
+                onClick={() => {
+                  onApplyNextProgression();
+                  setProgressionApplied(true);
+                }}
+                className={`saas-btn px-4 py-2.5 rounded-xl text-xs font-bold inline-flex items-center gap-2 ${
+                  progressionApplied
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white btn-glow-indigo'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" />
+                <span>
+                  {progressionApplied
+                    ? 'Progresión aplicada a tu rutina'
+                    : 'Aplicar Progresión Auto para la Próxima'}
+                </span>
+              </button>
+            </div>
+          )}
+        </section>
       )}
 
       {/* Lista Interactiva de Ejercicios y Series */}
@@ -512,9 +804,21 @@ export function LiveTrackerTab({
                   </h3>
                 </div>
 
-                <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5 bg-muted/40 px-3 py-1.5 rounded-lg border border-border/60 tabular-nums">
-                  <Timer className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Descanso: {ex.restSeconds}s</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActive3DExercise(ex.exercise)}
+                    title="Ver técnica correcta en 3D sin pausar tu cronómetro"
+                    className="saas-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 text-xs font-semibold"
+                  >
+                    <Box className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Ayuda 3D</span>
+                  </button>
+
+                  <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5 bg-muted/40 px-3 py-1.5 rounded-lg border border-border/60 tabular-nums">
+                    <Timer className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{ex.restSeconds}s</span>
+                  </div>
                 </div>
               </div>
 
@@ -531,15 +835,24 @@ export function LiveTrackerTab({
                 {ex.sets.map((setRow, setIndex) => (
                   <div
                     key={setRow.id}
-                    className={`grid grid-cols-12 gap-2 items-center p-2 rounded-xl border transition-all duration-200 ${
-                      setRow.completed
+                    className={`grid grid-cols-12 gap-2 items-center p-2 rounded-xl border transition-all duration-300 ${
+                      setRow.prType
+                        ? 'bg-gradient-to-r from-amber-50/90 via-yellow-50/70 to-emerald-50/80 border-amber-300 ring-2 ring-amber-400/50 shadow-sm'
+                        : setRow.completed
                         ? 'bg-emerald-50/70 border-emerald-200/90'
                         : 'bg-muted/25 border-border/60 hover:bg-muted/40'
                     }`}
                   >
                     <div className="col-span-2 flex items-center justify-center gap-1">
-                      <span className="w-7 h-7 rounded-lg bg-card border border-border/60 text-xs font-bold text-foreground flex items-center justify-center tabular-nums">
-                        {setIndex + 1}
+                      <span
+                        className={`w-7 h-7 rounded-lg border text-xs font-bold flex items-center justify-center tabular-nums ${
+                          setRow.prType
+                            ? 'bg-amber-500 border-amber-400 text-white animate-pulse'
+                            : 'bg-card border-border/60 text-foreground'
+                        }`}
+                        title={setRow.prType ? '¡Nuevo PR!' : undefined}
+                      >
+                        {setRow.prType ? <Trophy className="w-3.5 h-3.5" /> : setIndex + 1}
                       </span>
                       {ex.sets.length > 1 && !setRow.completed && (
                         <button
@@ -701,6 +1014,14 @@ export function LiveTrackerTab({
           )}
         </div>
       )}
+
+      {/* Visor 3D Contextual sin detener el cronómetro (A) */}
+      <Exercise3DModal
+        exercise={active3DExercise}
+        cues={active3DExercise ? expertMap.get(active3DExercise.id)?.executionCues : undefined}
+        machineLabel={active3DExercise ? expertMap.get(active3DExercise.id)?.machineLabel : undefined}
+        onClose={() => setActive3DExercise(null)}
+      />
     </div>
   );
 }
