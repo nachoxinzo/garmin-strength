@@ -2,15 +2,19 @@
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="100%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#090d16"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="core" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#38bdf8"/>
       <stop offset="100%" stop-color="#2563eb"/>
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="116" fill="url(#bg)"/>
-  <!-- Eslabón geométrico minimalista I + S (Hierro + Sincronización) -->
-  <rect x="132" y="136" width="52" height="240" rx="26" fill="#ffffff"/>
-  <path d="M232 162c0-14.4 11.6-26 26-26h96c14.4 0 26 11.6 26 26s-11.6 26-26 26h-70v42h70c28.7 0 52 23.3 52 52v42c0 28.7-23.3 52-52 52h-96c-14.4 0-26-11.6-26-26s11.6-26 26-26h96v-42h-70c-28.7 0-52-23.3-52-52v-42z" fill="url(#accent)"/>
+  <!-- Mitad superior izquierda del hexágono mecánico (blanco puro) -->
+  <path d="M256 96 L388 172 L344 198 L256 147 L168 198 L168 300 L124 326 L124 172 Z" fill="#ffffff"/>
+  <!-- Mitad inferior derecha del hexágono mecánico (acero plata, encajada en diagonal) -->
+  <path d="M256 416 L124 340 L168 314 L256 365 L344 314 L344 212 L388 186 L388 340 Z" fill="#94a3b8"/>
+  <!-- Núcleo central de sincronización en azul eléctrico -->
+  <circle cx="256" cy="256" r="42" fill="url(#core)"/>
+  <circle cx="256" cy="256" r="16" fill="#ffffff"/>
 </svg>
