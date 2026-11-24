@@ -32,6 +32,7 @@ import {
 } from '@/lib/smart-workout-engine';
 import { StrengthRoutine } from '@/lib/types';
 import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
+import { analyzeWeeklyMuscleBalance } from '@/lib/weekly-volume-analyzer';
 
 interface WorkoutGeneratorModalProps {
   isOpen: boolean;
@@ -59,6 +60,7 @@ export default function WorkoutGeneratorModal({
 
   // Estado Asistente Inteligente
   const [smartPrompt, setSmartPrompt] = useState('');
+  const [deloadMode, setDeloadMode] = useState(false);
   const [isGeneratingSmart, setIsGeneratingSmart] = useState(false);
   const [smartError, setSmartError] = useState<string | null>(null);
   const [smartPreview, setSmartPreview] = useState<SmartGenerateResult | null>(null);
@@ -115,6 +117,9 @@ export default function WorkoutGeneratorModal({
     try {
       const knownWeights = getKnownExerciseWeights();
       const wellness = loadGarminWellnessSnapshot();
+      const weeklyMuscleDeficits = analyzeWeeklyMuscleBalance()
+        .filter((m) => m.status === 'deficit')
+        .map((m) => m.muscle);
       const res = await fetch('/api/routines/smart-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -124,7 +129,9 @@ export default function WorkoutGeneratorModal({
           durationMinutes: duration,
           goal,
           knownWeights,
-          wellness
+          wellness,
+          weeklyMuscleDeficits,
+          deloadMode
         })
       });
 
@@ -380,6 +387,17 @@ export default function WorkoutGeneratorModal({
                     </button>
                   ))}
                 </div>
+                <label className="inline-flex items-center gap-2 pt-2 text-xs text-foreground cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={deloadMode}
+                    onChange={(e) => setDeloadMode(e.target.checked)}
+                    className="rounded border-border text-indigo-600"
+                  />
+                  <span>
+                    <strong>Modo Descarga (Deload):</strong> -40% series, RIR 3 para disipar fatiga
+                  </span>
+                </label>
               </div>
 
               {smartError && (
@@ -414,6 +432,7 @@ export default function WorkoutGeneratorModal({
                         </span>
                         <span className="text-muted-foreground shrink-0">
                           {b.sets}&times;{b.reps} &bull; {b.weightKg} kg
+                          {b.targetRir ? ` · ${b.targetRir}` : ''}
                         </span>
                       </div>
                     ))}

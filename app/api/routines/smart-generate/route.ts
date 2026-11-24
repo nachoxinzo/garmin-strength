@@ -42,6 +42,10 @@ export async function POST(req: Request) {
     const knownWeights: Record<string, number> =
       body.knownWeights && typeof body.knownWeights === 'object' ? body.knownWeights : {};
     const wellness = body.wellness && typeof body.wellness === 'object' ? body.wellness : null;
+    const weeklyMuscleDeficits = Array.isArray(body.weeklyMuscleDeficits)
+      ? body.weeklyMuscleDeficits
+      : [];
+    const deloadMode = Boolean(body.deloadMode);
 
     const geminiKey = process.env.GEMINI_API_KEY;
     if (!geminiKey) {
@@ -52,6 +56,8 @@ export async function POST(req: Request) {
         goal,
         knownWeights,
         wellness,
+        weeklyMuscleDeficits,
+        deloadMode,
       });
       return NextResponse.json(localResult);
     }
@@ -71,6 +77,12 @@ Restricciones del gimnasio del usuario ("${gymProfile.gymName}"):
 - Objetivo: ${goal}
 - Duración objetivo: ${durationMinutes} minutos
 - Cargas conocidas del usuario (ID -> kg): ${JSON.stringify(knownWeights)}
+- Principios científicos obligatorios:
+  1) Hipertrofia mediada por estiramiento: incluye al menos 1 ejercicio con máxima tensión en estiramiento (ej. press inclinado mancuernas, extensión tríceps overhead, curl inclinado, curl femoral sentado).
+  2) Ratio Estímulo-Fatiga (SFR): máximo 2 compuestos axiales pesados por sesión; ordena Tier 1 primero y aislamientos al final.
+  3) Descansos basados en evidencia: >=150s en compuestos Tier 1, 60-90s en aislamientos Tier 3.
+  4) Déficits semanales actuales del atleta: ${weeklyMuscleDeficits.length > 0 ? weeklyMuscleDeficits.join(', ') : 'ninguno'}.
+  5) Modo Descarga (Deload): ${deloadMode ? 'ACTIVO (-40% series, RIR 3, mantener peso)' : 'NO'}.
 ${wellness ? `- Contexto Garmin (Multideporte, Sueño y Recuperación): Readiness ${wellness.readinessIndex}/100, Sueño ${wellness.sleep?.durationHours ?? 'N/D'}h, HRV ${wellness.recovery?.hrvLastNight ?? 'N/D'} ms, Body Battery ${wellness.recovery?.bodyBatteryCurrent ?? 'N/D'}, Fatiga piernas (48h) ${wellness.lowerBodyFatigue}, Fatiga tren superior (48h) ${wellness.upperBodyFatigue}, Minutos semanales por deporte ${JSON.stringify(wellness.weeklySportMinutes)}. Adapta volumen, RIR y selección si la recuperación es baja o hay fatiga acumulada.` : ''}
 
 Responde ÚNICAMENTE con JSON válido con este esquema:
@@ -119,6 +131,8 @@ ${catalogSummary}`;
         goal,
         knownWeights,
         wellness,
+        weeklyMuscleDeficits,
+        deloadMode,
       });
       return NextResponse.json(fallback);
     }
@@ -133,6 +147,8 @@ ${catalogSummary}`;
         goal,
         knownWeights,
         wellness,
+        weeklyMuscleDeficits,
+        deloadMode,
       });
       return NextResponse.json(fallback);
     }
@@ -172,6 +188,8 @@ ${catalogSummary}`;
         goal,
         knownWeights,
         wellness,
+        weeklyMuscleDeficits,
+        deloadMode,
       });
       return NextResponse.json(fallback);
     }

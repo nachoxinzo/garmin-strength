@@ -9,6 +9,8 @@ export interface WorkoutExerciseBlock {
   suggestedWeightKg?: number; // Peso sugerido original de Hevy
   restSeconds: number;
   supersetGroupId?: string; // Agrupa ejercicios consecutivos en superserie/biserie
+  targetRir?: string; // ej. 'RIR 1-2', 'RIR 0-1', 'RIR 3 (Descarga)'
+  stretchBias?: boolean; // Máxima tensión en estiramiento (Maeo/Wolf et al.)
 }
 
 export interface StrengthRoutine {

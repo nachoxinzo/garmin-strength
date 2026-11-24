@@ -96,6 +96,8 @@ export interface SmartGenerateInput {
   goal: 'hypertrophy' | 'strength' | 'powerbuilding';
   knownWeights?: Record<string, number>;
   wellness?: GarminWellnessSnapshot | null;
+  weeklyMuscleDeficits?: MuscleGroup[];
+  deloadMode?: boolean;
 }
 
 export interface SmartGenerateResult {
@@ -114,17 +116,43 @@ const LOWER_BACK_HEAVY_IDS = new Set([
   'squat_back_barbell',
 ]);
 
+// Ejercicios con pico de tensión en posición elongada (hipertrofia mediada por estiramiento)
+const STRETCH_MEDIATED_IDS = new Set([
+  'bench_press_incline_dumbbell',
+  'incline_chest_press_machine',
+  'cable_crossover',
+  'dumbbell_fly',
+  'overhead_triceps_extension_cable',
+  'overhead_triceps_extension_dumbbell',
+  'incline_dumbbell_curl',
+  'leg_curl_seated',
+  'romanian_deadlift',
+  'lateral_raise_cable',
+  'lat_pulldown',
+  'calf_raise_standing',
+]);
+
 /**
  * Motor adaptativo local (cero latencia y fallback sin API key):
  * Interpreta lenguaje natural en español, prioriza ejercicios S-Tier de la Guía Experta,
  * filtra por el equipamiento real del gimnasio del usuario y aplica cargas sugeridas.
  */
 export function generateSmartLocalRoutine(input: SmartGenerateInput): SmartGenerateResult {
-  const { prompt, gymProfile, durationMinutes, goal, knownWeights = {}, wellness = null } = input;
+  const {
+    prompt,
+    gymProfile,
+    durationMinutes,
+    goal,
+    knownWeights = {},
+    wellness = null,
+    weeklyMuscleDeficits = [],
+    deloadMode = false,
+  } = input;
   const text = prompt.toLowerCase();
 
   const lowReadiness = Boolean(wellness && wellness.readinessIndex < 45);
-  const highReadiness = Boolean(wellness && wellness.readinessIndex >= 75);
+  const isDeload = deloadMode || lowReadiness || text.includes('descarga') || text.includes('deload');
+  const highReadiness = Boolean(wellness && wellness.readinessIndex >= 75 && !isDeload);
   const legFatigueHigh = wellness?.lowerBodyFatigue === 'high';
   const upperFatigueHigh = wellness?.upperBodyFatigue === 'high';
 
@@ -203,6 +231,15 @@ export function generateSmartLocalRoutine(input: SmartGenerateInput): SmartGener
     else if (ex.tier === 2) score += 12;
     else score += 6;
 
+    // Bonus científico: hipertrofia mediada por estiramiento (Maeo/Wolf et al.)
+    if (STRETCH_MEDIATED_IDS.has(ex.id)) score += 22;
+
+    // Bonus si el grupo muscular tiene déficit de volumen semanal (10-20 series)
+    if (weeklyMuscleDeficits.includes(ex.muscleGroup)) score += 28;
+
+    // Penalización ligera si hay fatiga de piernas en Garmin (48h)
+    if (wellness?.lowerBodyFatigue === 'high' && ex.muscleGroup === 'Piernas') score -= 20;
+
     const exName = ex.name.toLowerCase();
     if (text.includes('superior') && exName.includes('inclinado')) score += 40;
     if (text.includes('lateral') && exName.includes('lateral')) score += 40;
@@ -231,21 +268,29 @@ export function generateSmartLocalRoutine(input: SmartGenerateInput): SmartGener
     }
   }
 
-  // Segunda pasada: completar hasta targetCount con los mejor puntuados sin repetir patrón en exceso
+  // Segunda pasada: completar hasta targetCount con los mejor puntuados,
+  // limitando a máx. 2 compuestos axiales pesados (Ratio Estímulo-Fatiga / SFR)
+  let axialCount = selected.filter((item) => LOWER_BACK_HEAVY_IDS.has(item.ex.id)).length;
   for (const item of scored) {
     if (selected.length >= targetCount) break;
     if (usedIds.has(item.ex.id)) continue;
+    const isAxial = LOWER_BACK_HEAVY_IDS.has(item.ex.id);
+    if (isAxial && axialCount >= 2) continue;
     const patternCount = usedPatterns.get(item.ex.pattern) || 0;
     if (patternCount >= 2) continue;
     selected.push(item);
     usedIds.add(item.ex.id);
     usedPatterns.set(item.ex.pattern, patternCount + 1);
+    if (isAxial) axialCount++;
   }
+
+  // Orden biomecánico óptimo: compuestos pesados (Tier 1) primero, aislamientos al final
+  selected.sort((a, b) => a.ex.tier - b.ex.tier);
 
   const blocks: WorkoutExerciseBlock[] = selected.map(({ ex, expert }, idx) => {
     let sets = goal === 'strength' && ex.tier === 1 ? 4 : expert?.recommendedSets || 3;
-    if (lowReadiness) {
-      sets = Math.max(2, sets - 1);
+    if (isDeload) {
+      sets = Math.max(2, Math.round(sets * 0.6));
     } else if (legFatigueHigh && ex.muscleGroup === 'Piernas') {
       sets = Math.max(2, sets - 1);
     } else if (upperFatigueHigh && (ex.muscleGroup === 'Espalda' || ex.muscleGroup === 'Hombros')) {
@@ -258,14 +303,26 @@ export function generateSmartLocalRoutine(input: SmartGenerateInput): SmartGener
           ? 5
           : 8
         : expert?.defaultRepsNumber || (ex.tier === 3 ? 12 : 10);
+    // Descansos basados en evidencia (Schoenfeld et al. 2016: >=150s en compuestos Tier 1)
     const baseRest =
-      goal === 'strength' ? 150 : expert?.recommendedRestSeconds || (ex.tier === 1 ? 120 : 75);
-    const restSeconds = lowReadiness ? baseRest + 15 : baseRest;
+      goal === 'strength'
+        ? 180
+        : ex.tier === 1
+        ? 150
+        : expert?.recommendedRestSeconds || 75;
+    const restSeconds = isDeload ? baseRest + 15 : baseRest;
+    const targetRir = isDeload
+      ? 'RIR 3 (Descarga)'
+      : ex.tier === 1
+      ? 'RIR 1-2'
+      : ex.tier === 2
+      ? 'RIR 1'
+      : 'RIR 0-1';
+    const stretchBias = STRETCH_MEDIATED_IDS.has(ex.id);
 
-    // Peso inteligente: historial conocido o peso base realista por equipamiento
-    // Si la recuperación es baja, consolidamos peso sin forzar subida del +2.5%
+    // Peso inteligente: en descarga consolidamos al 100% sin sobrecarga; si hay buen readiness, +2.5%
     const known = knownWeights[ex.id];
-    const progressionMultiplier = lowReadiness ? 1.0 : highReadiness ? 1.025 : 1.015;
+    const progressionMultiplier = isDeload ? 1.0 : highReadiness ? 1.025 : 1.015;
     const suggested = known
       ? Math.round((known * progressionMultiplier) / 2.5) * 2.5
       : DEFAULT_WEIGHTS_BY_EQUIPMENT[ex.equipment];
@@ -278,21 +335,24 @@ export function generateSmartLocalRoutine(input: SmartGenerateInput): SmartGener
       weightKg: suggested,
       suggestedWeightKg: known || undefined,
       restSeconds,
+      targetRir,
+      stretchBias,
     };
   });
 
   const cleanMusclesLabel = requestedMuscles.slice(0, 2).join('+');
-  const routineName = `IA ${cleanMusclesLabel}`.slice(0, 16);
+  const routineName = `${isDeload ? 'DL ' : 'IA '}${cleanMusclesLabel}`.slice(0, 16);
 
+  const stretchCount = blocks.filter((b) => b.stretchBias).length;
   const rationaleParts = [
     `Diseñada para ${requestedMuscles.join(', ')} en ~${targetDuration} min usando exclusivamente el equipamiento de "${gymProfile.gymName}" (${gymProfile.availableEquipment.join(', ')}).`,
     spareLowerBack
-      ? 'Se han excluido ejercicios con alta carga axial lumbar (peso muerto convencional / sentadilla libre pesada), priorizando máquinas y apoyos estables.'
-      : 'Se priorizan ejercicios S-Tier por su estabilidad y perfil de resistencia óptimo.',
-    Object.keys(knownWeights).length > 0
-      ? lowReadiness
-        ? 'Cargas consolidadas sin sobrecarga agresiva por recuperación reducida.'
-        : 'Cargas ajustadas automáticamente (+2.5% sobrecarga progresiva) según tu historial reciente.'
+      ? 'Se han excluido ejercicios con alta carga axial lumbar, priorizando máquinas y apoyos estables.'
+      : `Orden biomecánico optimizado (Tier 1→3, máx. 2 axiales para controlar fatiga) con ${stretchCount} ejercicio(s) de máxima tensión en estiramiento.`,
+    isDeload
+      ? 'Modo Descarga (Deload): -40% de series manteniendo carga y trabajando a RIR 3 para disipar fatiga acumulada.'
+      : Object.keys(knownWeights).length > 0
+      ? 'Cargas ajustadas automáticamente (+2.5% sobrecarga progresiva) con descansos científicos (>=150s en compuestos, RIR 0-2).'
       : 'Cargas base orientativas listas para calibrar en tu primera serie.',
   ];
 
