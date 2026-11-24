@@ -288,6 +288,7 @@ export default function ProgressDashboard() {
   if (!csvRaw || analytics.exercises.length === 0) {
     return (
       <div className="space-y-6">
+        <GarminWellnessCard />
         {renderMuscleBalanceCard()}
         <div className="bg-white rounded-2xl border border-slate-200/90 p-8 sm:p-12 text-center shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] max-w-xl mx-auto my-4 animate-in fade-in duration-150">
         <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-5 border border-blue-100 shadow-xs">
