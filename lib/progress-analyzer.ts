@@ -378,3 +378,347 @@ export function computeLinearTrend(values: number[]): LinearTrendResult | null {
 
   return { slope, startY, endY, direction, deltaPct, isPlateau };
 }
+
+export interface PeriodActivityItem {
+  id: number | string;
+  name: string;
+  sportCategory: string;
+  date: string; // YYYY-MM-DD
+  durationMinutes: number;
+  distanceKm: number;
+}
+
+export interface WeeklyPeriodSummary {
+  weekStartIso: string;
+  weekEndIso: string;
+  trainedDaysCount: number;
+  targetDays: number;
+  strengthVolumeKg: number;
+  prevStrengthVolumeKg: number;
+  volumeDeltaPct: number | null;
+  totalMinutes: number;
+  sessionsCount: number;
+  streakWeeks: number;
+  days: {
+    date: string;
+    shortLabel: string;
+    hasStrength: boolean;
+    hasCardio: boolean;
+    volumeKg: number;
+  }[];
+}
+
+export interface MonthlyPeriodSummary {
+  year: number;
+  monthIndex: number; // 0-11
+  monthLabel: string;
+  trainedDaysCount: number;
+  totalSessions: number;
+  totalVolumeKg: number;
+  totalMinutes: number;
+  leadingEmptyDays: number;
+  calendarDays: {
+    dayNumber: number;
+    date: string;
+    hasStrength: boolean;
+    hasCardio: boolean;
+    volumeKg: number;
+  }[];
+  weeklyBars: { label: string; volumeKg: number; sessions: number }[];
+  distribution: { label: string; count: number; pct: number }[];
+}
+
+export interface AnnualPeriodSummary {
+  year: number;
+  totalSessions: number;
+  strengthSessions: number;
+  cardioSessions: number;
+  totalTonnes: number;
+  totalHours: number;
+  totalDistanceKm: number;
+  bestMonthLabel: string | null;
+  bestMonthSessions: number;
+  monthlyEvolution: {
+    monthIndex: number;
+    shortLabel: string;
+    volumeKg: number;
+    sessions: number;
+  }[];
+}
+
+const WEEKDAY_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const MONTH_NAMES_ES = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+];
+const MONTH_SHORT_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+function toLocalIso(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function computeWeeklyPeriodSummary(
+  globalVolumeByDate: Record<string, number>,
+  activities: PeriodActivityItem[],
+  targetDays = 4
+): WeeklyPeriodSummary {
+  const now = new Date();
+  const jsDay = now.getDay();
+  const diffToMonday = jsDay === 0 ? -6 : 1 - jsDay;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
+
+  const prevMonday = new Date(monday);
+  prevMonday.setDate(monday.getDate() - 7);
+
+  let strengthVolumeKg = 0;
+  let prevStrengthVolumeKg = 0;
+  let totalMinutes = 0;
+  let sessionsCount = 0;
+  let trainedDaysCount = 0;
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const iso = toLocalIso(d);
+    const vol = Math.round(globalVolumeByDate[iso] || 0);
+    const dayActs = activities.filter((a) => a.date === iso);
+    const hasGarminStrength = dayActs.some((a) => a.sportCategory === 'Fuerza');
+    const hasCardio = dayActs.some((a) => a.sportCategory !== 'Fuerza');
+    const hasStrength = vol > 0 || hasGarminStrength;
+
+    if (hasStrength || hasCardio) {
+      trainedDaysCount++;
+    }
+    strengthVolumeKg += vol;
+    sessionsCount += dayActs.length > 0 ? dayActs.length : vol > 0 ? 1 : 0;
+    totalMinutes += dayActs.reduce((acc, a) => acc + a.durationMinutes, 0);
+
+    // Semana anterior para comparativa
+    const pd = new Date(prevMonday);
+    pd.setDate(prevMonday.getDate() + i);
+    const pIso = toLocalIso(pd);
+    prevStrengthVolumeKg += Math.round(globalVolumeByDate[pIso] || 0);
+
+    return {
+      date: iso,
+      shortLabel: WEEKDAY_SHORT[i],
+      hasStrength,
+      hasCardio,
+      volumeKg: vol,
+    };
+  });
+
+  const volumeDeltaPct =
+    prevStrengthVolumeKg > 0
+      ? Math.round(((strengthVolumeKg - prevStrengthVolumeKg) / prevStrengthVolumeKg) * 1000) / 10
+      : null;
+
+  // Calcular racha de semanas consecutivas con al menos 1 sesión
+  let streakWeeks = 0;
+  for (let w = 0; w < 12; w++) {
+    const wStart = new Date(monday);
+    wStart.setDate(monday.getDate() - w * 7);
+    let activeInWeek = false;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(wStart);
+      d.setDate(wStart.getDate() + i);
+      const iso = toLocalIso(d);
+      if ((globalVolumeByDate[iso] || 0) > 0 || activities.some((a) => a.date === iso)) {
+        activeInWeek = true;
+        break;
+      }
+    }
+    if (activeInWeek) streakWeeks++;
+    else if (w > 0) break;
+  }
+
+  return {
+    weekStartIso: toLocalIso(monday),
+    weekEndIso: days[6].date,
+    trainedDaysCount,
+    targetDays: Math.max(1, targetDays),
+    strengthVolumeKg,
+    prevStrengthVolumeKg,
+    volumeDeltaPct,
+    totalMinutes: Math.round(totalMinutes),
+    sessionsCount,
+    streakWeeks,
+    days,
+  };
+}
+
+export function computeMonthlyPeriodSummary(
+  year: number,
+  monthIndex: number,
+  globalVolumeByDate: Record<string, number>,
+  activities: PeriodActivityItem[]
+): MonthlyPeriodSummary {
+  const firstOfMonth = new Date(year, monthIndex, 1);
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const leadingEmptyDays = (firstOfMonth.getDay() + 6) % 7;
+
+  let trainedDaysCount = 0;
+  let totalSessions = 0;
+  let totalVolumeKg = 0;
+  let totalMinutes = 0;
+
+  const weekBuckets = [
+    { label: 'Sem 1', volumeKg: 0, sessions: 0 },
+    { label: 'Sem 2', volumeKg: 0, sessions: 0 },
+    { label: 'Sem 3', volumeKg: 0, sessions: 0 },
+    { label: 'Sem 4+', volumeKg: 0, sessions: 0 },
+  ];
+  const distMap = new Map<string, number>();
+
+  const calendarDays = Array.from({ length: daysInMonth }, (_, i) => {
+    const dayNumber = i + 1;
+    const iso = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(dayNumber).padStart(
+      2,
+      '0'
+    )}`;
+    const vol = Math.round(globalVolumeByDate[iso] || 0);
+    const dayActs = activities.filter((a) => a.date === iso);
+    const hasGarminStrength = dayActs.some((a) => a.sportCategory === 'Fuerza');
+    const hasCardio = dayActs.some((a) => a.sportCategory !== 'Fuerza');
+    const hasStrength = vol > 0 || hasGarminStrength;
+
+    if (hasStrength || hasCardio) trainedDaysCount++;
+
+    const daySessions = dayActs.length > 0 ? dayActs.length : vol > 0 ? 1 : 0;
+    totalSessions += daySessions;
+    totalVolumeKg += vol;
+    totalMinutes += dayActs.reduce((acc, a) => acc + a.durationMinutes, 0);
+
+    const wIdx = Math.min(3, Math.floor((dayNumber - 1) / 7));
+    weekBuckets[wIdx].volumeKg += vol;
+    weekBuckets[wIdx].sessions += daySessions;
+
+    if (dayActs.length > 0) {
+      dayActs.forEach((a) => {
+        distMap.set(a.sportCategory, (distMap.get(a.sportCategory) || 0) + 1);
+      });
+    } else if (vol > 0) {
+      distMap.set('Fuerza', (distMap.get('Fuerza') || 0) + 1);
+    }
+
+    return {
+      dayNumber,
+      date: iso,
+      hasStrength,
+      hasCardio,
+      volumeKg: vol,
+    };
+  });
+
+  const distTotal = Array.from(distMap.values()).reduce((a, b) => a + b, 0) || 1;
+  const distribution = Array.from(distMap.entries())
+    .map(([label, count]) => ({
+      label,
+      count,
+      pct: Math.round((count / distTotal) * 100),
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    year,
+    monthIndex,
+    monthLabel: `${MONTH_NAMES_ES[monthIndex]} ${year}`,
+    trainedDaysCount,
+    totalSessions,
+    totalVolumeKg,
+    totalMinutes: Math.round(totalMinutes),
+    leadingEmptyDays,
+    calendarDays,
+    weeklyBars: weekBuckets,
+    distribution,
+  };
+}
+
+export function computeAnnualPeriodSummary(
+  year: number,
+  globalVolumeByDate: Record<string, number>,
+  activities: PeriodActivityItem[]
+): AnnualPeriodSummary {
+  const yearPrefix = `${year}-`;
+  let totalVolumeKg = 0;
+  let totalMinutes = 0;
+  let totalDistanceKm = 0;
+  let strengthSessions = 0;
+  let cardioSessions = 0;
+
+  const monthlyEvolution = MONTH_SHORT_ES.map((shortLabel, monthIndex) => ({
+    monthIndex,
+    shortLabel,
+    volumeKg: 0,
+    sessions: 0,
+  }));
+
+  const countedStrengthDates = new Set<string>();
+
+  for (const [dateStr, vol] of Object.entries(globalVolumeByDate)) {
+    if (!dateStr.startsWith(yearPrefix) || vol <= 0) continue;
+    const mIdx = parseInt(dateStr.slice(5, 7), 10) - 1;
+    if (mIdx >= 0 && mIdx < 12) {
+      monthlyEvolution[mIdx].volumeKg += Math.round(vol);
+      monthlyEvolution[mIdx].sessions += 1;
+      countedStrengthDates.add(dateStr);
+    }
+    totalVolumeKg += vol;
+    strengthSessions += 1;
+  }
+
+  for (const act of activities) {
+    if (!act.date.startsWith(yearPrefix)) continue;
+    const mIdx = parseInt(act.date.slice(5, 7), 10) - 1;
+    totalMinutes += act.durationMinutes;
+    totalDistanceKm += act.distanceKm;
+
+    if (act.sportCategory === 'Fuerza') {
+      if (!countedStrengthDates.has(act.date)) {
+        strengthSessions += 1;
+        if (mIdx >= 0 && mIdx < 12) monthlyEvolution[mIdx].sessions += 1;
+      }
+    } else {
+      cardioSessions += 1;
+      if (mIdx >= 0 && mIdx < 12) monthlyEvolution[mIdx].sessions += 1;
+    }
+  }
+
+  let bestMonthLabel: string | null = null;
+  let bestMonthSessions = 0;
+  let bestScore = 0;
+  monthlyEvolution.forEach((m) => {
+    const score = m.sessions * 1000 + m.volumeKg;
+    if (m.sessions > 0 && score > bestScore) {
+      bestScore = score;
+      bestMonthLabel = MONTH_NAMES_ES[m.monthIndex];
+      bestMonthSessions = m.sessions;
+    }
+  });
+
+  return {
+    year,
+    totalSessions: strengthSessions + cardioSessions,
+    strengthSessions,
+    cardioSessions,
+    totalTonnes: Math.round((totalVolumeKg / 1000) * 10) / 10,
+    totalHours: Math.round((totalMinutes / 60) * 10) / 10,
+    totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
+    bestMonthLabel,
+    bestMonthSessions,
+    monthlyEvolution,
+  };
+}

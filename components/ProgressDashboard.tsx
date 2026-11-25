@@ -37,6 +37,8 @@ import { EXERCISE_CATALOG } from '@/lib/exercise-catalog';
 import { getSimilarExercises } from '@/lib/exercise-alternatives';
 import { GarminActivityDetail, GarminActivitySummary, GarminWellnessSnapshot } from '@/lib/types';
 import { GarminWellnessCard } from './GarminWellnessCard';
+import { PeriodSummarySection } from './PeriodSummarySection';
+import { loadWeeklyPlan } from '@/lib/weekly-planner';
 import { Skeleton } from './ui/skeleton';
 import {
   DbWorkoutLog,
@@ -939,6 +941,13 @@ export default function ProgressDashboard() {
         onSynced={handleGarminSynced}
         onImportStrengthLogs={handleImportGarminStrength}
       />
+        <PeriodSummarySection
+          globalVolumeByDate={mergedGlobalVolumeByDate}
+          garminActivities={garminActivities}
+          exerciseStatsMap={analytics.exerciseStatsMap}
+          targetWeeklyDays={Object.keys(loadWeeklyPlan()).length || 4}
+          isLoading={isCloudSyncing}
+        />
         {renderGlobalTrendsSection()}
         {renderMuscleBalanceCard()}
         <div className="bg-card rounded-2xl border border-border/80 p-8 sm:p-12 text-center saas-card max-w-xl mx-auto my-4 animate-in fade-in duration-150">
@@ -988,6 +997,13 @@ export default function ProgressDashboard() {
       <GarminWellnessCard
         onSynced={handleGarminSynced}
         onImportStrengthLogs={handleImportGarminStrength}
+      />
+      <PeriodSummarySection
+        globalVolumeByDate={mergedGlobalVolumeByDate}
+        garminActivities={garminActivities}
+        exerciseStatsMap={analytics.exerciseStatsMap}
+        targetWeeklyDays={Object.keys(loadWeeklyPlan()).length || 4}
+        isLoading={isCloudSyncing}
       />
       {renderGlobalTrendsSection()}
       {renderMuscleBalanceCard()}
