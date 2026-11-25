@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Activity,
   Award,
   BarChart3,
   Calendar,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Database,
   Dumbbell,
@@ -20,10 +22,16 @@ import {
   Trophy,
   Watch,
 } from 'lucide-react';
-import { useTrainingSummary } from '@/hooks/useTrainingSummary';
 import { GarminWellnessCard } from '@/components/GarminWellnessCard';
-import { DEMO_WELLNESS_SNAPSHOT } from '@/lib/summary-mock-data';
-import { MetricDelta, PersonalRecordItem, SummaryPeriod } from '@/lib/summary-types';
+import { DaySessionsPanel } from '@/components/summary/DaySessionsPanel';
+import {
+  ActivityHeatmapCalendar,
+  AnnualBodyWeightChart,
+  AnnualMonthlyComparisonChart,
+  BodyWeightVolumeChart,
+  HrZonesDistributionBar,
+  WeeklyEvolutionStackedChart,
+} from '@/components/summary/SummaryCharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,14 +46,8 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import {
-  ActivityHeatmapCalendar,
-  AnnualBodyWeightChart,
-  AnnualMonthlyComparisonChart,
-  BodyWeightVolumeChart,
-  HrZonesDistributionBar,
-  WeeklyEvolutionStackedChart,
-} from '@/components/summary/SummaryCharts';
+import { useTrainingSummary } from '@/hooks/useTrainingSummary';
+import { MetricDelta, PersonalRecordItem, SummaryPeriod } from '@/lib/summary-types';
 
 interface SummaryTabProps {
   onNavigateToLive?: () => void;
@@ -152,15 +154,48 @@ function SummarySkeletonView() {
 }
 
 export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
+  const now = new Date();
   const [period, setPeriod] = useState<SummaryPeriod>('weekly');
-  const [forceEmpty, setForceEmpty] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
+  const [selectedWeeklyDate, setSelectedWeeklyDate] = useState<string | null>(null);
   const [monthlyBreakdownMode, setMonthlyBreakdownMode] = useState<'disciplines' | 'muscles'>(
     'disciplines'
   );
 
-  const { stats, isLoading, isEmpty, simulateReload } = useTrainingSummary(period, {
-    forceEmpty,
+  const { stats, isLoading, isEmpty, sourceLabel, refresh } = useTrainingSummary(period, {
+    year: selectedYear,
+    monthIndex: selectedMonth,
   });
+
+  // Seleccionar automáticamente el último día activo de la semana en curso al cargar datos reales
+  useEffect(() => {
+    if (selectedWeeklyDate) return;
+    const latestActive = [...stats.weekly.daysStrip]
+      .reverse()
+      .find((d) => !d.isFuture && d.sessionsCount > 0);
+    if (latestActive) {
+      setSelectedWeeklyDate(latestActive.date);
+    }
+  }, [stats.weekly.daysStrip, selectedWeeklyDate]);
+
+  const handlePrevMonth = () => {
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setSelectedYear((y) => y - 1);
+    } else {
+      setSelectedMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setSelectedYear((y) => y + 1);
+    } else {
+      setSelectedMonth((m) => m + 1);
+    }
+  };
 
   const periodSubtitle =
     period === 'weekly'
@@ -169,15 +204,21 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
       ? `Consistencia y carga combinada · ${stats.monthly.monthLabel}`
       : `Balance global y récords · Año ${stats.annual.year}`;
 
+  const selectedWeeklyDay =
+    stats.weekly.daysStrip.find((d) => d.date === selectedWeeklyDate) ?? null;
+  const selectedWeeklyBundle = selectedWeeklyDate
+    ? stats.daySessionsMap[selectedWeeklyDate]
+    : undefined;
+
   return (
     <TooltipProvider>
       <div className="space-y-5 animate-in fade-in duration-150">
         {/* Estado Diario Garmin (Recuperación, Sueño, HRV y Body Battery) */}
         <GarminWellnessCard
           hideWeeklySportStrip
-          forceEmpty={forceEmpty}
-          fallbackSnapshot={DEMO_WELLNESS_SNAPSHOT}
-          onSynced={() => simulateReload()}
+          onSynced={() => {
+            refresh();
+          }}
         />
 
         {/* Cabecera Ejecutiva + Selector de Periodo sin saltos de layout */}
@@ -191,7 +232,7 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                 </CardTitle>
                 <Badge variant="secondary" className="text-[10px] font-semibold gap-1">
                   <Database className="w-3 h-3" />
-                  <span>Demo · Esquema Supabase</span>
+                  <span>{sourceLabel}</span>
                 </Badge>
               </div>
               <CardDescription className="text-xs">{periodSubtitle}</CardDescription>
@@ -230,28 +271,17 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                 </TabsList>
               </Tabs>
 
-              {/* Controles de validación visual (Skeleton y Empty State) */}
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={simulateReload}
-                  className="min-h-[40px] flex-1 sm:flex-none text-xs gap-1.5"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                  <span>Recargar</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant={forceEmpty ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setForceEmpty((prev) => !prev)}
-                  className="min-h-[40px] flex-1 sm:flex-none text-xs"
-                >
-                  {forceEmpty ? 'Ver con datos' : 'Probar vacío'}
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => refresh()}
+                disabled={isLoading}
+                className="min-h-[40px] text-xs gap-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>Actualizar</span>
+              </Button>
             </div>
           </CardHeader>
         </Card>
@@ -260,26 +290,62 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
         {isLoading ? (
           <SummarySkeletonView />
         ) : isEmpty ? (
-          /* Estado Vacío Ilustrado con CTA */
+          /* Estado Vacío real */
           <Card className="saas-card">
             <CardContent className="py-12 px-6 text-center space-y-4">
+              {period === 'monthly' && (
+                <div className="flex items-center justify-center gap-3 pb-2">
+                  <Button type="button" variant="outline" size="icon-sm" onClick={handlePrevMonth}>
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm font-bold text-foreground">
+                    {stats.monthly.monthLabel}
+                  </span>
+                  <Button type="button" variant="outline" size="icon-sm" onClick={handleNextMonth}>
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+              {period === 'annual' && (
+                <div className="flex items-center justify-center gap-3 pb-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => setSelectedYear((y) => y - 1)}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm font-bold text-foreground">
+                    Año {stats.annual.year}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => setSelectedYear((y) => y + 1)}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
               <div className="w-14 h-14 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center justify-center mx-auto">
                 <BarChart3 className="w-7 h-7" />
               </div>
               <div className="space-y-1.5 max-w-md mx-auto">
                 <h3 className="text-base font-bold text-foreground">
                   {period === 'weekly'
-                    ? 'Aún no hay actividad registrada esta semana'
+                    ? 'Aún no hay entrenamientos registrados esta semana'
                     : period === 'monthly'
                     ? `Sin entrenamientos en ${stats.monthly.monthLabel}`
-                    : `Sin histórico registrado en ${stats.annual.year}`}
+                    : `Sin entrenamientos registrados en ${stats.annual.year}`}
                 </h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Registra una sesión en Entreno en Vivo, sube tu historial o sincroniza tu Garmin para ver métricas cruzadas de fuerza, pulso Z1–Z5, peso corporal y récords.
+                  Pulsa <strong>Sincronizar Garmin</strong> arriba, registra una sesión en Entreno en Vivo o sube tu CSV en Ejercicios &amp; Datos para ver tus estadísticas reales.
                 </p>
               </div>
-              <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
-                {onNavigateToLive && (
+              {onNavigateToLive && (
+                <div className="pt-1">
                   <Button
                     type="button"
                     onClick={onNavigateToLive}
@@ -288,16 +354,8 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                     <Play className="w-3.5 h-3.5" />
                     <span>Ir a Entreno en Vivo</span>
                   </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setForceEmpty(false)}
-                  className="min-h-[42px] text-xs font-semibold"
-                >
-                  Cargar datos demo
-                </Button>
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         ) : period === 'weekly' ? (
@@ -323,12 +381,15 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                   <Progress
                     value={Math.min(
                       100,
-                      Math.round((stats.weekly.activeDays / Math.max(1, stats.weekly.targetDays)) * 100)
+                      Math.round(
+                        (stats.weekly.activeDays / Math.max(1, stats.weekly.targetDays)) * 100
+                      )
                     )}
                     className="[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-blue-600"
                   />
                   <div className="text-[11px] text-muted-foreground tabular-nums">
-                    {stats.weekly.strengthSessions} fuerza &middot; {stats.weekly.garminSessions} Garmin
+                    {stats.weekly.strengthSessions} fuerza app &middot; {stats.weekly.garminSessions}{' '}
+                    Garmin
                   </div>
                 </CardContent>
               </Card>
@@ -344,7 +405,8 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                   </div>
                   <DeltaPill delta={stats.weekly.strengthVolumeKg} suffix="vs sem. ant." />
                   <div className="text-[11px] text-muted-foreground tabular-nums">
-                    Racha activa: {stats.weekly.streakWeeks} semanas
+                    Racha activa: {stats.weekly.streakWeeks}{' '}
+                    {stats.weekly.streakWeeks === 1 ? 'semana' : 'semanas'}
                   </div>
                 </CardContent>
               </Card>
@@ -377,68 +439,90 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                       <div className="text-2xl font-black text-foreground tabular-nums">
                         {stats.weekly.bodyWeight.currentKg?.toFixed(1)} kg
                       </div>
-                      <div
-                        className={`text-[11px] font-semibold tabular-nums ${
-                          (stats.weekly.bodyWeight.deltaKg ?? 0) <= 0
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-amber-600 dark:text-amber-400'
-                        }`}
-                      >
-                        {(stats.weekly.bodyWeight.deltaKg ?? 0) > 0 ? '+' : ''}
+                      <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
                         {stats.weekly.bodyWeight.deltaKg?.toFixed(1)} kg esta semana
-                      </div>
-                      <div className="text-[11px] text-muted-foreground tabular-nums">
-                        Inicio sem.: {stats.weekly.bodyWeight.startKg?.toFixed(1)} kg
                       </div>
                     </>
                   ) : (
-                    <div className="text-xs text-muted-foreground pt-1">
-                      Sin pesajes esta semana
-                    </div>
+                    <>
+                      <div className="text-lg font-bold text-foreground">Sin registros</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Pendiente de tabla de pesajes en Supabase
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
             </div>
 
-            {/* Tira L-D Semanal sin recortes en móvil 390px */}
+            {/* Tira L-D Semanal INTERACTIVA (tocar un día muestra sesiones y detalle) */}
             <Card className="saas-card">
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <span className="font-bold text-foreground">
-                    Desglose Diario (Lunes a Domingo)
-                  </span>
+                  <div>
+                    <span className="font-bold text-foreground">
+                      Desglose Diario (Lunes a Domingo)
+                    </span>
+                    <span className="text-[11px] text-muted-foreground ml-2">
+                      · Toca un día para ver sesiones
+                    </span>
+                  </div>
                   <span className="text-[11px] text-muted-foreground tabular-nums">
                     {stats.weekly.periodLabel}
                   </span>
                 </div>
+
                 <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
                   {stats.weekly.daysStrip.map((d) => {
-                    const pillCls =
-                      d.type === 'both'
-                        ? 'bg-indigo-600 text-white border-indigo-500'
-                        : d.type === 'strength'
-                        ? 'bg-blue-600 text-white border-blue-500'
-                        : d.type === 'garmin'
-                        ? 'bg-emerald-600 text-white border-emerald-500'
-                        : 'bg-muted/35 text-muted-foreground border-border/70';
+                    const isSelected = selectedWeeklyDate === d.date;
+                    const pillCls = d.isFuture
+                      ? 'bg-muted/20 text-muted-foreground/45 border-border/40'
+                      : d.type === 'both'
+                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
+                      : d.type === 'strength'
+                      ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
+                      : d.type === 'garmin'
+                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                      : 'bg-muted/35 text-muted-foreground border-border/70 hover:bg-muted/60';
 
                     return (
-                      <div
+                      <button
                         key={d.date}
-                        className={`rounded-xl border py-2.5 px-0.5 sm:px-1.5 text-center space-y-1 ${pillCls}`}
-                        title={`${d.date}${d.topActivityLabel ? ` · ${d.topActivityLabel}` : ''}`}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() =>
+                          setSelectedWeeklyDate((prev) => (prev === d.date ? null : d.date))
+                        }
+                        className={`min-h-[54px] rounded-xl border py-2 px-0.5 sm:px-1.5 text-center space-y-1 transition-all active:scale-95 ${pillCls} ${
+                          isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-card' : ''
+                        }`}
+                        title={`${d.date}${
+                          d.isFuture
+                            ? ' (próximo)'
+                            : d.topActivityLabel
+                            ? ` · ${d.topActivityLabel}`
+                            : ''
+                        }`}
                       >
                         <div className="text-xs font-bold">{d.shortWeekday}</div>
                         <div className="text-[9px] sm:text-[10px] font-medium leading-tight opacity-95 tabular-nums">
-                          {d.type === 'both' ? (
+                          {d.isFuture ? (
+                            '—'
+                          ) : d.type === 'both' ? (
                             'Doble'
                           ) : d.type === 'strength' ? (
-                            <>
-                              <span className="sm:hidden">Fza</span>
-                              <span className="hidden sm:inline">
-                                {Math.round(d.strengthVolumeKg / 100) / 10}t
-                              </span>
-                            </>
+                            d.strengthVolumeKg > 0 ? (
+                              <>
+                                <span className="sm:hidden">
+                                  {Math.round(d.strengthVolumeKg / 100) / 10}t
+                                </span>
+                                <span className="hidden sm:inline">
+                                  {d.strengthVolumeKg.toLocaleString('es-ES')} kg
+                                </span>
+                              </>
+                            ) : (
+                              'Fza'
+                            )
                           ) : d.type === 'garmin' ? (
                             <>
                               <span className="sm:hidden">{d.garminMinutes}m</span>
@@ -448,10 +532,20 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                             '—'
                           )}
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
+
+                {selectedWeeklyDate && selectedWeeklyDay && (
+                  <DaySessionsPanel
+                    date={selectedWeeklyDate}
+                    day={selectedWeeklyDay}
+                    garminActivities={selectedWeeklyBundle?.garminActivities || []}
+                    strengthSessions={selectedWeeklyBundle?.strengthSessions || []}
+                    onClose={() => setSelectedWeeklyDate(null)}
+                  />
+                )}
               </CardContent>
             </Card>
 
@@ -477,7 +571,7 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
 
                   {stats.weekly.recentPRs.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border/70 p-6 text-center text-xs text-muted-foreground">
-                      Sin récords nuevos en los últimos 7 días.
+                      Sin récords de fuerza con peso registrados en los últimos 7 días.
                     </div>
                   ) : (
                     <div className="space-y-2.5">
@@ -495,6 +589,29 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
           /* 2. VISTA MENSUAL                                                 */
           /* ================================================================ */
           <div className="space-y-4 animate-in fade-in duration-150">
+            {/* Selector de Mes */}
+            <div className="flex items-center justify-between rounded-xl bg-card border border-border/75 px-3 py-2 saas-card">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={handlePrevMonth}
+                aria-label="Mes anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <div className="text-sm font-bold text-foreground">{stats.monthly.monthLabel}</div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleNextMonth}
+                aria-label="Mes siguiente"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+
             {/* KPIs Mensuales */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
               <Card className="saas-card">
@@ -507,7 +624,8 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                     {stats.monthly.activeDays} días
                   </div>
                   <div className="text-[11px] text-muted-foreground tabular-nums">
-                    {stats.monthly.strengthSessions} fuerza &middot; {stats.monthly.garminSessions} Garmin
+                    {stats.monthly.strengthSessions} fuerza app &middot;{' '}
+                    {stats.monthly.garminSessions} Garmin
                   </div>
                 </CardContent>
               </Card>
@@ -519,7 +637,9 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                     <Dumbbell className="w-3.5 h-3.5 text-indigo-600" />
                   </div>
                   <div className="text-2xl font-black text-foreground tabular-nums">
-                    {Math.round(stats.monthly.totalVolumeKg.current / 100) / 10} t
+                    {stats.monthly.totalVolumeKg.current >= 1000
+                      ? `${Math.round(stats.monthly.totalVolumeKg.current / 100) / 10} t`
+                      : `${stats.monthly.totalVolumeKg.current.toLocaleString('es-ES')} kg`}
                   </div>
                   <DeltaPill delta={stats.monthly.totalVolumeKg} suffix="vs mes ant." />
                 </CardContent>
@@ -546,13 +666,15 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                     <span>Peso Corporal</span>
                     <Scale className="w-3.5 h-3.5 text-indigo-500" />
                   </div>
-                  <div className="text-2xl font-black text-foreground tabular-nums">
-                    {stats.monthly.bodyWeight.currentKg?.toFixed(1) ?? '—'} kg
+                  <div className="text-lg font-bold text-foreground">
+                    {stats.monthly.bodyWeight.hasData
+                      ? `${stats.monthly.bodyWeight.currentKg?.toFixed(1)} kg`
+                      : 'Sin registros'}
                   </div>
-                  <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                    {stats.monthly.bodyWeight.deltaKg !== null
-                      ? `${stats.monthly.bodyWeight.deltaKg > 0 ? '+' : ''}${stats.monthly.bodyWeight.deltaKg.toFixed(1)} kg este mes`
-                      : 'Sin referencia'}
+                  <div className="text-[11px] text-muted-foreground">
+                    {stats.monthly.bodyWeight.hasData
+                      ? `${stats.monthly.bodyWeight.deltaKg?.toFixed(1)} kg este mes`
+                      : 'Pendiente de pesajes'}
                   </div>
                 </CardContent>
               </Card>
@@ -563,11 +685,13 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
               <Card className="saas-card">
                 <CardContent>
                   <ActivityHeatmapCalendar
+                    key={`${stats.monthly.year}-${stats.monthly.monthIndex}`}
                     monthLabel={stats.monthly.monthLabel}
                     leadingEmptyDays={stats.monthly.leadingEmptyDays}
                     calendarDays={stats.monthly.calendarDays}
                     activeDays={stats.monthly.activeDays}
                     totalSessions={stats.monthly.totalSessions}
+                    daySessionsMap={stats.daySessionsMap}
                   />
                 </CardContent>
               </Card>
@@ -622,32 +746,46 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    {(monthlyBreakdownMode === 'disciplines'
-                      ? stats.monthly.disciplineBreakdown
-                      : stats.monthly.muscleGroupBreakdown
-                    ).map((item) => (
-                      <div key={item.key} className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs tabular-nums">
-                          <span className="font-semibold text-foreground">{item.label}</span>
-                          <span className="text-muted-foreground">
-                            {item.volumeKg
-                              ? `${item.volumeKg.toLocaleString('es-ES')} kg`
-                              : `${item.minutes} min`}{' '}
-                            &middot; <strong className="text-foreground">{item.pct}%</strong>
-                          </span>
+                  {(() => {
+                    const list =
+                      monthlyBreakdownMode === 'disciplines'
+                        ? stats.monthly.disciplineBreakdown
+                        : stats.monthly.muscleGroupBreakdown;
+                    if (list.length === 0) {
+                      return (
+                        <div className="rounded-xl border border-dashed border-border/70 p-6 text-center text-xs text-muted-foreground">
+                          {monthlyBreakdownMode === 'muscles'
+                            ? 'Registra o importa series de fuerza para ver el reparto por grupo muscular.'
+                            : 'Sin sesiones registradas este mes.'}
                         </div>
-                        <Progress
-                          value={item.pct}
-                          className={
-                            item.category === 'strength'
-                              ? '[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-blue-600'
-                              : '[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-emerald-500'
-                          }
-                        />
+                      );
+                    }
+                    return (
+                      <div className="space-y-3">
+                        {list.map((item) => (
+                          <div key={item.key} className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs tabular-nums">
+                              <span className="font-semibold text-foreground">{item.label}</span>
+                              <span className="text-muted-foreground">
+                                {item.volumeKg
+                                  ? `${item.volumeKg.toLocaleString('es-ES')} kg`
+                                  : `${item.minutes} min`}{' '}
+                                &middot; <strong className="text-foreground">{item.pct}%</strong>
+                              </span>
+                            </div>
+                            <Progress
+                              value={item.pct}
+                              className={
+                                item.category === 'strength'
+                                  ? '[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-blue-600'
+                                  : '[&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-indicator]]:bg-emerald-500'
+                              }
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>
@@ -658,17 +796,23 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
                     <Trophy className="w-4 h-4 text-amber-500 shrink-0" />
-                    <span>Mejores Marcas y Progresión ({stats.monthly.monthLabel})</span>
+                    <span>Mejores Marcas ({stats.monthly.monthLabel})</span>
                   </div>
                   <Badge variant="secondary" className="text-[11px] font-bold tabular-nums">
-                    Top {stats.monthly.topPRs.length} ejercicios
+                    {stats.monthly.topPRs.length} ejercicios
                   </Badge>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                  {stats.monthly.topPRs.map((pr, idx) => (
-                    <PrHighlightCard key={pr.id} pr={pr} rank={idx + 1} />
-                  ))}
-                </div>
+                {stats.monthly.topPRs.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border/70 p-6 text-center text-xs text-muted-foreground">
+                    No hay series de fuerza con peso registradas en {stats.monthly.monthLabel}.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    {stats.monthly.topPRs.map((pr, idx) => (
+                      <PrHighlightCard key={pr.id} pr={pr} rank={idx + 1} />
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -677,6 +821,29 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
           /* 3. VISTA ANUAL                                                   */
           /* ================================================================ */
           <div className="space-y-4 animate-in fade-in duration-150">
+            {/* Selector de Año */}
+            <div className="flex items-center justify-between rounded-xl bg-card border border-border/75 px-3 py-2 saas-card">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setSelectedYear((y) => y - 1)}
+                aria-label="Año anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <div className="text-sm font-bold text-foreground">Resumen Anual {stats.annual.year}</div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setSelectedYear((y) => y + 1)}
+                aria-label="Año siguiente"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+
             {/* Hero Ejecutivo Anual */}
             <div className="rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 text-white p-5 sm:p-6 border border-slate-800 shadow-lg space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -701,7 +868,8 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                   <div className="text-[11px] text-slate-300">Sesiones Totales</div>
                   <div className="text-2xl font-black mt-1">{stats.annual.totalSessions}</div>
                   <div className="text-[11px] text-slate-400">
-                    {stats.annual.strengthSessions} fuerza &middot; {stats.annual.garminSessions} Garmin
+                    {stats.annual.strengthSessions} fuerza app &middot;{' '}
+                    {stats.annual.garminSessions} Garmin
                   </div>
                 </div>
                 <div className="rounded-xl bg-white/5 border border-white/10 p-3.5">
@@ -773,14 +941,20 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                       <span>Cuadro de Honor · PRs {stats.annual.year}</span>
                     </div>
                     <Badge variant="secondary" className="text-[11px] font-bold tabular-nums">
-                      Top {stats.annual.hallOfFamePRs.length}
+                      {stats.annual.hallOfFamePRs.length} marcas
                     </Badge>
                   </div>
-                  <div className="space-y-2.5">
-                    {stats.annual.hallOfFamePRs.map((pr, idx) => (
-                      <PrHighlightCard key={pr.id} pr={pr} rank={idx + 1} />
-                    ))}
-                  </div>
+                  {stats.annual.hallOfFamePRs.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border/70 p-6 text-center text-xs text-muted-foreground">
+                      No hay récords con peso registrados en {stats.annual.year}.
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {stats.annual.hallOfFamePRs.map((pr, idx) => (
+                        <PrHighlightCard key={pr.id} pr={pr} rank={idx + 1} />
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

@@ -15,10 +15,12 @@ import {
 import {
   BodyWeightSummary,
   CalendarActivityDay,
+  DaySessionsBundle,
   HeartRateZoneBucket,
 } from '@/lib/summary-types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DaySessionsPanel } from '@/components/summary/DaySessionsPanel';
 
 const ZONE_COLORS: Record<number, { bar: string; dot: string; text: string }> = {
   1: {
@@ -157,17 +159,20 @@ export function ActivityHeatmapCalendar({
   calendarDays,
   activeDays,
   totalSessions,
+  daySessionsMap = {},
 }: {
   monthLabel: string;
   leadingEmptyDays: number;
   calendarDays: CalendarActivityDay[];
   activeDays: number;
   totalSessions: number;
+  daySessionsMap?: Record<string, DaySessionsBundle>;
 }) {
   const defaultSelected =
-    [...calendarDays].reverse().find((d) => d.type !== 'none')?.date ?? null;
+    [...calendarDays].reverse().find((d) => !d.isFuture && d.type !== 'none')?.date ?? null;
   const [selectedDate, setSelectedDate] = useState<string | null>(defaultSelected);
   const selectedDay = calendarDays.find((d) => d.date === selectedDate) ?? null;
+  const selectedBundle = selectedDate ? daySessionsMap[selectedDate] : undefined;
 
   return (
     <div className="space-y-3.5">
@@ -197,14 +202,15 @@ export function ActivityHeatmapCalendar({
         ))}
         {calendarDays.map((day) => {
           const isSelected = selectedDate === day.date;
-          const colorCls =
-            day.type === 'both'
-              ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
-              : day.type === 'strength'
-              ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
-              : day.type === 'garmin'
-              ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
-              : 'bg-muted/45 text-muted-foreground border-border/60 hover:bg-muted';
+          const colorCls = day.isFuture
+            ? 'bg-muted/20 text-muted-foreground/45 border-border/40'
+            : day.type === 'both'
+            ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
+            : day.type === 'strength'
+            ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
+            : day.type === 'garmin'
+            ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+            : 'bg-muted/45 text-muted-foreground border-border/60 hover:bg-muted';
 
           return (
             <button
@@ -213,7 +219,9 @@ export function ActivityHeatmapCalendar({
               onClick={() =>
                 setSelectedDate((prev) => (prev === day.date ? null : day.date))
               }
-              aria-label={`${day.date}: ${day.topActivityLabel || 'Descanso'}`}
+              aria-label={`${day.date}: ${
+                day.isFuture ? 'Día futuro' : day.topActivityLabel || 'Descanso'
+              }`}
               className={`h-9 rounded-lg border text-xs font-bold tabular-nums transition-all active:scale-95 ${colorCls} ${
                 isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-card' : ''
               }`}
@@ -225,61 +233,37 @@ export function ActivityHeatmapCalendar({
       </div>
 
       {/* Leyenda */}
-      <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground pt-0.5">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-xs bg-blue-600" />
-          Fuerza
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-xs bg-emerald-600" />
-          Garmin Cardio
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-xs bg-indigo-600" />
-          Doble sesión
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-xs bg-muted border border-border/70" />
-          Descanso
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground pt-0.5">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-xs bg-blue-600" />
+            Fuerza
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-xs bg-emerald-600" />
+            Garmin Cardio
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-xs bg-indigo-600" />
+            Doble sesión
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-xs bg-muted border border-border/70" />
+            Descanso
+          </span>
+        </div>
+        <span className="text-[10px]">Pulsa un día para ver sesiones</span>
       </div>
 
-      {/* Inspector de día seleccionado */}
-      {selectedDay && (
-        <div className="rounded-xl bg-muted/40 border border-border/70 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-          <div className="space-y-0.5">
-            <div className="font-semibold text-foreground">
-              {selectedDay.date} &middot;{' '}
-              {selectedDay.topActivityLabel || 'Día de recuperación'}
-            </div>
-            <div className="text-[11px] text-muted-foreground tabular-nums">
-              {selectedDay.sessionsCount === 0
-                ? 'Sin sesiones registradas'
-                : `${selectedDay.sessionsCount} ${
-                    selectedDay.sessionsCount === 1 ? 'sesión' : 'sesiones'
-                  }`}
-            </div>
-          </div>
-          {selectedDay.sessionsCount > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 tabular-nums">
-              {selectedDay.strengthVolumeKg > 0 && (
-                <Badge variant="secondary" className="font-semibold">
-                  {selectedDay.strengthVolumeKg.toLocaleString('es-ES')} kg
-                </Badge>
-              )}
-              {selectedDay.garminMinutes > 0 && (
-                <Badge variant="outline" className="font-semibold">
-                  {selectedDay.garminMinutes} min
-                </Badge>
-              )}
-              {selectedDay.garminDistanceKm > 0 && (
-                <Badge variant="outline" className="font-semibold">
-                  {selectedDay.garminDistanceKm} km
-                </Badge>
-              )}
-            </div>
-          )}
-        </div>
+      {/* Inspector interactivo con detalle expandible de cada sesión */}
+      {selectedDate && selectedDay && (
+        <DaySessionsPanel
+          date={selectedDate}
+          day={selectedDay}
+          garminActivities={selectedBundle?.garminActivities || []}
+          strengthSessions={selectedBundle?.strengthSessions || []}
+          onClose={() => setSelectedDate(null)}
+        />
       )}
     </div>
   );
@@ -318,8 +302,14 @@ export function WeeklyEvolutionStackedChart({
 
       <div className="h-40 flex items-end gap-3 pt-4">
         {weeks.map((w, idx) => {
-          const volPct = Math.max(14, Math.round((w.strengthVolumeKg / maxVolume) * 100));
-          const minPct = Math.max(14, Math.round((w.garminMinutes / maxMinutes) * 100));
+          const volPct =
+            w.strengthVolumeKg > 0
+              ? Math.max(12, Math.round((w.strengthVolumeKg / maxVolume) * 100))
+              : 4;
+          const minPct =
+            w.garminMinutes > 0
+              ? Math.max(12, Math.round((w.garminMinutes / maxMinutes) * 100))
+              : 4;
           const isSelected = idx === selectedIdx;
 
           return (
@@ -334,14 +324,18 @@ export function WeeklyEvolutionStackedChart({
               <div className="w-full flex-1 flex items-end justify-center gap-1.5">
                 <div className="w-4 sm:w-5 h-full flex items-end">
                   <div
-                    className="w-full rounded-t-md bg-blue-600 transition-all duration-300"
+                    className={`w-full rounded-t-md transition-all duration-300 ${
+                      w.strengthVolumeKg > 0 ? 'bg-blue-600' : 'bg-muted'
+                    }`}
                     style={{ height: `${volPct}%` }}
                     title={`${w.weekLabel} Fuerza: ${w.strengthVolumeKg.toLocaleString('es-ES')} kg`}
                   />
                 </div>
                 <div className="w-4 sm:w-5 h-full flex items-end">
                   <div
-                    className="w-full rounded-t-md bg-emerald-500 transition-all duration-300"
+                    className={`w-full rounded-t-md transition-all duration-300 ${
+                      w.garminMinutes > 0 ? 'bg-emerald-500' : 'bg-muted'
+                    }`}
                     style={{ height: `${minPct}%` }}
                     title={`${w.weekLabel} Garmin: ${w.garminMinutes} min`}
                   />

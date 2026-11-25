@@ -1,3 +1,5 @@
+import { GarminActivitySummary } from './types';
+
 export type SummaryPeriod = 'weekly' | 'monthly' | 'annual';
 export type ActivityDayType = 'none' | 'strength' | 'garmin' | 'both';
 export type HrZoneNumber = 1 | 2 | 3 | 4 | 5;
@@ -67,6 +69,37 @@ export interface CalendarActivityDay {
   garminDistanceKm: number;
   sessionsCount: number;
   topActivityLabel?: string;
+  isFuture?: boolean;
+}
+
+export interface StrengthDaySetDetail {
+  setIndex: number;
+  weightKg: number;
+  reps: number;
+  rpe?: number;
+}
+
+export interface StrengthDayExerciseDetail {
+  name: string;
+  muscleGroup: string;
+  totalVolumeKg: number;
+  bestEstimated1RM: number;
+  sets: StrengthDaySetDetail[];
+}
+
+export interface StrengthDaySession {
+  id: string;
+  date: string;
+  workoutTitle: string;
+  source: 'supabase_hevy' | 'live_tracker';
+  totalVolumeKg: number;
+  totalSets: number;
+  exercises: StrengthDayExerciseDetail[];
+}
+
+export interface DaySessionsBundle {
+  garminActivities: GarminActivitySummary[];
+  strengthSessions: StrengthDaySession[];
 }
 
 export interface WeeklySummaryStats {
@@ -145,6 +178,7 @@ export interface SummaryStats {
   weekly: WeeklySummaryStats;
   monthly: MonthlySummaryStats;
   annual: AnnualSummaryStats;
-  dataSource: 'mock' | 'supabase_garmin';
+  daySessionsMap: Record<string, DaySessionsBundle>;
+  dataSource: 'live_real' | 'supabase_garmin';
   lastUpdatedAt: string;
 }
