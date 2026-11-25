@@ -44,6 +44,15 @@
     background-size: 100% 100%, 36px 36px, 36px 36px;
   }
 
+  .dark .ambient-canvas {
+    background-color: #090d16;
+    background-image:
+      radial-gradient(ellipse 75% 42% at 50% -12%, rgba(59, 130, 246, 0.14), transparent),
+      linear-gradient(to right, rgba(30, 41, 59, 0.45) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(30, 41, 59, 0.45) 1px, transparent 1px);
+    background-size: 100% 100%, 36px 36px, 36px 36px;
+  }
+
   .saas-card {
     box-shadow:
       0 1px 3px 0 rgba(15, 23, 42, 0.03),

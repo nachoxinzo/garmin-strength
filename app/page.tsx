@@ -53,6 +53,13 @@ import {
   BookOpen
 } from 'lucide-react';
 import { InteractiveGuideModal, GuideTargetAction } from '@/components/InteractiveGuideModal';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import {
+  deleteLocalTemplate,
+  downloadLocalBackupJson,
+  loadLocalTemplates,
+  saveLocalTemplate,
+} from '@/lib/backup-utils';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { EnrichedExpertExercise } from '@/lib/expert-gym-guide';
 import { downloadAppleWatchCalendarIcs, formatAppleWatchNotesText } from '@/lib/apple-watch-export';
@@ -166,6 +173,8 @@ export default function WorkoutStudioPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileLoadToolsOpen, setIsMobileLoadToolsOpen] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const [localTemplates, setLocalTemplates] = useState<StrengthRoutine[]>([]);
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
 
   // Supabase Cloud Routines
   const [cloudRoutines, setCloudRoutines] = useState<StrengthRoutine[]>([]);
@@ -177,6 +186,7 @@ export default function WorkoutStudioPage() {
 
   // Cargar estado de Garmin y rutina guardada al inicio
   useEffect(() => {
+    setLocalTemplates(loadLocalTemplates());
     checkGarminStatus();
     const available = isSupabaseConfigured();
     setIsSupabaseAvailable(available);
@@ -977,6 +987,8 @@ export default function WorkoutStudioPage() {
               </button>
             )}
 
+            <ThemeToggle />
+
             <button
               onClick={() => checkGarminStatus()}
               disabled={isCheckingStatus}
@@ -987,16 +999,18 @@ export default function WorkoutStudioPage() {
             </button>
           </div>
 
-          {/* Barra Móvil y Tablet (< 1024px): Guía + Estado Garmin + Menú Cajón */}
+          {/* Barra Móvil y Tablet (< 1024px): Tema + Guía + Estado Garmin + Menú Cajón */}
           <div className="flex lg:hidden items-center gap-1.5 shrink-0">
+            <ThemeToggle />
+
             <button
               type="button"
               onClick={() => setIsGuideModalOpen(true)}
               aria-label="Abrir guía interactiva"
-              className="min-h-[42px] px-3 py-1.5 rounded-lg bg-card hover:bg-accent border border-border/80 text-foreground text-xs font-medium inline-flex items-center gap-1.5 shadow-2xs transition-all active:scale-[0.98]"
+              className="min-h-[42px] px-2.5 py-1.5 rounded-lg bg-card hover:bg-accent border border-border/80 text-foreground text-xs font-medium inline-flex items-center gap-1 shadow-2xs transition-all active:scale-[0.98]"
             >
-              <BookOpen className="w-3.5 h-3.5 text-blue-600" />
-              <span>Guía</span>
+              <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span className="hidden xs:inline">Guía</span>
             </button>
 
             <button
@@ -1137,6 +1151,20 @@ export default function WorkoutStudioPage() {
                     <span>Guía Interactiva</span>
                   </span>
                   <ArrowRight className="w-4 h-4 text-blue-600" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    downloadLocalBackupJson();
+                  }}
+                  className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-card hover:bg-muted/50 border border-border/60 flex items-center justify-between text-sm font-semibold text-foreground"
+                >
+                  <span className="flex items-center gap-3">
+                    <Download className="w-4 h-4 text-emerald-600" />
+                    <span>Exportar Backup (.json)</span>
+                  </span>
                 </button>
 
                 <button
@@ -1370,6 +1398,75 @@ export default function WorkoutStudioPage() {
                   <Cloud className="w-3.5 h-3.5 text-emerald-600" />
                   <span>{isCloudSaving ? 'Guardando...' : 'Guardar Nube'}</span>
                 </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsTemplatesOpen((v) => !v)}
+                    className="saas-btn min-h-[42px] inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-card hover:bg-accent text-foreground border border-border/80 shadow-2xs"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Plantillas ({localTemplates.length})</span>
+                  </button>
+                  {isTemplatesOpen && (
+                    <div className="absolute right-0 mt-2 w-72 rounded-xl bg-card border border-border/80 shadow-xl p-3 z-30 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-foreground">Plantillas Locales</span>
+                        <button
+                          type="button"
+                          disabled={routine.blocks.length === 0}
+                          onClick={() => {
+                            const updated = saveLocalTemplate(routine);
+                            setLocalTemplates(updated);
+                            setStatusMessage({
+                              type: 'success',
+                              text: `Plantilla "${routine.name}" guardada en el dispositivo.`,
+                            });
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-[11px] font-semibold"
+                        >
+                          + Guardar actual
+                        </button>
+                      </div>
+                      {localTemplates.length === 0 ? (
+                        <p className="text-[11px] text-muted-foreground py-2">
+                          Guarda aquí tus rutinas favoritas para cargarlas con 1 clic sin conexión.
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                          {localTemplates.map((tpl) => (
+                            <div
+                              key={tpl.id}
+                              className="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/40 border border-border/60 text-xs"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRoutine(tpl);
+                                  setIsTemplatesOpen(false);
+                                  setStatusMessage({
+                                    type: 'success',
+                                    text: `Plantilla "${tpl.name}" cargada.`,
+                                  });
+                                }}
+                                className="flex-1 text-left font-semibold text-foreground truncate hover:text-blue-600"
+                              >
+                                {tpl.name} ({tpl.blocks.length} ej.)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setLocalTemplates(deleteLocalTemplate(tpl.id))}
+                                aria-label="Eliminar plantilla"
+                                className="p-1 text-muted-foreground hover:text-rose-600"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {routine.blocks.length > 0 && (
                   <button
                     onClick={resetToNewRoutine}
@@ -1411,28 +1508,28 @@ export default function WorkoutStudioPage() {
               <button
                 onClick={() => scaleRoutineWeights(0.85)}
                 title="Escalar todas las cargas al 85%"
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/70 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/25 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
               >
                 85%
               </button>
               <button
                 onClick={() => scaleRoutineWeights(0.75)}
                 title="Ajustar al 75%"
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/70 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/25 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
               >
                 75%
               </button>
               <button
                 onClick={() => adjustAllWeightsDelta(5)}
                 title="Añadir +5kg a todos los ejercicios"
-                className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/70 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
               >
                 +5 kg
               </button>
               <button
                 onClick={() => adjustAllWeightsDelta(-5)}
                 title="Restar -5kg a todos los ejercicios"
-                className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/70 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/25 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
               >
                 -5 kg
               </button>
@@ -1645,24 +1742,27 @@ export default function WorkoutStudioPage() {
                           {block.exercise.name}
                         </h3>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <span className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/60">
+                          <span
+                            title={`ID Garmin: ${block.exercise.garminName}`}
+                            className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-blue-500/10 text-blue-700 border border-blue-500/20"
+                          >
                             {block.exercise.muscleGroup}
                           </span>
+                          <span className="text-[11px] font-medium text-muted-foreground">
+                            {block.exercise.equipment}
+                          </span>
                           {isInSuperset && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/80">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-700 border border-indigo-500/20">
                               <Link2 className="w-3 h-3" />
                               <span>Superserie</span>
                             </span>
                           )}
                           {record?.bestEstimated1RM ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 tabular-nums">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 border border-amber-500/20 tabular-nums">
                               <Trophy className="w-3 h-3 text-amber-600" />
                               <span>PR: {record.bestWeightKg}kg &bull; 1RM: {record.bestEstimated1RM}kg</span>
                             </span>
                           ) : null}
-                          <span className="text-[11px] text-muted-foreground font-mono break-all">
-                            {block.exercise.garminName}
-                          </span>
                         </div>
                       </div>
                     </div>
@@ -1689,9 +1789,9 @@ export default function WorkoutStudioPage() {
                         type="button"
                         onClick={() => setActive3DExercise(block.exercise)}
                         title="Ver demostración biomecánica 3D"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-blue-700 dark:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
                       >
-                        <Box className="w-3.5 h-3.5 text-blue-600" />
+                        <Box className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                         <span className="hidden sm:inline">3D</span>
                       </button>
 
@@ -1701,9 +1801,9 @@ export default function WorkoutStudioPage() {
                           setIsSwapModalOpen(true);
                         }}
                         title="Máquina ocupada: Cambiar por ejercicio similar"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
                       >
-                        <Shuffle className="w-3.5 h-3.5 text-amber-600" />
+                        <Shuffle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                         <span className="hidden sm:inline">Sustituir</span>
                       </button>
 

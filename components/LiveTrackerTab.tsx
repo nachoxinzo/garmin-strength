@@ -218,6 +218,20 @@ export function LiveTrackerTab({
           setIsRestRunning(false);
           if (soundEnabled) playRestBeep(1046, 0.35);
           triggerVibration([200, 100, 200]);
+          if (
+            typeof Notification !== 'undefined' &&
+            Notification.permission === 'granted' &&
+            document.hidden
+          ) {
+            try {
+              new Notification('IronSync: Descanso completado', {
+                body: 'Listo para la siguiente serie.',
+                icon: '/icon.svg',
+              });
+            } catch {
+              // ignore notification error
+            }
+          }
           return 0;
         }
         if (prev <= 4 && soundEnabled) {
@@ -724,6 +738,27 @@ export function LiveTrackerTab({
             )}
           </div>
         </div>
+
+        {/* Barra de progreso de sesión en tiempo real */}
+        {stats.totalSets > 0 && (
+          <div className="space-y-1.5 pt-1">
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+              <span>Progreso de la sesión</span>
+              <span className="font-semibold text-foreground">
+                {stats.completedSets}/{stats.totalSets} series (
+                {Math.round((stats.completedSets / stats.totalSets) * 100)}%)
+              </span>
+            </div>
+            <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                style={{
+                  width: `${Math.min(100, Math.round((stats.completedSets / stats.totalSets) * 100))}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Celebración Emergente Centrada de Nuevo PR con GIF */}
@@ -1004,8 +1039,8 @@ export function LiveTrackerTab({
                     : null;
 
                 return (
-                  <div className="rounded-xl bg-amber-50/70 border border-amber-200/80 px-3 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                    <div className="text-amber-950 tabular-nums">
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 px-3 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="text-foreground tabular-nums">
                       <span className="font-bold">Calentamiento sugerido:</span>{' '}
                       <span className="font-semibold">
                         {singleWarmup.weightKg} kg &times; {singleWarmup.reps}
@@ -1062,11 +1097,11 @@ export function LiveTrackerTab({
                     key={setRow.id}
                     className={`grid grid-cols-12 gap-2 items-center p-2 rounded-xl border transition-all duration-300 ${
                       setRow.prType
-                        ? 'bg-gradient-to-r from-amber-50/90 via-yellow-50/70 to-emerald-50/80 border-amber-300 ring-2 ring-amber-400/50 shadow-sm'
+                        ? 'bg-amber-500/15 border-amber-500/50 ring-2 ring-amber-400/40 shadow-sm'
                         : setRow.completed
-                        ? 'bg-emerald-50/70 border-emerald-200/90'
+                        ? 'bg-emerald-500/10 border-emerald-500/35'
                         : setRow.isWarmup
-                        ? 'bg-amber-50/40 border-amber-200/60'
+                        ? 'bg-amber-500/10 border-amber-500/30'
                         : 'bg-muted/25 border-border/60 hover:bg-muted/40'
                     }`}
                   >
