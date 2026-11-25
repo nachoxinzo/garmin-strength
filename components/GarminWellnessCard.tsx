@@ -23,11 +23,17 @@ import { DbWorkoutLog } from '@/lib/supabase';
 interface GarminWellnessCardProps {
   onSynced?: (snapshot: GarminWellnessSnapshot) => void;
   onImportStrengthLogs?: (logs: DbWorkoutLog[]) => Promise<{ added: number; total: number } | void>;
+  hideWeeklySportStrip?: boolean;
+  forceEmpty?: boolean;
+  fallbackSnapshot?: GarminWellnessSnapshot | null;
 }
 
 export function GarminWellnessCard({
   onSynced,
   onImportStrengthLogs,
+  hideWeeklySportStrip = false,
+  forceEmpty = false,
+  fallbackSnapshot = null,
 }: GarminWellnessCardProps = {}) {
   const [snapshot, setSnapshot] = useState<GarminWellnessSnapshot | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -119,40 +125,61 @@ export function GarminWellnessCard({
     }
   };
 
-  const readinessColor = !snapshot
-    ? 'text-slate-600 bg-slate-100 border-slate-200'
-    : snapshot.readinessIndex >= 75
-    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-    : snapshot.readinessIndex >= 45
-    ? 'text-amber-700 bg-amber-50 border-amber-200'
-    : 'text-rose-700 bg-rose-50 border-rose-200';
+  const displaySnapshot = forceEmpty ? null : snapshot || fallbackSnapshot;
+  const isLiveSnapshot = Boolean(!forceEmpty && snapshot);
 
-  const sportEntries = snapshot
-    ? (Object.entries(snapshot.weeklySportMinutes) as [SportCategory, number][]).filter(
-        ([, mins]) => mins > 0
-      )
-    : [];
+  const readinessColor = !displaySnapshot
+    ? 'text-muted-foreground bg-muted/40 border-border/60'
+    : displaySnapshot.readinessIndex >= 75
+    ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60'
+    : displaySnapshot.readinessIndex >= 45
+    ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/60'
+    : 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/60';
+
+  const sportEntries =
+    !hideWeeklySportStrip && displaySnapshot
+      ? (Object.entries(displaySnapshot.weeklySportMinutes) as [SportCategory, number][]).filter(
+          ([, mins]) => mins > 0
+        )
+      : [];
 
   return (
-    <div className="bg-card rounded-xl border border-border/60 p-4 sm:p-5 shadow-sm space-y-4">
+    <div className="bg-card rounded-2xl border border-border/80 p-4 sm:p-5 saas-card space-y-4 text-left">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center justify-center shrink-0">
             <Watch className="w-4.5 h-4.5" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-foreground">
-              Estado del Atleta y Multideporte (Garmin)
-            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">
+                Recuperación y Estado de Hoy (Garmin)
+              </h3>
+              {displaySnapshot && (
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                    isLiveSnapshot
+                      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
+                      : 'bg-muted text-muted-foreground border-border/70'
+                  }`}
+                >
+                  {isLiveSnapshot ? 'Garmin en vivo' : 'Demo · Sin sincronizar'}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {snapshot
-                ? `Última sincronización: ${new Date(snapshot.syncedAt).toLocaleString('es-ES', {
+              {displaySnapshot
+                ? `Actualizado: ${new Date(displaySnapshot.syncedAt).toLocaleString('es-ES', {
                     day: '2-digit',
                     month: 'short',
                     hour: '2-digit',
                     minute: '2-digit',
-                  })} · ${snapshot.recentActivities.length} actividades (84d)`
-                : 'Sincroniza sueño, HRV, Body Battery y tus últimos 84 días de deporte.'}
+                  })}${
+                    displaySnapshot.recentActivities.length > 0
+                      ? ` · ${displaySnapshot.recentActivities.length} actividades (84d)`
+                      : ''
+                  }`
+                : 'Sincroniza sueño, HRV, Body Battery y tu disponibilidad diaria de Garmin.'}
             </p>
           </div>
         </div>
@@ -183,20 +210,20 @@ export function GarminWellnessCard({
       </div>
 
       {errorMsg && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700">
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs text-rose-700 dark:text-rose-300">
           <ShieldAlert className="w-4 h-4 shrink-0" />
           <span>{errorMsg}</span>
         </div>
       )}
 
       {importNotice && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
-          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-700 dark:text-emerald-300">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>{importNotice}</span>
         </div>
       )}
 
-      {snapshot && (
+      {displaySnapshot && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className={`rounded-xl border p-3 ${readinessColor}`}>
@@ -205,12 +232,12 @@ export function GarminWellnessCard({
                 <span>Readiness Hoy</span>
               </div>
               <div className="text-xl font-bold tabular-nums mt-1">
-                {snapshot.readinessIndex}/100
+                {displaySnapshot.readinessIndex}/100
               </div>
               <div className="text-[11px] opacity-85">
-                {snapshot.readinessIndex >= 75
+                {displaySnapshot.readinessIndex >= 75
                   ? 'Listo para progresar'
-                  : snapshot.readinessIndex >= 45
+                  : displaySnapshot.readinessIndex >= 45
                   ? 'Carga moderada'
                   : 'Prioriza recuperación'}
               </div>
@@ -222,11 +249,11 @@ export function GarminWellnessCard({
                 <span>Sueño Anoche</span>
               </div>
               <div className="text-xl font-bold text-foreground tabular-nums mt-1">
-                {snapshot.sleep ? `${snapshot.sleep.durationHours}h` : 'N/D'}
+                {displaySnapshot.sleep ? `${displaySnapshot.sleep.durationHours}h` : 'N/D'}
               </div>
               <div className="text-[11px] text-muted-foreground tabular-nums">
-                {snapshot.sleep?.sleepScore
-                  ? `Score ${snapshot.sleep.sleepScore} · Prof. ${snapshot.sleep.deepHours}h`
+                {displaySnapshot.sleep?.sleepScore
+                  ? `Score ${displaySnapshot.sleep.sleepScore} · Prof. ${displaySnapshot.sleep.deepHours}h`
                   : 'Sin detalle de fases'}
               </div>
             </div>
@@ -237,10 +264,14 @@ export function GarminWellnessCard({
                 <span>HRV / FC Reposo</span>
               </div>
               <div className="text-xl font-bold text-foreground tabular-nums mt-1">
-                {snapshot.recovery.hrvLastNight ? `${snapshot.recovery.hrvLastNight} ms` : 'N/D'}
+                {displaySnapshot.recovery.hrvLastNight
+                  ? `${displaySnapshot.recovery.hrvLastNight} ms`
+                  : 'N/D'}
               </div>
               <div className="text-[11px] text-muted-foreground tabular-nums">
-                {snapshot.recovery.restingHr ? `FCR ${snapshot.recovery.restingHr} bpm` : 'Sin FCR'}
+                {displaySnapshot.recovery.restingHr
+                  ? `FCR ${displaySnapshot.recovery.restingHr} bpm`
+                  : 'Sin FCR'}
               </div>
             </div>
 
@@ -250,10 +281,10 @@ export function GarminWellnessCard({
                 <span>Body Battery</span>
               </div>
               <div className="text-xl font-bold text-foreground tabular-nums mt-1">
-                {snapshot.recovery.bodyBatteryCurrent ?? 'N/D'}
+                {displaySnapshot.recovery.bodyBatteryCurrent ?? 'N/D'}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                Fatiga piernas: {snapshot.lowerBodyFatigue}
+                Fatiga piernas: {displaySnapshot.lowerBodyFatigue}
               </div>
             </div>
           </div>
@@ -271,17 +302,19 @@ export function GarminWellnessCard({
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/60 border border-border/60 text-xs font-medium text-foreground tabular-nums"
                   >
                     <span>{sport}:</span>
-                    <span className="font-bold text-blue-600">{Math.round(mins)} min</span>
+                    <span className="font-bold text-blue-600 dark:text-blue-400">
+                      {Math.round(mins)} min
+                    </span>
                   </span>
                 ))}
               </div>
             </div>
           )}
 
-          {snapshot.coachInsights.length > 0 && (
-            <div className="rounded-lg bg-blue-50/70 border border-blue-200/80 p-3 space-y-1">
-              {snapshot.coachInsights.map((tip, i) => (
-                <p key={i} className="text-xs text-blue-900 leading-relaxed">
+          {displaySnapshot.coachInsights.length > 0 && (
+            <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 p-3 space-y-1">
+              {displaySnapshot.coachInsights.map((tip, i) => (
+                <p key={i} className="text-xs text-blue-950 dark:text-blue-200 leading-relaxed">
                   &bull; {tip}
                 </p>
               ))}

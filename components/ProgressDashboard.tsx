@@ -7,11 +7,11 @@ import {
   Trophy,
   Flame,
   Calendar,
-  Layers,
   ArrowUpRight,
   ArrowDownRight,
   Search,
   Upload,
+  Download,
   RefreshCw,
   BarChart2,
   Zap,
@@ -20,26 +20,18 @@ import {
   FileSpreadsheet,
   Cloud,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Watch
 } from 'lucide-react';
 import {
   extractProgressFromHevyCSV,
   ExerciseStatsSummary,
   ExerciseSessionProgress,
-  computeWeeklyTonnageTrend,
-  computeConsistencyHeatmap,
   computeLinearTrend,
 } from '@/lib/progress-analyzer';
 import { analyzeWeeklyMuscleBalance, MuscleVolumeStatus } from '@/lib/weekly-volume-analyzer';
-import { loadProgressionHistory } from '@/lib/progressive-overload-engine';
-import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
 import { EXERCISE_CATALOG } from '@/lib/exercise-catalog';
 import { getSimilarExercises } from '@/lib/exercise-alternatives';
-import { GarminActivityDetail, GarminActivitySummary, GarminWellnessSnapshot } from '@/lib/types';
-import { GarminWellnessCard } from './GarminWellnessCard';
-import { PeriodSummarySection } from './PeriodSummarySection';
-import { loadWeeklyPlan } from '@/lib/weekly-planner';
-import { Skeleton } from './ui/skeleton';
 import {
   DbWorkoutLog,
   isSupabaseConfigured,
@@ -61,41 +53,13 @@ export default function ProgressDashboard() {
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
   const [hasCloudSource, setHasCloudSource] = useState<boolean>(false);
   const [muscleBalance, setMuscleBalance] = useState<MuscleVolumeStatus[]>([]);
-  const [garminActivities, setGarminActivities] = useState<GarminActivitySummary[]>([]);
-  const [garminCardioMinutesWeek, setGarminCardioMinutesWeek] = useState<number>(0);
-  const [garminReadiness, setGarminReadiness] = useState<number | null>(null);
-  const [selectedHeatmapDate, setSelectedHeatmapDate] = useState<string | null>(null);
-  const [expandedActivityId, setExpandedActivityId] = useState<number | null>(null);
-  const [activityDetailsCache, setActivityDetailsCache] = useState<
-    Record<number, GarminActivityDetail>
-  >({});
-  const [loadingActivityId, setLoadingActivityId] = useState<number | null>(null);
-  const [activityDetailError, setActivityDetailError] = useState<string | null>(null);
-  const [liveVolumeByDate, setLiveVolumeByDate] = useState<Record<string, number>>({});
   const [confirmClearHistory, setConfirmClearHistory] = useState<boolean>(false);
+  const [isImportingGarminStrength, setIsImportingGarminStrength] = useState<boolean>(false);
+  const [garminImportNotice, setGarminImportNotice] = useState<string | null>(null);
+  const [garminImportError, setGarminImportError] = useState<string | null>(null);
 
   useEffect(() => {
     setMuscleBalance(analyzeWeeklyMuscleBalance());
-    const snap = loadGarminWellnessSnapshot();
-    if (snap?.recentActivities) {
-      setGarminActivities(snap.recentActivities);
-      const w = snap.weeklySportMinutes;
-      const cardioMins =
-        (w?.Running || 0) + (w?.Ciclismo || 0) + (w?.Natación || 0) + (w?.['Cardio / Otros'] || 0);
-      setGarminCardioMinutesWeek(Math.round(cardioMins));
-      setGarminReadiness(snap.readinessIndex);
-    }
-
-    // Fusionar sesiones registradas en Entreno en Vivo (localStorage)
-    const liveHistory = loadProgressionHistory();
-    const liveVol: Record<string, number> = {};
-    Object.values(liveHistory).forEach((rec) => {
-      if (rec.lastDate && rec.lastWeightKg > 0 && rec.lastReps > 0 && rec.lastSets > 0) {
-        const vol = rec.lastWeightKg * rec.lastReps * rec.lastSets;
-        liveVol[rec.lastDate] = (liveVol[rec.lastDate] || 0) + vol;
-      }
-    });
-    setLiveVolumeByDate(liveVol);
   }, []);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -199,80 +163,6 @@ export default function ProgressDashboard() {
     );
   }, [analytics.exercises, searchExercise]);
 
-  const garminCardioDates = useMemo(
-    () =>
-      garminActivities
-        .filter((a) => a.sportCategory !== 'Fuerza')
-        .map((a) => a.startTimeLocal.slice(0, 10))
-        .filter(Boolean),
-    [garminActivities]
-  );
-
-  const garminStrengthDates = useMemo(
-    () =>
-      garminActivities
-        .filter((a) => a.sportCategory === 'Fuerza')
-        .map((a) => a.startTimeLocal.slice(0, 10))
-        .filter(Boolean),
-    [garminActivities]
-  );
-
-  const handleGarminSynced = (snap: GarminWellnessSnapshot) => {
-    setGarminActivities(snap.recentActivities || []);
-    const w = snap.weeklySportMinutes;
-    const cardioMins =
-      (w?.Running || 0) + (w?.Ciclismo || 0) + (w?.Natación || 0) + (w?.['Cardio / Otros'] || 0);
-    setGarminCardioMinutesWeek(Math.round(cardioMins));
-    setGarminReadiness(snap.readinessIndex);
-  };
-
-  const handleToggleActivityDetail = async (act: GarminActivitySummary) => {
-    if (expandedActivityId === act.activityId) {
-      setExpandedActivityId(null);
-      return;
-    }
-
-    setExpandedActivityId(act.activityId);
-    setActivityDetailError(null);
-
-    if (activityDetailsCache[act.activityId]) {
-      return;
-    }
-
-    setLoadingActivityId(act.activityId);
-    try {
-      const rawTokens = localStorage.getItem('garmin_oauth_tokens');
-      const garminTokens = rawTokens ? JSON.parse(rawTokens) : null;
-
-      const res = await fetch('/api/garmin/activity-detail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          activityId: act.activityId,
-          sportCategory: act.sportCategory,
-          garminTokens,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'No se pudo cargar el detalle de la actividad.');
-      }
-
-      if (data.tokens) {
-        localStorage.setItem('garmin_oauth_tokens', JSON.stringify(data.tokens));
-      }
-
-      setActivityDetailsCache((prev) => ({
-        ...prev,
-        [act.activityId]: data.detail as GarminActivityDetail,
-      }));
-    } catch (err: any) {
-      setActivityDetailError(err?.message || 'Error al cargar el detalle desde Garmin.');
-    } finally {
-      setLoadingActivityId(null);
-    }
-  };
-
   const handleImportGarminStrength = async (logs: DbWorkoutLog[]) => {
     if (logs.length === 0) return { added: 0, total: 0 };
 
@@ -327,32 +217,47 @@ export default function ProgressDashboard() {
     return { added: newRows.length, total: logs.length };
   };
 
-  // Fusionar volumen de Hevy/Supabase con sesiones registradas en Entreno en Vivo
-  const mergedGlobalVolumeByDate = useMemo(() => {
-    const merged: Record<string, number> = { ...analytics.globalVolumeByDate };
-    for (const [date, vol] of Object.entries(liveVolumeByDate)) {
-      if (!merged[date]) {
-        merged[date] = vol;
+  const handleTriggerGarminStrengthImport = async () => {
+    setIsImportingGarminStrength(true);
+    setGarminImportNotice(null);
+    setGarminImportError(null);
+    try {
+      const rawTokens = localStorage.getItem('garmin_oauth_tokens');
+      const garminTokens = rawTokens ? JSON.parse(rawTokens) : null;
+
+      const res = await fetch('/api/garmin/strength-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ garminTokens }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'No se pudieron importar las sesiones de fuerza de Garmin.');
       }
+      if (data.tokens) {
+        localStorage.setItem('garmin_oauth_tokens', JSON.stringify(data.tokens));
+      }
+
+      const logs = Array.isArray(data.logs) ? (data.logs as DbWorkoutLog[]) : [];
+      if (logs.length === 0) {
+        setGarminImportNotice(
+          `Revisadas ${data.activitiesCount || 0} sesiones de fuerza en Garmin (sin series nuevas con repeticiones registradas).`
+        );
+        return;
+      }
+
+      const result = await handleImportGarminStrength(logs);
+      setGarminImportNotice(
+        result.added > 0
+          ? `Importadas ${result.added} series nuevas de ${data.activitiesCount} sesiones de Garmin.`
+          : `Todas las ${logs.length} series de tus ${data.activitiesCount} sesiones ya estaban guardadas.`
+      );
+    } catch (err: any) {
+      setGarminImportError(err?.message || 'Conecta primero tu cuenta de Garmin en la barra superior.');
+    } finally {
+      setIsImportingGarminStrength(false);
     }
-    return merged;
-  }, [analytics.globalVolumeByDate, liveVolumeByDate]);
-
-  // Tendencias globales (tonelaje semanal y mapa de consistencia 84 días)
-  const weeklyTonnage = useMemo(
-    () => computeWeeklyTonnageTrend(mergedGlobalVolumeByDate, 10),
-    [mergedGlobalVolumeByDate]
-  );
-
-  const consistency = useMemo(
-    () =>
-      computeConsistencyHeatmap(
-        mergedGlobalVolumeByDate,
-        garminCardioDates,
-        garminStrengthDates
-      ),
-    [mergedGlobalVolumeByDate, garminCardioDates, garminStrengthDates]
-  );
+  };
 
   // Cálculos para la gráfica SVG interactiva con filtro temporal y regresión lineal
   const chartData = useMemo(() => {
@@ -500,480 +405,57 @@ export default function ProgressDashboard() {
     );
   };
 
-  const renderGlobalTrendsSection = () => {
-    const maxWeekVol = Math.max(1, ...weeklyTonnage.map((w) => w.totalVolumeKg));
-    const latestWeek = weeklyTonnage[weeklyTonnage.length - 1];
-
-    return (
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-left">
-        {/* Tonelaje Semanal */}
-        <div className="bg-card rounded-2xl border border-border/60 p-5 shadow-sm space-y-4">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                <BarChart2 className="w-4 h-4 text-blue-600" />
-                <span>Tendencia de Tonelaje Semanal</span>
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Volumen total levantado por semana (últimas {weeklyTonnage.length || 0} semanas)
-              </p>
-            </div>
-            {latestWeek && (
-              <div className="text-right">
-                <div className="text-sm font-black text-foreground tabular-nums">
-                  {latestWeek.totalVolumeKg.toLocaleString('es-ES')} kg
-                </div>
-                {latestWeek.deltaPct !== null && (
-                  <div
-                    className={`text-[11px] font-bold tabular-nums ${
-                      latestWeek.deltaPct >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                    }`}
-                  >
-                    {latestWeek.deltaPct >= 0 ? '+' : ''}
-                    {latestWeek.deltaPct}% vs sem. ant.
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {weeklyTonnage.length > 0 ? (
-            <div className="h-36 flex items-end gap-1.5 pt-2">
-              {weeklyTonnage.map((w, idx) => {
-                const heightPct = Math.max(8, Math.round((w.totalVolumeKg / maxWeekVol) * 100));
-                const isLatest = idx === weeklyTonnage.length - 1;
-                return (
-                  <div
-                    key={w.weekKey}
-                    className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full group"
-                    title={`Semana ${w.label}: ${w.totalVolumeKg.toLocaleString('es-ES')} kg (${w.sessionsCount} sesiones)`}
-                  >
-                    <div className="w-full flex-1 flex items-end">
-                      <div
-                        className={`w-full rounded-t-md transition-all duration-300 ${
-                          isLatest
-                            ? 'bg-blue-600'
-                            : 'bg-blue-200 group-hover:bg-blue-400'
-                        }`}
-                        style={{ height: `${heightPct}%` }}
-                      />
-                    </div>
-                    <span className="text-[9px] text-muted-foreground font-medium truncate max-w-full">
-                      {w.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="h-36 flex items-center justify-center rounded-xl bg-muted/30 border border-dashed border-border text-xs text-muted-foreground">
-              Sube tu historial o completa sesiones para ver tu evolución semanal.
-            </div>
-          )}
-        </div>
-
-        {/* Consistencia 12 Semanas (Fuerza + Garmin) */}
-        <div className="bg-card rounded-2xl border border-border/60 p-5 shadow-sm space-y-4">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-emerald-600" />
-                <span>Consistencia (Últimos 84 días)</span>
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Fuerza + actividades multideporte de Garmin
-              </p>
-            </div>
-            <div className="flex items-center gap-3 text-right">
-              <div>
-                <div className="text-sm font-black text-foreground tabular-nums">
-                  {consistency.activeLast30Days}d
-                </div>
-                <div className="text-[10px] text-muted-foreground">últimos 30d</div>
-              </div>
-              <div>
-                <div className="text-sm font-black text-blue-600 tabular-nums">
-                  {consistency.avgSessionsPerWeek}/sem
-                </div>
-                <div className="text-[10px] text-muted-foreground">media 12s</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-semibold text-muted-foreground">
-              <span>L</span>
-              <span>M</span>
-              <span>X</span>
-              <span>J</span>
-              <span>V</span>
-              <span>S</span>
-              <span>D</span>
-            </div>
-            <div className="grid grid-cols-7 gap-1.5">
-              {consistency.days.map((day, idx) => {
-                if (!day) {
-                  return <div key={`pad-${idx}`} className="w-full h-5 sm:h-6 rounded-[4px]" />;
-                }
-                const isSelected = selectedHeatmapDate === day.date;
-                const colorClass =
-                  day.hasStrength && day.hasCardio
-                    ? 'bg-indigo-600'
-                    : day.hasStrength
-                    ? 'bg-blue-500'
-                    : day.hasCardio
-                    ? 'bg-emerald-500'
-                    : 'bg-muted';
-                return (
-                  <button
-                    type="button"
-                    key={day.date}
-                    onClick={() =>
-                      setSelectedHeatmapDate((prev) => (prev === day.date ? null : day.date))
-                    }
-                    aria-label={`Ver actividad del ${day.date}`}
-                    title={`${day.date}${day.hasStrength ? (day.strengthVolume > 0 ? ` · Fuerza: ${day.strengthVolume} kg` : ' · Fuerza (Garmin)') : ''}${day.hasCardio ? ' · Cardio (Garmin)' : ''}`}
-                    className={`w-full h-5 sm:h-6 rounded-[4px] ${colorClass} transition-transform hover:scale-110 ${
-                      isSelected ? 'ring-2 ring-blue-600 ring-offset-1 scale-105' : ''
-                    }`}
-                  />
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-[2px] bg-blue-500" /> Fuerza
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-[2px] bg-emerald-500" /> Cardio
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-[2px] bg-indigo-600" /> Doble sesión
-              </span>
-            </div>
-            <span>Izquierda → derecha (L–D) · Pulsa un día</span>
-          </div>
-
-          {selectedHeatmapDate && (() => {
-            const dayActs = garminActivities.filter(
-              (a) => a.startTimeLocal.slice(0, 10) === selectedHeatmapDate
-            );
-            const dayStrengthVol = Math.round(mergedGlobalVolumeByDate[selectedHeatmapDate] || 0);
-            const formattedDay = new Date(`${selectedHeatmapDate}T12:00:00Z`).toLocaleDateString(
-              'es-ES',
-              { weekday: 'long', day: 'numeric', month: 'short' }
-            );
-            return (
-              <div className="rounded-xl bg-muted/40 border border-border/60 p-3.5 space-y-2 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-foreground capitalize">
-                    {formattedDay}
-                  </span>
-                  {dayStrengthVol > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-bold tabular-nums">
-                      Fuerza: {dayStrengthVol.toLocaleString('es-ES')} kg
-                    </span>
-                  )}
-                </div>
-                {dayActs.length > 0 ? (
-                  <div className="space-y-2">
-                    {dayActs.map((act) => {
-                      const isExpanded = expandedActivityId === act.activityId;
-                      const detail = activityDetailsCache[act.activityId];
-                      const isLoadingThis = loadingActivityId === act.activityId;
-
-                      return (
-                        <div
-                          key={act.activityId}
-                          className="rounded-lg bg-card border border-border/60 overflow-hidden"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleToggleActivityDetail(act)}
-                            className="w-full min-h-[44px] px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-left text-xs hover:bg-muted/40 transition-colors"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span
-                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${
-                                  act.sportCategory === 'Fuerza'
-                                    ? 'bg-blue-50 text-blue-700'
-                                    : 'bg-emerald-50 text-emerald-700'
-                                }`}
-                              >
-                                {act.sportCategory}
-                              </span>
-                              <span className="font-semibold text-foreground truncate">
-                                {act.name}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
-                              <span>
-                                {act.durationMinutes} min
-                                {act.distanceKm > 0 ? ` · ${act.distanceKm} km` : ''}
-                                {act.calories > 0 ? ` · ${act.calories} kcal` : ''}
-                                {act.avgHr ? ` · ${act.avgHr} bpm` : ''}
-                              </span>
-                              <span className="text-[10px] font-bold text-blue-600">
-                                {isExpanded ? 'Ocultar' : 'Ver detalle'}
-                              </span>
-                            </div>
-                          </button>
-
-                          {isExpanded && (
-                            <div className="px-3 pb-3 pt-2 border-t border-border/50 bg-muted/20 space-y-3 text-xs">
-                              {isLoadingThis && (
-                                <div className="space-y-2">
-                                  <Skeleton className="h-4 w-3/4" />
-                                  <Skeleton className="h-12 w-full" />
-                                </div>
-                              )}
-
-                              {!isLoadingThis && activityDetailError && !detail && (
-                                <p className="text-rose-600 text-xs">{activityDetailError}</p>
-                              )}
-
-                              {!isLoadingThis && detail && (
-                                <>
-                                  {/* Métricas fisiológicas */}
-                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                    {detail.avgPaceMinKm && (
-                                      <div className="rounded-lg bg-card border border-border/50 p-2">
-                                        <div className="text-[10px] text-muted-foreground">Ritmo Medio</div>
-                                        <div className="font-bold text-foreground tabular-nums">
-                                          {detail.avgPaceMinKm}
-                                        </div>
-                                      </div>
-                                    )}
-                                    {!detail.avgPaceMinKm && detail.avgSpeedKmh && (
-                                      <div className="rounded-lg bg-card border border-border/50 p-2">
-                                        <div className="text-[10px] text-muted-foreground">Velocidad Media</div>
-                                        <div className="font-bold text-foreground tabular-nums">
-                                          {detail.avgSpeedKmh} km/h
-                                        </div>
-                                      </div>
-                                    )}
-                                    {(detail.avgHr || detail.maxHr) && (
-                                      <div className="rounded-lg bg-card border border-border/50 p-2">
-                                        <div className="text-[10px] text-muted-foreground">FC Media / Máx</div>
-                                        <div className="font-bold text-foreground tabular-nums">
-                                          {detail.avgHr ?? '—'} / {detail.maxHr ?? '—'} bpm
-                                        </div>
-                                      </div>
-                                    )}
-                                    {detail.elevationGainM !== undefined && detail.elevationGainM > 0 && (
-                                      <div className="rounded-lg bg-card border border-border/50 p-2">
-                                        <div className="text-[10px] text-muted-foreground">Desnivel +</div>
-                                        <div className="font-bold text-foreground tabular-nums">
-                                          {detail.elevationGainM} m
-                                        </div>
-                                      </div>
-                                    )}
-                                    {(detail.aerobicEffect !== undefined ||
-                                      detail.anaerobicEffect !== undefined) && (
-                                      <div className="rounded-lg bg-card border border-border/50 p-2">
-                                        <div className="text-[10px] text-muted-foreground">Training Effect</div>
-                                        <div className="font-bold text-foreground tabular-nums">
-                                          Aer {detail.aerobicEffect !== undefined ? detail.aerobicEffect.toFixed(1) : '—'} &middot; Ana {detail.anaerobicEffect !== undefined ? detail.anaerobicEffect.toFixed(1) : '—'}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Zonas de FC (Z1-Z5) */}
-                                  {detail.hrZones.length > 0 && (
-                                    <div className="space-y-1.5">
-                                      <div className="text-[11px] font-semibold text-muted-foreground">
-                                        Zonas de Frecuencia Cardíaca
-                                      </div>
-                                      <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-muted">
-                                        {detail.hrZones.map((z) => {
-                                          const zoneColors: Record<number, string> = {
-                                            1: 'bg-slate-400',
-                                            2: 'bg-blue-500',
-                                            3: 'bg-emerald-500',
-                                            4: 'bg-amber-500',
-                                            5: 'bg-rose-500',
-                                          };
-                                          return (
-                                            <div
-                                              key={z.zone}
-                                              style={{ width: `${z.pct}%` }}
-                                              className={zoneColors[z.zone] || 'bg-slate-400'}
-                                              title={`Z${z.zone}: ${Math.round(z.seconds / 60)} min (${z.pct}%)`}
-                                            />
-                                          );
-                                        })}
-                                      </div>
-                                      <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground tabular-nums">
-                                        {detail.hrZones.map((z) => (
-                                          <span key={z.zone}>
-                                            Z{z.zone}: {Math.round(z.seconds / 60)}m ({z.pct}%)
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Series de Fuerza */}
-                                  {detail.strengthExercises.length > 0 && (
-                                    <div className="space-y-1.5">
-                                      <div className="text-[11px] font-semibold text-muted-foreground">
-                                        Ejercicios y Series Registradas
-                                      </div>
-                                      <div className="space-y-1.5">
-                                        {detail.strengthExercises.map((ex, i) => (
-                                          <div
-                                            key={i}
-                                            className="rounded-lg bg-card border border-border/50 p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5"
-                                          >
-                                            <span className="font-semibold text-foreground">
-                                              {ex.name}
-                                            </span>
-                                            <div className="flex flex-wrap gap-1.5 tabular-nums">
-                                              {ex.sets.map((s) => (
-                                                <span
-                                                  key={s.setIndex}
-                                                  className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-semibold"
-                                                >
-                                                  {s.weightKg} kg &times; {s.reps}
-                                                </span>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Parciales / Vueltas */}
-                                  {detail.splits.length > 0 && (
-                                    <div className="space-y-1.5">
-                                      <div className="text-[11px] font-semibold text-muted-foreground">
-                                        Parciales / Vueltas ({detail.splits.length})
-                                      </div>
-                                      <div className="overflow-x-auto rounded-lg border border-border/50 bg-card">
-                                        <table className="w-full text-[11px] text-left tabular-nums">
-                                          <thead className="bg-muted/40 text-muted-foreground">
-                                            <tr>
-                                              <th className="px-2.5 py-1.5">Vuelta</th>
-                                              <th className="px-2.5 py-1.5">Dist.</th>
-                                              <th className="px-2.5 py-1.5">Tiempo</th>
-                                              {detail.splits.some((s) => s.paceMinKm) && (
-                                                <th className="px-2.5 py-1.5">Ritmo</th>
-                                              )}
-                                              <th className="px-2.5 py-1.5">FC</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody className="divide-y divide-border/40">
-                                            {detail.splits.map((sp) => (
-                                              <tr key={sp.lap}>
-                                                <td className="px-2.5 py-1.5 font-semibold">#{sp.lap}</td>
-                                                <td className="px-2.5 py-1.5">{sp.distanceKm} km</td>
-                                                <td className="px-2.5 py-1.5">{sp.durationMin} min</td>
-                                                {detail.splits.some((s) => s.paceMinKm) && (
-                                                  <td className="px-2.5 py-1.5">{sp.paceMinKm || '—'}</td>
-                                                )}
-                                                <td className="px-2.5 py-1.5">{sp.avgHr ? `${sp.avgHr} bpm` : '—'}</td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  dayStrengthVol === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Sin actividades registradas este día.
-                    </p>
-                  )
-                )}
-              </div>
-            );
-          })()}
-        </div>
-
-        {/* Comparativa Semanal de Carga: Fuerza + Garmin Cardio */}
-        {(latestWeek || garminCardioMinutesWeek > 0) && (
-          <div className="lg:col-span-2 bg-card rounded-2xl border border-border/60 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Flame className="w-4 h-4 text-orange-500" />
-                <span>Carga Global Semanal (Fuerza + Garmin Cardio)</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {latestWeek && latestWeek.deltaPct !== null && latestWeek.deltaPct > 15 && garminCardioMinutesWeek > 180
-                  ? 'Alerta de fatiga combinada: subida fuerte de tonelaje junto a alto volumen de cardio esta semana. Valora priorizar sueño o modo Descarga.'
-                  : garminReadiness !== null && garminReadiness < 45
-                  ? `Readiness Garmin bajo (${garminReadiness}/100): conviene moderar la carga combinada hoy.`
-                  : 'Equilibrio saludable entre carga de fuerza semanal y actividad cardiovascular registrada.'}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 shrink-0 tabular-nums">
-              <span className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold">
-                Fuerza: {latestWeek ? `${latestWeek.totalVolumeKg.toLocaleString('es-ES')} kg` : '0 kg'}
-              </span>
-              <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
-                Cardio Garmin: {garminCardioMinutesWeek} min/sem
-              </span>
-            </div>
-          </div>
-        )}
-      </section>
-    );
-  };
-
   if (!csvRaw || analytics.exercises.length === 0) {
     return (
       <div className="space-y-6">
-        <GarminWellnessCard
-        onSynced={handleGarminSynced}
-        onImportStrengthLogs={handleImportGarminStrength}
-      />
-        <PeriodSummarySection
-          globalVolumeByDate={mergedGlobalVolumeByDate}
-          garminActivities={garminActivities}
-          exerciseStatsMap={analytics.exerciseStatsMap}
-          targetWeeklyDays={Object.keys(loadWeeklyPlan()).length || 4}
-          isLoading={isCloudSyncing}
-        />
-        {renderGlobalTrendsSection()}
         {renderMuscleBalanceCard()}
         <div className="bg-card rounded-2xl border border-border/80 p-8 sm:p-12 text-center saas-card max-w-xl mx-auto my-4 animate-in fade-in duration-150">
         <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-5 border border-blue-100 shadow-xs">
           <TrendingUp className="w-8 h-8" />
         </div>
-        <h3 className="text-lg font-bold text-slate-900 mb-2">
-          Sin datos de entrenamientos aún
+        <h3 className="text-lg font-bold text-foreground mb-2">
+          Sin historial por ejercicio cargado
         </h3>
-        <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-          Para ver tus gráficos de evolución, cargas máximas, 1RM estimado y volumen por ejercicio, sube tu archivo exportado de Hevy.
+        <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+          Para analizar cargas máximas, 1RM estimado, alertas de estancamiento y series históricas por ejercicio, sube tu CSV de Hevy o importa tus sesiones de fuerza desde Garmin.
         </p>
 
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-md shadow-blue-500/20 transition-all active:scale-[0.98] min-h-[44px]"
-        >
-          <Upload className="w-4 h-4" />
-          <span>Subir workouts.csv de Hevy</span>
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-md shadow-blue-500/20 transition-all active:scale-[0.98] min-h-[44px]"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Subir workouts.csv de Hevy</span>
+          </button>
 
-        <div className="mt-8 pt-6 border-t border-slate-100 text-left">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+          <button
+            type="button"
+            onClick={handleTriggerGarminStrengthImport}
+            disabled={isImportingGarminStrength}
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-md shadow-emerald-500/20 transition-all active:scale-[0.98] min-h-[44px] disabled:opacity-60"
+          >
+            <Download className={`w-4 h-4 ${isImportingGarminStrength ? 'animate-pulse' : ''}`} />
+            <span>{isImportingGarminStrength ? 'Importando...' : 'Importar Fuerza Garmin'}</span>
+          </button>
+        </div>
+
+        {garminImportNotice && (
+          <div className="mt-4 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
+            {garminImportNotice}
+          </div>
+        )}
+        {garminImportError && (
+          <div className="mt-4 rounded-xl bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700">
+            {garminImportError}
+          </div>
+        )}
+
+        <div className="mt-8 pt-6 border-t border-border/60 text-left">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
             ¿Cómo exportar desde Hevy?
           </h4>
-          <ol className="text-xs text-slate-500 space-y-1.5 list-decimal list-inside">
+          <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
             <li>Abre Hevy en tu móvil y entra en tu <strong>Perfil</strong>.</li>
             <li>Toca en <strong>Ajustes</strong> (icono de engranaje).</li>
             <li>Baja hasta <strong>Exportar datos</strong> y descarga el archivo CSV.</li>
@@ -994,89 +476,99 @@ export default function ProgressDashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
-      <GarminWellnessCard
-        onSynced={handleGarminSynced}
-        onImportStrengthLogs={handleImportGarminStrength}
-      />
-      <PeriodSummarySection
-        globalVolumeByDate={mergedGlobalVolumeByDate}
-        garminActivities={garminActivities}
-        exerciseStatsMap={analytics.exerciseStatsMap}
-        targetWeeklyDays={Object.keys(loadWeeklyPlan()).length || 4}
-        isLoading={isCloudSyncing}
-      />
-      {renderGlobalTrendsSection()}
       {renderMuscleBalanceCard()}
       {/* Barra de Origen de Datos */}
-      <div className="bg-card rounded-xl border border-border/80 p-4 saas-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-            <BarChart2 className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-slate-900 flex items-center gap-2">
-              <span>Origen de Datos:</span>
-              {hasCloudSource ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <Cloud className="w-3 h-3 text-emerald-600" />
-                  Supabase Cloud
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                  Historial Local (Hevy)
-                </span>
-              )}
+      <div className="bg-card rounded-xl border border-border/80 p-4 saas-card space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+              <BarChart2 className="w-4 h-4" />
             </div>
-            <p className="text-[11px] text-slate-500">
-              {analytics.exercises.length} ejercicios detectados en tu historial.
-              {isCloudSyncing && ' (Sincronizando con Supabase...)'}
-            </p>
+            <div>
+              <div className="text-xs font-semibold text-foreground flex flex-wrap items-center gap-2">
+                <span>Origen de Datos:</span>
+                {hasCloudSource ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <Cloud className="w-3 h-3 text-emerald-600" />
+                    Supabase Cloud
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                    Historial Local (Hevy)
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {analytics.exercises.length} ejercicios detectados en tu historial.
+                {isCloudSyncing && ' (Sincronizando con Supabase...)'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleTriggerGarminStrengthImport}
+              disabled={isImportingGarminStrength}
+              className="saas-btn min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs disabled:opacity-60"
+            >
+              <Watch className={`w-3.5 h-3.5 ${isImportingGarminStrength ? 'animate-pulse' : ''}`} />
+              <span>{isImportingGarminStrength ? 'Importando...' : 'Importar Fuerza Garmin'}</span>
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="saas-btn min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Actualizar workouts.csv</span>
+            </button>
+            {confirmClearHistory ? (
+              <div className="inline-flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleClearHistory}
+                  className="min-h-[40px] px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold"
+                >
+                  Confirmar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearHistory(false)}
+                  className="min-h-[40px] px-2.5 py-1 rounded-lg bg-muted hover:bg-accent text-foreground text-xs font-medium border border-border/80"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmClearHistory(true)}
+                title="Borrar historial guardado"
+                className="min-h-[40px] min-w-[40px] flex items-center justify-center text-muted-foreground hover:text-rose-600 rounded-lg border border-border/80 hover:bg-rose-500/10 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".csv,text/csv"
+              className="hidden"
+            />
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="saas-btn min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Actualizar workouts.csv</span>
-          </button>
-          {confirmClearHistory ? (
-            <div className="inline-flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={handleClearHistory}
-                className="min-h-[38px] px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold"
-              >
-                Confirmar
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmClearHistory(false)}
-                className="min-h-[38px] px-2.5 py-1 rounded-lg bg-muted hover:bg-accent text-foreground text-xs font-medium border border-border/80"
-              >
-                Cancelar
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmClearHistory(true)}
-              title="Borrar historial guardado"
-              className="min-h-[38px] min-w-[38px] flex items-center justify-center text-muted-foreground hover:text-rose-600 rounded-lg border border-border/80 hover:bg-rose-500/10 transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            accept=".csv,text/csv"
-            className="hidden"
-          />
-        </div>
+        {garminImportNotice && (
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
+            {garminImportNotice}
+          </div>
+        )}
+        {garminImportError && (
+          <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700">
+            {garminImportError}
+          </div>
+        )}
       </div>
 
       {/* Selector de Ejercicio y Métrica */}

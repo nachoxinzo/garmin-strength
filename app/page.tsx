@@ -50,7 +50,8 @@ import {
   Menu,
   StickyNote,
   AlertTriangle,
-  BookOpen
+  BookOpen,
+  LayoutDashboard
 } from 'lucide-react';
 import { InteractiveGuideModal, GuideTargetAction } from '@/components/InteractiveGuideModal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -79,6 +80,7 @@ import { StrengthRoutine, WorkoutExerciseBlock, GarminAccountStatus } from '@/li
 import { parseHevyCSV, ParsedHevyWorkout } from '@/lib/hevy-csv-parser';
 import { encodeRoutineToShareUrl } from '@/lib/share-utils';
 import ProgressDashboard from '@/components/ProgressDashboard';
+import { SummaryTab } from '@/components/SummaryTab';
 import SocialDashboard from '@/components/SocialDashboard';
 import { GymExerciseGuide } from '@/components/GymExerciseGuide';
 import { Exercise3DModal } from '@/components/Exercise3DModal';
@@ -105,7 +107,8 @@ const DEFAULT_ROUTINE: StrengthRoutine = {
 };
 
 export default function WorkoutStudioPage() {
-  const [currentMainTab, setCurrentMainTab] = useState<'studio' | 'live' | 'guide' | 'progress' | 'social'>('studio');
+  const [currentMainTab, setCurrentMainTab] = useState<'summary' | 'studio' | 'live' | 'progress' | 'social'>('studio');
+  const [studioSubTab, setStudioSubTab] = useState<'editor' | 'guide'>('editor');
   const [routine, setRoutine] = useState<StrengthRoutine>(DEFAULT_ROUTINE);
   const [accountStatus, setAccountStatus] = useState<GarminAccountStatus | null>(null);
   const [garminTokens, setGarminTokens] = useState<any>(null);
@@ -1195,21 +1198,32 @@ export default function WorkoutStudioPage() {
         <div className="max-w-5xl mx-auto px-2 sm:px-6 py-2 flex items-center justify-between gap-3">
           <nav className="grid grid-cols-5 sm:inline-flex items-center gap-1 p-1 rounded-xl bg-muted/80 border border-border/70 w-full sm:w-auto overflow-x-auto no-scrollbar">
             <button
+              onClick={() => setCurrentMainTab('summary')}
+              className={`saas-btn min-h-[42px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
+                currentMainTab === 'summary'
+                  ? 'bg-card text-foreground shadow-xs border border-border/80'
+                  : 'text-muted-foreground hover:text-foreground border border-transparent'
+              }`}
+            >
+              <LayoutDashboard className={`w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 ${currentMainTab === 'summary' ? 'text-blue-600' : ''}`} />
+              <span>Resumen</span>
+            </button>
+
+            <button
               onClick={() => setCurrentMainTab('studio')}
-              className={`saas-btn min-h-[40px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
+              className={`saas-btn min-h-[42px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
                 currentMainTab === 'studio'
                   ? 'bg-card text-foreground shadow-xs border border-border/80'
                   : 'text-muted-foreground hover:text-foreground border border-transparent'
               }`}
             >
               <Dumbbell className={`w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 ${currentMainTab === 'studio' ? 'text-blue-600' : ''}`} />
-              <span className="sm:hidden">Rutina</span>
-              <span className="hidden sm:inline">Diseñador</span>
+              <span>Rutinas</span>
             </button>
 
             <button
               onClick={() => setCurrentMainTab('live')}
-              className={`saas-btn min-h-[40px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
+              className={`saas-btn min-h-[42px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
                 currentMainTab === 'live'
                   ? 'bg-card text-foreground shadow-xs border border-border/80'
                   : 'text-muted-foreground hover:text-foreground border border-transparent'
@@ -1221,37 +1235,21 @@ export default function WorkoutStudioPage() {
             </button>
 
             <button
-              onClick={() => setCurrentMainTab('guide')}
-              className={`saas-btn min-h-[40px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
-                currentMainTab === 'guide'
-                  ? 'bg-card text-foreground shadow-xs border border-border/80'
-                  : 'text-muted-foreground hover:text-foreground border border-transparent'
-              }`}
-            >
-              <Award className={`w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 ${currentMainTab === 'guide' ? 'text-amber-600' : ''}`} />
-              <span className="sm:hidden">Top Gym</span>
-              <span className="hidden sm:inline">Top Gimnasio</span>
-              <span className="hidden lg:inline-block px-1.5 py-0.2 text-[10px] font-bold rounded-md bg-amber-500/15 text-amber-800">
-                S-Tier
-              </span>
-            </button>
-
-            <button
               onClick={() => setCurrentMainTab('progress')}
-              className={`saas-btn min-h-[40px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
+              className={`saas-btn min-h-[42px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
                 currentMainTab === 'progress'
                   ? 'bg-card text-foreground shadow-xs border border-border/80'
                   : 'text-muted-foreground hover:text-foreground border border-transparent'
               }`}
             >
               <TrendingUp className={`w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 ${currentMainTab === 'progress' ? 'text-blue-600' : ''}`} />
-              <span className="sm:hidden">Métricas</span>
-              <span className="hidden sm:inline">Progreso &amp; Métricas</span>
+              <span className="sm:hidden">Ejercicios</span>
+              <span className="hidden sm:inline">Ejercicios &amp; Datos</span>
             </button>
 
             <button
               onClick={() => setCurrentMainTab('social')}
-              className={`saas-btn min-h-[40px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
+              className={`saas-btn min-h-[42px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
                 currentMainTab === 'social'
                   ? 'bg-card text-foreground shadow-xs border border-border/80'
                   : 'text-muted-foreground hover:text-foreground border border-transparent'
@@ -1299,7 +1297,9 @@ export default function WorkoutStudioPage() {
           </div>
         )}
 
-        {currentMainTab === 'live' ? (
+        {currentMainTab === 'summary' ? (
+          <SummaryTab onNavigateToLive={() => setCurrentMainTab('live')} />
+        ) : currentMainTab === 'live' ? (
           <LiveTrackerTab
             routine={routine}
             onOpenCatalog={() => {
@@ -1312,17 +1312,75 @@ export default function WorkoutStudioPage() {
             }}
             onApplyNextProgression={() => handleApplyProgressiveOverload('optimal')}
           />
-        ) : currentMainTab === 'guide' ? (
-          <GymExerciseGuide
-            onAddToRoutine={handleAddExpertExercise}
-            currentRoutineExerciseIds={routine.blocks.map(b => b.exercise.id)}
-          />
         ) : currentMainTab === 'progress' ? (
           <ProgressDashboard />
         ) : currentMainTab === 'social' ? (
           <SocialDashboard onOpenAuth={() => setIsAuthModalOpen(true)} />
         ) : (
-          <>
+          <div className="space-y-6">
+            {/* Sub-navegación de Rutinas: Diseñador vs Top Gimnasio */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div
+                role="tablist"
+                aria-label="Herramientas de rutina"
+                className="inline-flex items-center gap-1 p-1 rounded-xl bg-muted/80 border border-border/70 w-full sm:w-auto"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={studioSubTab === 'editor'}
+                  onClick={() => setStudioSubTab('editor')}
+                  className={`saas-btn min-h-[40px] flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    studioSubTab === 'editor'
+                      ? 'bg-card text-foreground shadow-xs border border-border/80'
+                      : 'text-muted-foreground hover:text-foreground border border-transparent'
+                  }`}
+                >
+                  <Dumbbell className={`w-3.5 h-3.5 ${studioSubTab === 'editor' ? 'text-blue-600' : ''}`} />
+                  <span>Mi Rutina</span>
+                  {routine.blocks.length > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-md bg-blue-500/15 text-blue-700 dark:text-blue-300 text-[10px] font-bold tabular-nums">
+                      {routine.blocks.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={studioSubTab === 'guide'}
+                  onClick={() => setStudioSubTab('guide')}
+                  className={`saas-btn min-h-[40px] flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    studioSubTab === 'guide'
+                      ? 'bg-card text-foreground shadow-xs border border-border/80'
+                      : 'text-muted-foreground hover:text-foreground border border-transparent'
+                  }`}
+                >
+                  <Award className={`w-3.5 h-3.5 ${studioSubTab === 'guide' ? 'text-amber-600' : ''}`} />
+                  <span>Top Gimnasio</span>
+                  <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-md bg-amber-500/15 text-amber-800 dark:text-amber-300">
+                    S-Tier
+                  </span>
+                </button>
+              </div>
+              {studioSubTab === 'guide' && (
+                <button
+                  type="button"
+                  onClick={() => setStudioSubTab('editor')}
+                  className="saas-btn min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs"
+                >
+                  <span>Volver a Mi Rutina ({routine.blocks.length})</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {studioSubTab === 'guide' ? (
+              <GymExerciseGuide
+                onAddToRoutine={handleAddExpertExercise}
+                currentRoutineExerciseIds={routine.blocks.map(b => b.exercise.id)}
+              />
+            ) : (
+              <>
 
         {/* Panel Superior Ejecutivo: Título de Rutina, Métricas y Acciones Rápidas */}
         <section className="bg-card rounded-xl border border-border/80 p-5 sm:p-7 saas-card">
@@ -1689,7 +1747,7 @@ export default function WorkoutStudioPage() {
                   <span>Importar desde Hevy</span>
                 </button>
                 <button
-                  onClick={() => setCurrentMainTab('guide')}
+                  onClick={() => setStudioSubTab('guide')}
                   className="saas-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-800 text-xs font-semibold hover:bg-amber-100 shadow-xs"
                 >
                   <Award className="w-4 h-4" />
@@ -2177,7 +2235,9 @@ export default function WorkoutStudioPage() {
             </div>
           </div>
         </div>
-          </>
+              </>
+            )}
+          </div>
         )}
       </main>
 
@@ -2918,8 +2978,10 @@ export default function WorkoutStudioPage() {
         isOpen={isGuideModalOpen}
         onClose={() => setIsGuideModalOpen(false)}
         onNavigate={(target: GuideTargetAction) => {
-          if (target === 'builder') setCurrentMainTab('studio');
-          else if (target === 'live') setCurrentMainTab('live');
+          if (target === 'builder') {
+            setCurrentMainTab('studio');
+            setStudioSubTab('editor');
+          } else if (target === 'live') setCurrentMainTab('live');
           else if (target === 'progress') setCurrentMainTab('progress');
           else if (target === 'social') setCurrentMainTab('social');
           else if (target === 'generator') {
