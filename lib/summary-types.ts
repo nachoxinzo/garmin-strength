@@ -91,10 +91,11 @@ export interface StrengthDaySession {
   id: string;
   date: string;
   workoutTitle: string;
-  source: 'supabase_hevy' | 'live_tracker';
+  source: 'supabase_hevy' | 'live_tracker' | 'garmin_import';
   totalVolumeKg: number;
   totalSets: number;
   exercises: StrengthDayExerciseDetail[];
+  linkedGarminActivity?: GarminActivitySummary;
 }
 
 export interface DaySessionsBundle {

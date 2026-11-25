@@ -32,6 +32,7 @@ import {
   parseCsvToDbLogs,
   syncWorkoutLogsToSupabase,
 } from '@/lib/supabase';
+import { stripGarminImportedRowsForDate } from '@/lib/strength-sync-merger';
 import {
   EffortRating,
   ExerciseProgressRecord,
@@ -540,9 +541,12 @@ export function LiveTrackerTab({
     }
 
     // Volcar series efectivas realizadas al historial de gráficas (CSV local + Supabase sin duplicados)
+    // Si ya había series auto-importadas de Garmin ese mismo día, la App tiene prioridad en pesos y series
     if (completedLogsToPersist.length > 0 && typeof window !== 'undefined') {
       try {
-        const currentCsv = localStorage.getItem('hevy_raw_csv_cache') || '';
+        const workoutDate = completedLogsToPersist[0].performed_at.slice(0, 10);
+        const rawCsv = localStorage.getItem('hevy_raw_csv_cache') || '';
+        const currentCsv = stripGarminImportedRowsForDate(rawCsv, workoutDate);
         const existingParsed = currentCsv ? parseCsvToDbLogs(currentCsv) : [];
         const seen = new Set(
           existingParsed.map(

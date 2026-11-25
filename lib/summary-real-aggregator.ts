@@ -1,7 +1,10 @@
 import { EXERCISE_CATALOG } from './exercise-catalog';
 import { calculateEstimated1RM } from './progress-analyzer';
 import { ExerciseProgressRecord } from './progressive-overload-engine';
-import { parseCsvToDbLogs } from './supabase';
+import {
+  GARMIN_IMPORT_MARKER,
+  parseCsvRow,
+} from './strength-sync-merger';
 import {
   BodyWeightSummary,
   CalendarActivityDay,
@@ -77,7 +80,7 @@ function addDays(date: Date, days: number): Date {
 
 function getMondayOfWeek(date: Date): Date {
   const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0);
-  const jsDay = copy.getDay(); // 0=Sun..6=Sat
+  const jsDay = copy.getDay();
   const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
   copy.setDate(copy.getDate() + mondayOffset);
   return copy;
@@ -116,23 +119,60 @@ function resolveMuscleGroup(exerciseTitle: string): string {
   );
   if (partial) return partial.muscleGroup;
 
-  if (lower.includes('sentadilla') || lower.includes('squat') || lower.includes('prensa') || lower.includes('zancada') || lower.includes('femoral') || lower.includes('cuádriceps') || lower.includes('gemelo')) {
-    return 'Pierna';
+  if (
+    lower.includes('sentadilla') ||
+    lower.includes('squat') ||
+    lower.includes('prensa') ||
+    lower.includes('zancada') ||
+    lower.includes('femoral') ||
+    lower.includes('cuádriceps') ||
+    lower.includes('gemelo') ||
+    lower.includes('split')
+  ) {
+    return 'Piernas';
   }
-  if (lower.includes('banca') || lower.includes('bench') || lower.includes('pecho') || lower.includes('aperturas') || lower.includes('fondos')) {
+  if (
+    lower.includes('banca') ||
+    lower.includes('bench') ||
+    lower.includes('pecho') ||
+    lower.includes('aperturas') ||
+    lower.includes('fly') ||
+    lower.includes('fondos')
+  ) {
     return 'Pecho';
   }
-  if (lower.includes('remo') || lower.includes('row') || lower.includes('jalón') || lower.includes('dominada') || lower.includes('pull')) {
+  if (
+    lower.includes('remo') ||
+    lower.includes('row') ||
+    lower.includes('jalón') ||
+    lower.includes('dominada') ||
+    lower.includes('pull')
+  ) {
     return 'Espalda';
   }
-  if (lower.includes('peso muerto') || lower.includes('deadlift') || lower.includes('hip thrust')) {
-    return 'Isquios / Glúteo';
+  if (
+    lower.includes('peso muerto') ||
+    lower.includes('deadlift') ||
+    lower.includes('hip thrust')
+  ) {
+    return 'Piernas';
   }
-  if (lower.includes('militar') || lower.includes('hombro') || lower.includes('lateral') || lower.includes('face pull')) {
-    return 'Hombro';
+  if (
+    lower.includes('militar') ||
+    lower.includes('hombro') ||
+    lower.includes('lateral') ||
+    lower.includes('shoulder') ||
+    lower.includes('ohp') ||
+    lower.includes('face pull') ||
+    lower.includes('rotation')
+  ) {
+    return 'Hombros';
   }
   if (lower.includes('bíceps') || lower.includes('curl') || lower.includes('tríceps')) {
     return 'Brazos';
+  }
+  if (lower.includes('crunch') || lower.includes('plancha') || lower.includes('elevación de piernas')) {
+    return 'Core';
   }
   return 'General';
 }
@@ -180,55 +220,125 @@ function computeHrZonesFromActivities(activities: GarminActivitySummary[]): Hear
   });
 }
 
+interface ParsedCsvSetRow {
+  date: string;
+  workoutTitle: string;
+  exerciseTitle: string;
+  weightKg: number;
+  reps: number;
+  rpe?: number;
+  isGarminImport: boolean;
+}
+
 function buildStrengthSessionsByDate(
   csvRaw: string,
   liveHistory: Record<string, ExerciseProgressRecord>,
   todayIso: string
 ): Record<string, StrengthDaySession[]> {
+  const rowsByDate = new Map<string, ParsedCsvSetRow[]>();
+  const appAuthoritativeDates = new Set<string>();
+
+  if (csvRaw && csvRaw.trim().length > 0) {
+    const lines = csvRaw.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length >= 2) {
+      const headers = parseCsvRow(lines[0]).map((h) => h.trim().toLowerCase());
+      const titleIdx = headers.indexOf('title');
+      const startTimeIdx = headers.indexOf('start_time');
+      const exIdx = headers.indexOf('exercise_title');
+      const notesIdx = headers.indexOf('exercise_notes');
+      const weightIdx = headers.indexOf('weight_kg');
+      const repsIdx = headers.indexOf('reps');
+      const rpeIdx = headers.indexOf('rpe');
+
+      if (exIdx !== -1) {
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCsvRow(lines[i]);
+          const exerciseTitle = cols[exIdx]?.trim();
+          if (!exerciseTitle) continue;
+
+          const date = startTimeIdx !== -1 ? String(cols[startTimeIdx] || '').trim().slice(0, 10) : '';
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayIso) continue;
+
+          const reps = repsIdx !== -1 ? Math.max(0, parseInt(cols[repsIdx], 10) || 0) : 0;
+          if (reps <= 0) continue;
+
+          const weightKg = weightIdx !== -1 ? Math.max(0, parseFloat(cols[weightIdx]) || 0) : 0;
+          const rpeRaw = rpeIdx !== -1 ? parseFloat(cols[rpeIdx]) : NaN;
+          const rpe = !isNaN(rpeRaw) && rpeRaw > 0 ? rpeRaw : undefined;
+          const workoutTitle =
+            titleIdx !== -1 ? cols[titleIdx]?.trim() || 'Entrenamiento' : 'Entrenamiento';
+          const notes = notesIdx !== -1 ? String(cols[notesIdx] || '').trim().toLowerCase() : '';
+          const isGarminImport = notes === GARMIN_IMPORT_MARKER;
+
+          if (!isGarminImport) {
+            appAuthoritativeDates.add(date);
+          }
+
+          const arr = rowsByDate.get(date) || [];
+          arr.push({
+            date,
+            workoutTitle,
+            exerciseTitle,
+            weightKg,
+            reps,
+            rpe,
+            isGarminImport,
+          });
+          rowsByDate.set(date, arr);
+        }
+      }
+    }
+  }
+
+  for (const rec of Object.values(liveHistory)) {
+    const date = String(rec.lastDate || '').slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date) && date <= todayIso && rec.lastReps > 0 && rec.lastSets > 0) {
+      appAuthoritativeDates.add(date);
+    }
+  }
+
   const byDateAndTitle = new Map<
     string,
     {
       date: string;
       workoutTitle: string;
-      source: 'supabase_hevy' | 'live_tracker';
+      source: 'supabase_hevy' | 'live_tracker' | 'garmin_import';
       exercises: Map<string, { weightKg: number; reps: number; setIndex: number; rpe?: number }[]>;
     }
   >();
 
   const existingExerciseOnDate = new Set<string>();
 
-  if (csvRaw && csvRaw.trim().length > 0) {
-    const dbLogs = parseCsvToDbLogs(csvRaw);
-    for (const row of dbLogs) {
-      const date = String(row.performed_at || '').slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayIso) continue;
-      if (row.reps <= 0) continue;
+  rowsByDate.forEach((rows, date) => {
+    const hasAppSets = appAuthoritativeDates.has(date);
 
-      const title = (row.workout_title || 'Sesión de Fuerza').trim();
-      const sessionKey = `${date}||${title}`;
+    for (const row of rows) {
+      // Regla de prioridad: si ese día hay fuerza registrada en la App, omitir series auto-importadas de Garmin
+      if (hasAppSets && row.isGarminImport) continue;
+
+      const sessionKey = `${date}||${row.workoutTitle}`;
       let session = byDateAndTitle.get(sessionKey);
       if (!session) {
         session = {
           date,
-          workoutTitle: title,
-          source: 'supabase_hevy',
+          workoutTitle: row.workoutTitle,
+          source: row.isGarminImport ? 'garmin_import' : 'supabase_hevy',
           exercises: new Map(),
         };
         byDateAndTitle.set(sessionKey, session);
       }
 
-      const exTitle = row.exercise_title.trim();
-      const list = session.exercises.get(exTitle) || [];
+      const list = session.exercises.get(row.exerciseTitle) || [];
       list.push({
         setIndex: list.length + 1,
-        weightKg: Number(row.weight_kg) || 0,
-        reps: Number(row.reps) || 0,
+        weightKg: row.weightKg,
+        reps: row.reps,
         rpe: row.rpe,
       });
-      session.exercises.set(exTitle, list);
-      existingExerciseOnDate.add(`${date}||${exTitle.toLowerCase()}`);
+      session.exercises.set(row.exerciseTitle, list);
+      existingExerciseOnDate.add(`${date}||${row.exerciseTitle.toLowerCase()}`);
     }
-  }
+  });
 
   // Combinar registros realizados en Entreno en Vivo que aún no estén en CSV/Supabase
   for (const rec of Object.values(liveHistory)) {
@@ -305,9 +415,10 @@ function buildDayActivitySummary(
   dayNumber: number,
   shortWeekday: string,
   isFuture: boolean,
-  bundle?: DaySessionsBundle
+  bundle?: DaySessionsBundle,
+  allGarminActsForDay: GarminActivitySummary[] = []
 ): CalendarActivityDay {
-  if (isFuture || !bundle) {
+  if (isFuture || (!bundle && allGarminActsForDay.length === 0)) {
     return {
       date,
       dayNumber,
@@ -321,23 +432,25 @@ function buildDayActivitySummary(
     };
   }
 
-  const strengthSessions = bundle.strengthSessions;
-  const garminActs = bundle.garminActivities;
+  const strengthSessions = bundle?.strengthSessions || [];
+  const remainingGarminActs = bundle?.garminActivities || [];
 
   const strengthVolumeKg = Math.round(
     strengthSessions.reduce((acc, s) => acc + s.totalVolumeKg, 0)
   );
   const garminMinutes = Math.round(
-    garminActs.reduce((acc, a) => acc + (a.durationMinutes || 0), 0)
+    allGarminActsForDay.reduce((acc, a) => acc + (a.durationMinutes || 0), 0)
   );
   const garminDistanceKm =
-    Math.round(garminActs.reduce((acc, a) => acc + (a.distanceKm || 0), 0) * 100) / 100;
+    Math.round(
+      allGarminActsForDay.reduce((acc, a) => acc + (a.distanceKm || 0), 0) * 100
+    ) / 100;
 
-  const hasAppStrength = strengthSessions.length > 0;
-  const hasGarminStrength = garminActs.some((a) => a.sportCategory === 'Fuerza');
-  const hasGarminCardio = garminActs.some((a) => a.sportCategory !== 'Fuerza');
+  const hasStrength =
+    strengthSessions.length > 0 ||
+    allGarminActsForDay.some((a) => a.sportCategory === 'Fuerza');
+  const hasGarminCardio = allGarminActsForDay.some((a) => a.sportCategory !== 'Fuerza');
 
-  const hasStrength = hasAppStrength || hasGarminStrength;
   const type =
     hasStrength && hasGarminCardio
       ? 'both'
@@ -347,10 +460,10 @@ function buildDayActivitySummary(
       ? 'garmin'
       : 'none';
 
-  // Sesiones totales del día (evitar contar doble si la misma sesión de fuerza está en Garmin y App? las listamos todas, y el conteo refleja sesiones registradas)
-  const sessionsCount = strengthSessions.length + garminActs.length;
+  // Conteo unificado: sesiones de fuerza (ya emparejadas con su actividad Garmin si aplica) + resto de Garmin
+  const sessionsCount = strengthSessions.length + remainingGarminActs.length;
   const topActivityLabel =
-    strengthSessions[0]?.workoutTitle || garminActs[0]?.name || undefined;
+    strengthSessions[0]?.workoutTitle || allGarminActsForDay[0]?.name || undefined;
 
   return {
     date,
@@ -399,7 +512,11 @@ function extractPRsInRange(
             if (e1rm > prev) bestBeforeWindow.set(key, e1rm);
           } else if (date >= startIso && date <= endIso) {
             const curr = bestInWindow.get(key);
-            if (!curr || e1rm > curr.estimated1RMKg || (e1rm === curr.estimated1RMKg && s.weightKg > curr.maxWeightKg)) {
+            if (
+              !curr ||
+              e1rm > curr.estimated1RMKg ||
+              (e1rm === curr.estimated1RMKg && s.weightKg > curr.maxWeightKg)
+            ) {
               bestInWindow.set(key, {
                 exerciseTitle: ex.name,
                 muscleGroup: ex.muscleGroup,
@@ -466,30 +583,45 @@ export function buildRealSummaryStats({
   const monthIndex = selectedMonthIndex ?? now.getMonth();
 
   const strengthByDate = buildStrengthSessionsByDate(csvRaw, liveHistory, todayIso);
-  const daySessionsMap: Record<string, DaySessionsBundle> = {};
-
-  for (const [date, sessions] of Object.entries(strengthByDate)) {
-    daySessionsMap[date] = {
-      garminActivities: [],
-      strengthSessions: sessions,
-    };
-  }
+  const allGarminByDate: Record<string, GarminActivitySummary[]> = {};
 
   for (const act of garminActivities) {
     const date = String(act.startTimeLocal || '').slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayIso) continue;
-    if (!daySessionsMap[date]) {
-      daySessionsMap[date] = { garminActivities: [], strengthSessions: [] };
-    }
-    daySessionsMap[date].garminActivities.push(act);
+    if (!allGarminByDate[date]) allGarminByDate[date] = [];
+    allGarminByDate[date].push(act);
   }
+
+  // Emparejar actividades Garmin de "Fuerza" con la sesión de fuerza del mismo día (cero sesiones duplicadas)
+  const allDatesSet = new Set([
+    ...Object.keys(strengthByDate),
+    ...Object.keys(allGarminByDate),
+  ]);
+  const daySessionsMap: Record<string, DaySessionsBundle> = {};
+
+  allDatesSet.forEach((date) => {
+    const strengthSessions = (strengthByDate[date] || []).map((s) => ({ ...s }));
+    const garminActs = [...(allGarminByDate[date] || [])];
+
+    if (strengthSessions.length > 0) {
+      const garminStrengthIdx = garminActs.findIndex((a) => a.sportCategory === 'Fuerza');
+      if (garminStrengthIdx !== -1) {
+        const [pairedGarminAct] = garminActs.splice(garminStrengthIdx, 1);
+        strengthSessions[0].linkedGarminActivity = pairedGarminAct;
+      }
+    }
+
+    daySessionsMap[date] = {
+      strengthSessions,
+      garminActivities: garminActs,
+    };
+  });
 
   // ============================================================================
   // 1. VISTA SEMANAL (Lunes a Domingo de la semana actual, nunca días futuros)
   // ============================================================================
   const weekStart = getMondayOfWeek(now);
   const weekEnd = addDays(weekStart, 6);
-  const weekStartIso = toLocalIsoDate(weekStart);
   const prevWeekStart = addDays(weekStart, -7);
   const prevWeekEnd = addDays(weekStart, -1);
   const prevWeekStartIso = toLocalIsoDate(prevWeekStart);
@@ -504,7 +636,8 @@ export function buildRealSummaryStats({
       d.getDate(),
       SHORT_WEEKDAYS[idx],
       isFuture,
-      daySessionsMap[iso]
+      daySessionsMap[iso],
+      allGarminByDate[iso] || []
     );
   });
 
@@ -520,11 +653,15 @@ export function buildRealSummaryStats({
   for (const d of daysStrip) {
     if (d.isFuture) continue;
     const bundle = daySessionsMap[d.date];
-    if (!bundle) continue;
-    weeklyStrengthSessions += bundle.strengthSessions.length;
-    weeklyStrengthVol += d.strengthVolumeKg;
-    weeklyGarminSessions += bundle.garminActivities.length;
-    for (const act of bundle.garminActivities) {
+    const allGarminForDay = allGarminByDate[d.date] || [];
+
+    if (bundle) {
+      weeklyStrengthSessions += bundle.strengthSessions.length;
+      weeklyStrengthVol += d.strengthVolumeKg;
+      weeklyGarminSessions += bundle.garminActivities.length;
+    }
+
+    for (const act of allGarminForDay) {
       weeklyGarminActs.push(act);
       weeklyGarminMins += act.durationMinutes || 0;
       weeklyGarminKm += act.distanceKm || 0;
@@ -532,14 +669,16 @@ export function buildRealSummaryStats({
     }
   }
 
-  // Semana anterior (comparativa)
   let prevStrengthVol = 0;
   let prevGarminMins = 0;
   let prevGarminKm = 0;
   for (const [date, bundle] of Object.entries(daySessionsMap)) {
     if (date < prevWeekStartIso || date > prevWeekEndIso) continue;
     for (const s of bundle.strengthSessions) prevStrengthVol += s.totalVolumeKg;
-    for (const a of bundle.garminActivities) {
+  }
+  for (const [date, acts] of Object.entries(allGarminByDate)) {
+    if (date < prevWeekStartIso || date > prevWeekEndIso) continue;
+    for (const a of acts) {
       prevGarminMins += a.durationMinutes || 0;
       prevGarminKm += a.distanceKm || 0;
     }
@@ -552,20 +691,16 @@ export function buildRealSummaryStats({
     const we = addDays(ws, 6);
     const wsIso = toLocalIsoDate(ws);
     const weIso = toLocalIsoDate(we) > todayIso ? todayIso : toLocalIsoDate(we);
-    const hasAny = Object.keys(daySessionsMap).some(
-      (d) => d >= wsIso && d <= weIso
-    );
+    const hasAny = Array.from(allDatesSet).some((d) => d >= wsIso && d <= weIso);
     if (hasAny) {
       streakWeeks++;
     } else if (w === 0) {
-      // Si la semana actual acaba de empezar y aún no entrenaste hoy, revisar desde la anterior
       continue;
     } else {
       break;
     }
   }
 
-  // PRs recientes (últimos 7 días hasta hoy)
   const sevenDaysAgoIso = toLocalIsoDate(addDays(now, -6));
   const recentPRs = extractPRsInRange(daySessionsMap, sevenDaysAgoIso, todayIso).slice(0, 3);
 
@@ -574,7 +709,7 @@ export function buildRealSummaryStats({
   // ============================================================================
   const firstDayOfMonth = new Date(year, monthIndex, 1, 12, 0, 0, 0);
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const leadingEmptyDays = (firstDayOfMonth.getDay() + 6) % 7; // L=0..D=6
+  const leadingEmptyDays = (firstDayOfMonth.getDay() + 6) % 7;
   const monthPrefix = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
 
   const prevMonthDate = new Date(year, monthIndex - 1, 1, 12, 0, 0, 0);
@@ -593,7 +728,8 @@ export function buildRealSummaryStats({
       dayNum,
       SHORT_WEEKDAYS[weekdayIdx],
       isFuture,
-      daySessionsMap[iso]
+      daySessionsMap[iso],
+      allGarminByDate[iso] || []
     );
   });
 
@@ -623,19 +759,26 @@ export function buildRealSummaryStats({
 
     const weekIdx = Math.min(3, Math.floor((day.dayNumber - 1) / 7));
     const bundle = daySessionsMap[day.date];
-    if (!bundle) continue;
-
-    monthStrengthSessions += bundle.strengthSessions.length;
-    monthGarminSessions += bundle.garminActivities.length;
-    monthVolumeKg += day.strengthVolumeKg;
+    const allGarminForDay = allGarminByDate[day.date] || [];
 
     weeklyBuckets[weekIdx].strengthVolumeKg += day.strengthVolumeKg;
     weeklyBuckets[weekIdx].garminMinutes += day.garminMinutes;
-    weeklyBuckets[weekIdx].sessions += bundle.strengthSessions.length + bundle.garminActivities.length;
+    weeklyBuckets[weekIdx].sessions += day.sessionsCount;
+    monthVolumeKg += day.strengthVolumeKg;
+
+    for (const act of allGarminForDay) {
+      monthGarminMins += act.durationMinutes || 0;
+      monthGarminKm += act.distanceKm || 0;
+    }
+
+    if (!bundle) continue;
+    monthStrengthSessions += bundle.strengthSessions.length;
+    monthGarminSessions += bundle.garminActivities.length;
 
     for (const s of bundle.strengthSessions) {
-      const existing = disciplineCounts.get('Fuerza (App)') || {
-        label: 'Fuerza (App)',
+      const discKey = s.source === 'garmin_import' ? 'Fuerza (Garmin)' : 'Fuerza (App)';
+      const existing = disciplineCounts.get(discKey) || {
+        label: discKey,
         sessions: 0,
         minutes: 0,
         volumeKg: 0,
@@ -643,7 +786,8 @@ export function buildRealSummaryStats({
       };
       existing.sessions += 1;
       existing.volumeKg += s.totalVolumeKg;
-      disciplineCounts.set('Fuerza (App)', existing);
+      existing.minutes += s.linkedGarminActivity?.durationMinutes || 0;
+      disciplineCounts.set(discKey, existing);
 
       const seenMusclesInSession = new Set<string>();
       for (const ex of s.exercises) {
@@ -658,10 +802,7 @@ export function buildRealSummaryStats({
     }
 
     for (const act of bundle.garminActivities) {
-      monthGarminMins += act.durationMinutes || 0;
-      monthGarminKm += act.distanceKm || 0;
-      const key =
-        act.sportCategory === 'Fuerza' ? 'Fuerza (Garmin)' : `${act.sportCategory} (Garmin)`;
+      const key = `${act.sportCategory} (Garmin)`;
       const cat: 'strength' | 'garmin' =
         act.sportCategory === 'Fuerza' ? 'strength' : 'garmin';
       const existing = disciplineCounts.get(key) || {
@@ -765,10 +906,19 @@ export function buildRealSummaryStats({
 
     for (const act of bundle.garminActivities) {
       annualGarminSessions += 1;
+      monthlyComparison[mIdx].garminSessions += 1;
+    }
+  }
+
+  for (const [date, acts] of Object.entries(allGarminByDate)) {
+    if (!date.startsWith(yearPrefix) || date > todayIso) continue;
+    const mIdx = parseInt(date.slice(5, 7), 10) - 1;
+    if (mIdx < 0 || mIdx > 11) continue;
+
+    for (const act of acts) {
       annualGarminActs.push(act);
       annualGarminMins += act.durationMinutes || 0;
       annualGarminKm += act.distanceKm || 0;
-      monthlyComparison[mIdx].garminSessions += 1;
       monthlyComparison[mIdx].garminHours += (act.durationMinutes || 0) / 60;
     }
   }
@@ -778,7 +928,6 @@ export function buildRealSummaryStats({
     m.garminHours = Math.round(m.garminHours * 10) / 10;
   }
 
-  // Racha máxima de días consecutivos en el año
   activeDatesInYear.sort();
   let longestStreakDays = 0;
   let currentDayStreak = 0;
@@ -795,7 +944,6 @@ export function buildRealSummaryStats({
     prevDayDate = d;
   }
 
-  // Mejor mes del año
   let bestMonth: { label: string; sessions: number; tonnes: number } | null = null;
   for (const m of monthlyComparison) {
     const totalSes = m.strengthSessions + m.garminSessions;

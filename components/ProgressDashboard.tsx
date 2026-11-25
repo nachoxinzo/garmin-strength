@@ -39,6 +39,7 @@ import {
   syncWorkoutLogsToSupabase,
   parseCsvToDbLogs
 } from '@/lib/supabase';
+import { mergeGarminStrengthLogsWithPriority } from '@/lib/strength-sync-merger';
 
 type MetricMode = 'maxWeight' | 'estimated1RM' | 'totalVolume' | 'bestSetVolume';
 type TimeRangeMode = '1M' | '3M' | '6M' | 'ALL';
@@ -164,57 +165,18 @@ export default function ProgressDashboard() {
   }, [analytics.exercises, searchExercise]);
 
   const handleImportGarminStrength = async (logs: DbWorkoutLog[]) => {
-    if (logs.length === 0) return { added: 0, total: 0 };
-
-    const existingKeys = new Set<string>();
-    const existingLogs = csvRaw ? parseCsvToDbLogs(csvRaw) : [];
-    for (const row of existingLogs) {
-      const k = `${String(row.performed_at || '').slice(0, 10)}|${String(
-        row.exercise_title || ''
-      )
-        .trim()
-        .toLowerCase()}|${Number(row.set_index) || 0}`;
-      existingKeys.add(k);
-    }
-
-    const newRows: DbWorkoutLog[] = [];
-    for (const log of logs) {
-      const k = `${String(log.performed_at || '').slice(0, 10)}|${String(
-        log.exercise_title || ''
-      )
-        .trim()
-        .toLowerCase()}|${Number(log.set_index) || 0}`;
-      if (existingKeys.has(k)) continue;
-      existingKeys.add(k);
-      newRows.push(log);
-    }
-
-    if (newRows.length > 0) {
-      const header =
-        'title,start_time,end_time,description,exercise_title,superset_id,exercise_notes,set_index,set_type,weight_kg,reps,distance_km,duration_seconds,rpe';
-      const formattedNewLines = newRows.map((r) => {
-        const t = `"${(r.workout_title || 'Fuerza Garmin').replace(/"/g, '""')}"`;
-        const d = `"${r.performed_at}"`;
-        const ex = `"${(r.exercise_title || '').replace(/"/g, '""')}"`;
-        return `${t},${d},${d},"",${ex},,"",${r.set_index},"normal",${r.weight_kg || 0},${r.reps || 0},,,,`;
-      });
-
-      const baseLines = csvRaw && csvRaw.trim().length > 0 ? csvRaw.trim().split(/\r?\n/) : [header];
-      const nextCsv = [...baseLines, ...formattedNewLines].join('\n');
-      setCsvRaw(nextCsv);
-      try {
-        localStorage.setItem('hevy_raw_csv_cache', nextCsv);
-      } catch {
-        // ignore
-      }
-
+    const mergeRes = await mergeGarminStrengthLogsWithPriority(logs);
+    if (mergeRes.added > 0) {
+      setCsvRaw(mergeRes.nextCsv);
       if (isSupabaseConfigured()) {
-        await syncWorkoutLogsToSupabase(newRows);
         setHasCloudSource(true);
       }
     }
-
-    return { added: newRows.length, total: logs.length };
+    return {
+      added: mergeRes.added,
+      skippedAppDates: mergeRes.skippedAppDates,
+      total: mergeRes.total,
+    };
   };
 
   const handleTriggerGarminStrengthImport = async () => {
@@ -247,11 +209,23 @@ export default function ProgressDashboard() {
       }
 
       const result = await handleImportGarminStrength(logs);
-      setGarminImportNotice(
-        result.added > 0
-          ? `Importadas ${result.added} series nuevas de ${data.activitiesCount} sesiones de Garmin.`
-          : `Todas las ${logs.length} series de tus ${data.activitiesCount} sesiones ya estaban guardadas.`
-      );
+      if (result.added > 0 && result.skippedAppDates.length > 0) {
+        setGarminImportNotice(
+          `Importadas ${result.added} series nuevas de Garmin. Respetados ${result.skippedAppDates.length} día(s) ya registrados en la App sin duplicar.`
+        );
+      } else if (result.added > 0) {
+        setGarminImportNotice(
+          `Importadas ${result.added} series nuevas de ${data.activitiesCount} sesiones de Garmin.`
+        );
+      } else if (result.skippedAppDates.length > 0) {
+        setGarminImportNotice(
+          `Los días coincidentes (${result.skippedAppDates.length}) ya tienen registro propio en la App; no se duplicaron series de Garmin.`
+        );
+      } else {
+        setGarminImportNotice(
+          `Todas las ${logs.length} series de tus ${data.activitiesCount} sesiones ya estaban guardadas.`
+        );
+      }
     } catch (err: any) {
       setGarminImportError(err?.message || 'Conecta primero tu cuenta de Garmin en la barra superior.');
     } finally {

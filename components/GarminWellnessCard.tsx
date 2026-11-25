@@ -19,6 +19,7 @@ import {
   saveGarminWellnessSnapshot,
 } from '@/lib/garmin-wellness-client';
 import { DbWorkoutLog } from '@/lib/supabase';
+import { mergeGarminStrengthLogsWithPriority } from '@/lib/strength-sync-merger';
 
 interface GarminWellnessCardProps {
   onSynced?: (snapshot: GarminWellnessSnapshot) => void;
@@ -63,11 +64,49 @@ export function GarminWellnessCard({
         throw new Error(data.error || 'No se pudo sincronizar con Garmin Connect.');
       }
 
+      const latestTokens = data.tokens || garminTokens;
       if (data.tokens) {
         localStorage.setItem('garmin_oauth_tokens', JSON.stringify(data.tokens));
       }
       saveGarminWellnessSnapshot(data.snapshot);
       setSnapshot(data.snapshot);
+
+      // Auto-importar series de fuerza de Garmin respetando los días ya registrados en la App
+      try {
+        const strengthRes = await fetch('/api/garmin/strength-import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ garminTokens: latestTokens }),
+        });
+        const strengthData = await strengthRes.json();
+        if (strengthRes.ok && strengthData.success) {
+          if (strengthData.tokens) {
+            localStorage.setItem('garmin_oauth_tokens', JSON.stringify(strengthData.tokens));
+          }
+          const logs = Array.isArray(strengthData.logs)
+            ? (strengthData.logs as DbWorkoutLog[])
+            : [];
+          if (logs.length > 0) {
+            const mergeRes = await mergeGarminStrengthLogsWithPriority(logs);
+            if (mergeRes.added > 0 && mergeRes.skippedAppDates.length > 0) {
+              setImportNotice(
+                `Importadas ${mergeRes.added} series de fuerza desde Garmin (${mergeRes.skippedAppDates.length} día(s) registrados en la App respetados sin duplicar).`
+              );
+            } else if (mergeRes.added > 0) {
+              setImportNotice(
+                `Importadas ${mergeRes.added} series de fuerza de Garmin (${strengthData.activitiesCount || 0} sesiones).`
+              );
+            } else if (mergeRes.skippedAppDates.length > 0) {
+              setImportNotice(
+                `Pesos de la App respetados en ${mergeRes.skippedAppDates.length} día(s) coincidentes sin duplicar datos.`
+              );
+            }
+          }
+        }
+      } catch {
+        // La importación automática de fuerza es no bloqueante si falla o alcanza límite
+      }
+
       onSynced?.(data.snapshot);
     } catch (err: any) {
       setErrorMsg(err?.message || 'Conecta primero tu cuenta de Garmin en la barra superior.');
