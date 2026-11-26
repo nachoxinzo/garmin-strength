@@ -5,7 +5,6 @@ import {
   Activity,
   BatteryCharging,
   CheckCircle2,
-  Download,
   HeartPulse,
   Moon,
   RefreshCw,
@@ -18,12 +17,9 @@ import {
   loadGarminWellnessSnapshot,
   saveGarminWellnessSnapshot,
 } from '@/lib/garmin-wellness-client';
-import { DbWorkoutLog } from '@/lib/supabase';
-import { mergeGarminStrengthLogsWithPriority } from '@/lib/strength-sync-merger';
 
 interface GarminWellnessCardProps {
   onSynced?: (snapshot: GarminWellnessSnapshot) => void;
-  onImportStrengthLogs?: (logs: DbWorkoutLog[]) => Promise<{ added: number; total: number } | void>;
   hideWeeklySportStrip?: boolean;
   forceEmpty?: boolean;
   fallbackSnapshot?: GarminWellnessSnapshot | null;
@@ -31,14 +27,12 @@ interface GarminWellnessCardProps {
 
 export function GarminWellnessCard({
   onSynced,
-  onImportStrengthLogs,
   hideWeeklySportStrip = false,
   forceEmpty = false,
   fallbackSnapshot = null,
 }: GarminWellnessCardProps = {}) {
   const [snapshot, setSnapshot] = useState<GarminWellnessSnapshot | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isImportingStrength, setIsImportingStrength] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [importNotice, setImportNotice] = useState<string | null>(null);
 
@@ -63,87 +57,15 @@ export function GarminWellnessCard({
 
       saveGarminWellnessSnapshot(data.snapshot);
       setSnapshot(data.snapshot);
-
-      // Auto-importar series de fuerza de Garmin respetando los días ya registrados en la App
-      try {
-        const strengthRes = await fetch('/api/garmin/strength-import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        const strengthData = await strengthRes.json();
-        if (strengthRes.ok && strengthData.success) {
-          const logs = Array.isArray(strengthData.logs)
-            ? (strengthData.logs as DbWorkoutLog[])
-            : [];
-          if (logs.length > 0) {
-            const mergeRes = await mergeGarminStrengthLogsWithPriority(logs);
-            if (mergeRes.added > 0 && mergeRes.skippedAppDates.length > 0) {
-              setImportNotice(
-                `Importadas ${mergeRes.added} series de fuerza desde Garmin (${mergeRes.skippedAppDates.length} día(s) registrados en la App respetados sin duplicar).`
-              );
-            } else if (mergeRes.added > 0) {
-              setImportNotice(
-                `Importadas ${mergeRes.added} series de fuerza de Garmin (${strengthData.activitiesCount || 0} sesiones).`
-              );
-            } else if (mergeRes.skippedAppDates.length > 0) {
-              setImportNotice(
-                `Pesos de la App respetados en ${mergeRes.skippedAppDates.length} día(s) coincidentes sin duplicar datos.`
-              );
-            }
-          }
-        }
-      } catch {
-        // La importación automática de fuerza es no bloqueante si falla o alcanza límite
-      }
+      setImportNotice(
+        'Garmin sincronizado: variables físicas, recuperación y actividades actualizadas.'
+      );
 
       onSynced?.(data.snapshot);
     } catch (err: any) {
       setErrorMsg(err?.message || 'Conecta primero tu cuenta de Garmin en la barra superior.');
     } finally {
       setIsSyncing(false);
-    }
-  };
-
-  const handleImportStrength = async () => {
-    setIsImportingStrength(true);
-    setErrorMsg(null);
-    setImportNotice(null);
-    try {
-      const res = await fetch('/api/garmin/strength-import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'No se pudieron importar las sesiones de fuerza de Garmin.');
-      }
-
-      const logs = Array.isArray(data.logs) ? (data.logs as DbWorkoutLog[]) : [];
-      if (logs.length === 0) {
-        setImportNotice(
-          `Revisadas ${data.activitiesCount || 0} sesiones de fuerza en Garmin (sin series nuevas con repeticiones registradas).`
-        );
-        return;
-      }
-
-      const result = await onImportStrengthLogs?.(logs);
-      if (result && typeof result.added === 'number') {
-        setImportNotice(
-          result.added > 0
-            ? `Importadas ${result.added} series nuevas de ${data.activitiesCount} sesiones de fuerza de Garmin (sin duplicados).`
-            : `Todas las ${logs.length} series de tus ${data.activitiesCount} sesiones ya estaban guardadas (0 duplicados).`
-        );
-      } else {
-        setImportNotice(
-          `Procesadas ${logs.length} series de ${data.activitiesCount} sesiones de fuerza de Garmin.`
-        );
-      }
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Conecta primero tu cuenta de Garmin para importar sesiones.');
-    } finally {
-      setIsImportingStrength(false);
     }
   };
 
@@ -216,18 +138,6 @@ export function GarminWellnessCard({
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
             <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Garmin'}</span>
           </button>
-
-          {onImportStrengthLogs && (
-            <button
-              type="button"
-              onClick={handleImportStrength}
-              disabled={isImportingStrength}
-              className="min-h-[42px] inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all active:scale-[0.98] disabled:opacity-60"
-            >
-              <Download className={`w-3.5 h-3.5 ${isImportingStrength ? 'animate-pulse' : ''}`} />
-              <span>{isImportingStrength ? 'Importando...' : 'Importar Fuerza a BD'}</span>
-            </button>
-          )}
         </div>
       </div>
 

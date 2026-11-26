@@ -544,6 +544,7 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                     garminActivities={selectedWeeklyBundle?.garminActivities || []}
                     strengthSessions={selectedWeeklyBundle?.strengthSessions || []}
                     onClose={() => setSelectedWeeklyDate(null)}
+                    onSessionsChanged={refresh}
                   />
                 )}
               </CardContent>
@@ -692,6 +693,7 @@ export function SummaryTab({ onNavigateToLive }: SummaryTabProps) {
                     activeDays={stats.monthly.activeDays}
                     totalSessions={stats.monthly.totalSessions}
                     daySessionsMap={stats.daySessionsMap}
+                    onSessionsChanged={refresh}
                   />
                 </CardContent>
               </Card>

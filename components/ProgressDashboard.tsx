@@ -20,8 +20,7 @@ import {
   FileSpreadsheet,
   Cloud,
   AlertTriangle,
-  CheckCircle2,
-  Watch
+  CheckCircle2
 } from 'lucide-react';
 import {
   extractProgressFromHevyCSV,
@@ -33,13 +32,11 @@ import { analyzeWeeklyMuscleBalance, MuscleVolumeStatus } from '@/lib/weekly-vol
 import { EXERCISE_CATALOG } from '@/lib/exercise-catalog';
 import { getSimilarExercises } from '@/lib/exercise-alternatives';
 import {
-  DbWorkoutLog,
   isSupabaseConfigured,
   getWorkoutLogsCsvFromSupabase,
   syncWorkoutLogsToSupabase,
   parseCsvToDbLogs
 } from '@/lib/supabase';
-import { mergeGarminStrengthLogsWithPriority } from '@/lib/strength-sync-merger';
 
 type MetricMode = 'maxWeight' | 'estimated1RM' | 'totalVolume' | 'bestSetVolume';
 type TimeRangeMode = '1M' | '3M' | '6M' | 'ALL';
@@ -55,9 +52,6 @@ export default function ProgressDashboard() {
   const [hasCloudSource, setHasCloudSource] = useState<boolean>(false);
   const [muscleBalance, setMuscleBalance] = useState<MuscleVolumeStatus[]>([]);
   const [confirmClearHistory, setConfirmClearHistory] = useState<boolean>(false);
-  const [isImportingGarminStrength, setIsImportingGarminStrength] = useState<boolean>(false);
-  const [garminImportNotice, setGarminImportNotice] = useState<string | null>(null);
-  const [garminImportError, setGarminImportError] = useState<string | null>(null);
 
   useEffect(() => {
     setMuscleBalance(analyzeWeeklyMuscleBalance());
@@ -163,69 +157,6 @@ export default function ProgressDashboard() {
       ex.toLowerCase().includes(searchExercise.toLowerCase())
     );
   }, [analytics.exercises, searchExercise]);
-
-  const handleImportGarminStrength = async (logs: DbWorkoutLog[]) => {
-    const mergeRes = await mergeGarminStrengthLogsWithPriority(logs);
-    if (mergeRes.added > 0) {
-      setCsvRaw(mergeRes.nextCsv);
-      if (isSupabaseConfigured()) {
-        setHasCloudSource(true);
-      }
-    }
-    return {
-      added: mergeRes.added,
-      skippedAppDates: mergeRes.skippedAppDates,
-      total: mergeRes.total,
-    };
-  };
-
-  const handleTriggerGarminStrengthImport = async () => {
-    setIsImportingGarminStrength(true);
-    setGarminImportNotice(null);
-    setGarminImportError(null);
-    try {
-      const res = await fetch('/api/garmin/strength-import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'No se pudieron importar las sesiones de fuerza de Garmin.');
-      }
-
-      const logs = Array.isArray(data.logs) ? (data.logs as DbWorkoutLog[]) : [];
-      if (logs.length === 0) {
-        setGarminImportNotice(
-          `Revisadas ${data.activitiesCount || 0} sesiones de fuerza en Garmin (sin series nuevas con repeticiones registradas).`
-        );
-        return;
-      }
-
-      const result = await handleImportGarminStrength(logs);
-      if (result.added > 0 && result.skippedAppDates.length > 0) {
-        setGarminImportNotice(
-          `Importadas ${result.added} series nuevas de Garmin. Respetados ${result.skippedAppDates.length} día(s) ya registrados en la App sin duplicar.`
-        );
-      } else if (result.added > 0) {
-        setGarminImportNotice(
-          `Importadas ${result.added} series nuevas de ${data.activitiesCount} sesiones de Garmin.`
-        );
-      } else if (result.skippedAppDates.length > 0) {
-        setGarminImportNotice(
-          `Los días coincidentes (${result.skippedAppDates.length}) ya tienen registro propio en la App; no se duplicaron series de Garmin.`
-        );
-      } else {
-        setGarminImportNotice(
-          `Todas las ${logs.length} series de tus ${data.activitiesCount} sesiones ya estaban guardadas.`
-        );
-      }
-    } catch (err: any) {
-      setGarminImportError(err?.message || 'Conecta primero tu cuenta de Garmin en la barra superior.');
-    } finally {
-      setIsImportingGarminStrength(false);
-    }
-  };
 
   // Cálculos para la gráfica SVG interactiva con filtro temporal y regresión lineal
   const chartData = useMemo(() => {
@@ -385,7 +316,7 @@ export default function ProgressDashboard() {
           Sin historial por ejercicio cargado
         </h3>
         <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-          Para analizar cargas máximas, 1RM estimado, alertas de estancamiento y series históricas por ejercicio, sube tu CSV de Hevy o importa tus sesiones de fuerza desde Garmin.
+          Para analizar cargas máximas, 1RM estimado, alertas de estancamiento y series históricas por ejercicio, registra tus sesiones en Entreno en Vivo o sube tu CSV de Hevy.
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-3">
@@ -396,28 +327,7 @@ export default function ProgressDashboard() {
             <Upload className="w-4 h-4" />
             <span>Subir workouts.csv de Hevy</span>
           </button>
-
-          <button
-            type="button"
-            onClick={handleTriggerGarminStrengthImport}
-            disabled={isImportingGarminStrength}
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-md shadow-emerald-500/20 transition-all active:scale-[0.98] min-h-[44px] disabled:opacity-60"
-          >
-            <Download className={`w-4 h-4 ${isImportingGarminStrength ? 'animate-pulse' : ''}`} />
-            <span>{isImportingGarminStrength ? 'Importando...' : 'Importar Fuerza Garmin'}</span>
-          </button>
         </div>
-
-        {garminImportNotice && (
-          <div className="mt-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
-            {garminImportNotice}
-          </div>
-        )}
-        {garminImportError && (
-          <div className="mt-4 rounded-xl bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">
-            {garminImportError}
-          </div>
-        )}
 
         <div className="mt-8 pt-6 border-t border-border/60 text-left">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
@@ -475,15 +385,6 @@ export default function ProgressDashboard() {
 
           <div className="flex flex-wrap items-center gap-2">
             <button
-              type="button"
-              onClick={handleTriggerGarminStrengthImport}
-              disabled={isImportingGarminStrength}
-              className="saas-btn min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs disabled:opacity-60"
-            >
-              <Watch className={`w-3.5 h-3.5 ${isImportingGarminStrength ? 'animate-pulse' : ''}`} />
-              <span>{isImportingGarminStrength ? 'Importando...' : 'Importar Fuerza Garmin'}</span>
-            </button>
-            <button
               onClick={() => fileInputRef.current?.click()}
               className="saas-btn min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs"
             >
@@ -526,17 +427,6 @@ export default function ProgressDashboard() {
             />
           </div>
         </div>
-
-        {garminImportNotice && (
-          <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
-            {garminImportNotice}
-          </div>
-        )}
-        {garminImportError && (
-          <div className="rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">
-            {garminImportError}
-          </div>
-        )}
       </div>
 
       {/* Selector de Ejercicio y Métrica */}

@@ -268,9 +268,12 @@ function buildStrengthSessionsByDate(
           const workoutTitle =
             titleIdx !== -1 ? cols[titleIdx]?.trim() || 'Entrenamiento' : 'Entrenamiento';
           const notes = notesIdx !== -1 ? String(cols[notesIdx] || '').trim().toLowerCase() : '';
+          const isGenericGarminTitle = ['fuerza', 'fuerza garmin', 'strength'].includes(
+            workoutTitle.trim().toLowerCase()
+          );
           const isGarminImport = notes === GARMIN_IMPORT_MARKER;
 
-          if (!isGarminImport) {
+          if (!isGarminImport && !isGenericGarminTitle) {
             appAuthoritativeDates.add(date);
           }
 
@@ -313,8 +316,11 @@ function buildStrengthSessionsByDate(
     const hasAppSets = appAuthoritativeDates.has(date);
 
     for (const row of rows) {
+      const isGenericGarminTitle = ['fuerza', 'fuerza garmin', 'strength'].includes(
+        row.workoutTitle.trim().toLowerCase()
+      );
       // Regla de prioridad: si ese día hay fuerza registrada en la App, omitir series auto-importadas de Garmin
-      if (hasAppSets && row.isGarminImport) continue;
+      if (hasAppSets && (row.isGarminImport || isGenericGarminTitle)) continue;
 
       const sessionKey = `${date}||${row.workoutTitle}`;
       let session = byDateAndTitle.get(sessionKey);
@@ -340,10 +346,11 @@ function buildStrengthSessionsByDate(
     }
   });
 
-  // Combinar registros realizados en Entreno en Vivo que aún no estén en CSV/Supabase
+  // Combinar registros realizados en Entreno en Vivo solo en fechas donde aún no haya sesión consolidada en CSV/Supabase
   for (const rec of Object.values(liveHistory)) {
     const date = String(rec.lastDate || '').slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayIso) continue;
+    if (appAuthoritativeDates.has(date)) continue;
     if (rec.lastReps <= 0 || rec.lastSets <= 0) continue;
 
     const catalogItem = EXERCISE_CATALOG.find((e) => e.id === rec.exerciseId);

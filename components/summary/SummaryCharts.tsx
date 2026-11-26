@@ -160,6 +160,7 @@ export function ActivityHeatmapCalendar({
   activeDays,
   totalSessions,
   daySessionsMap = {},
+  onSessionsChanged,
 }: {
   monthLabel: string;
   leadingEmptyDays: number;
@@ -167,6 +168,7 @@ export function ActivityHeatmapCalendar({
   activeDays: number;
   totalSessions: number;
   daySessionsMap?: Record<string, DaySessionsBundle>;
+  onSessionsChanged?: () => Promise<void> | void;
 }) {
   const defaultSelected =
     [...calendarDays].reverse().find((d) => !d.isFuture && d.type !== 'none')?.date ?? null;
@@ -263,6 +265,7 @@ export function ActivityHeatmapCalendar({
           garminActivities={selectedBundle?.garminActivities || []}
           strengthSessions={selectedBundle?.strengthSessions || []}
           onClose={() => setSelectedDate(null)}
+          onSessionsChanged={onSessionsChanged}
         />
       )}
     </div>

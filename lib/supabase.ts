@@ -242,6 +242,129 @@ export async function getWorkoutLogsCsvFromSupabase(): Promise<string | null> {
 }
 
 /**
+ * Reemplaza o elimina todas las series de una sesión de fuerza concreta en un día dado
+ * tanto en caché local (`hevy_raw_csv_cache`) como en Supabase (`workout_logs`).
+ */
+export async function replaceStrengthSessionLogs(params: {
+  date: string;
+  originalWorkoutTitle: string;
+  newWorkoutTitle: string;
+  logs: Omit<DbWorkoutLog, 'user_id'>[];
+}): Promise<{ ok: boolean; syncedCloud: boolean }> {
+  const { date, originalWorkoutTitle, newWorkoutTitle, logs } = params;
+  const targetTitleLower = originalWorkoutTitle.trim().toLowerCase();
+  const safeNewTitle = newWorkoutTitle.trim() || 'Entrenamiento';
+
+  // 1. Actualizar caché CSV local en navegador
+  if (typeof window !== 'undefined') {
+    try {
+      const header =
+        'title,start_time,end_time,description,exercise_title,superset_id,exercise_notes,set_index,set_type,weight_kg,reps,distance_km,duration_seconds,rpe';
+      const rawCsv = localStorage.getItem('hevy_raw_csv_cache') || '';
+      const lines = rawCsv.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      const keptLines: string[] = [header];
+
+      if (lines.length >= 2) {
+        const headers = parseCSVLine(lines[0]).map((h) => h.trim().toLowerCase());
+        const titleIdx = headers.indexOf('title');
+        const startTimeIdx = headers.indexOf('start_time');
+        const notesIdx = headers.indexOf('exercise_notes');
+
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCSVLine(lines[i]);
+          const rowDate = startTimeIdx !== -1 ? String(cols[startTimeIdx] || '').trim().slice(0, 10) : '';
+          const rowTitle = titleIdx !== -1 ? String(cols[titleIdx] || '').trim().toLowerCase() : '';
+          const rowNotes = notesIdx !== -1 ? String(cols[notesIdx] || '').trim().toLowerCase() : '';
+          const isGenericGarmin = ['fuerza', 'fuerza garmin', 'strength'].includes(rowTitle);
+
+          if (rowDate === date && (rowTitle === targetTitleLower || rowNotes === 'garmin_import' || isGenericGarmin)) {
+            continue;
+          }
+          keptLines.push(lines[i]);
+        }
+      }
+
+      const performedIso = `${date}T12:00:00.000Z`;
+      const formattedNew = logs
+        .filter((r) => (r.reps || 0) > 0)
+        .map((r) => {
+          const t = `"${safeNewTitle.replace(/"/g, '""')}"`;
+          const d = `"${r.performed_at || performedIso}"`;
+          const ex = `"${(r.exercise_title || '').replace(/"/g, '""')}"`;
+          return `${t},${d},${d},"",${ex},,"",${r.set_index},"normal",${r.weight_kg || 0},${r.reps || 0},,,,${r.rpe || ''}`;
+        });
+
+      localStorage.setItem('hevy_raw_csv_cache', [...keptLines, ...formattedNew].join('\n'));
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  // 2. Actualizar en Supabase si hay sesión autenticada
+  let syncedCloud = false;
+  if (supabase) {
+    const userId = await getCurrentAuthUserId();
+    if (userId) {
+      const dayStart = `${date}T00:00:00.000Z`;
+      const dayEnd = `${date}T23:59:59.999Z`;
+
+      const { error: delError } = await supabase
+        .from('workout_logs')
+        .delete()
+        .eq('user_id', userId)
+        .eq('workout_title', originalWorkoutTitle)
+        .gte('performed_at', dayStart)
+        .lte('performed_at', dayEnd);
+
+      if (delError) {
+        console.error('Error al borrar sesión previa en Supabase:', delError.message);
+        return { ok: false, syncedCloud: false };
+      }
+
+      const validLogs = logs
+        .filter((r) => (r.reps || 0) > 0 && r.exercise_title.trim().length > 0)
+        .map((r) => ({
+          workout_title: safeNewTitle,
+          performed_at: r.performed_at || `${date}T12:00:00.000Z`,
+          exercise_title: r.exercise_title.trim(),
+          set_index: r.set_index,
+          weight_kg: r.weight_kg || 0,
+          reps: r.reps || 0,
+          ...(r.rpe ? { rpe: r.rpe } : {}),
+          user_id: userId,
+        }));
+
+      if (validLogs.length > 0) {
+        const chunkSize = 100;
+        for (let i = 0; i < validLogs.length; i += chunkSize) {
+          const chunk = validLogs.slice(i, i + chunkSize);
+          const { error: insError } = await supabase.from('workout_logs').insert(chunk);
+          if (insError) {
+            console.error('Error al guardar sesión editada en Supabase:', insError.message);
+            return { ok: false, syncedCloud: false };
+          }
+        }
+      }
+      syncedCloud = true;
+    }
+  }
+
+  return { ok: true, syncedCloud };
+}
+
+export async function deleteStrengthSessionLogs(params: {
+  date: string;
+  workoutTitle: string;
+}): Promise<{ ok: boolean; syncedCloud: boolean }> {
+  return replaceStrengthSessionLogs({
+    date: params.date,
+    originalWorkoutTitle: params.workoutTitle,
+    newWorkoutTitle: params.workoutTitle,
+    logs: [],
+  });
+}
+
+/**
  * Convierte un contenido CSV en registros para insertar en la tabla workout_logs de Supabase
  */
 export function parseCsvToDbLogs(csvContent: string): DbWorkoutLog[] {
