@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { syncRoutineToGarmin } from '@/lib/garmin-service';
+import {
+  attachEncryptedCookie,
+  GARMIN_SESSION_COOKIE,
+  readEncryptedCookie,
+} from '@/lib/crypto-session';
+import { GarminTokensPayload, syncRoutineToGarmin } from '@/lib/garmin-service';
 import { StrengthRoutine } from '@/lib/types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
@@ -17,7 +22,8 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const routine: StrengthRoutine = body.routine;
-    const garminTokens = body.garminTokens || null;
+    const cookieTokens = readEncryptedCookie<GarminTokensPayload>(req, GARMIN_SESSION_COOKIE);
+    const effectiveTokens = cookieTokens || (body?.garminTokens as GarminTokensPayload | null) || null;
 
     if (!routine || !routine.name || !Array.isArray(routine.blocks) || routine.blocks.length === 0) {
       return NextResponse.json(
@@ -33,8 +39,13 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await syncRoutineToGarmin(routine, garminTokens);
-    return NextResponse.json(result);
+    const result = await syncRoutineToGarmin(routine, effectiveTokens);
+    const { tokens, ...safeResult } = result;
+    const res = NextResponse.json(safeResult);
+    if (tokens) {
+      attachEncryptedCookie(res, GARMIN_SESSION_COOKIE, tokens, req);
+    }
+    return res;
   } catch (error: any) {
     console.error('Error syncing routine:', error);
     return NextResponse.json(

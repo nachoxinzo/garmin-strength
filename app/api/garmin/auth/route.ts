@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import {
+  attachEncryptedCookie,
+  GARMIN_SESSION_COOKIE,
+} from '@/lib/crypto-session';
 import { loginToGarminAccount, resumeGarminMfaLogin } from '@/lib/garmin-service';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
@@ -18,12 +22,17 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { email, password, mfaCode, mfaState } = body;
 
     if (mfaCode) {
       const mfaResult = await resumeGarminMfaLogin(mfaCode, mfaState);
-      return NextResponse.json(mfaResult);
+      const { tokens, ...safeResult } = mfaResult;
+      const res = NextResponse.json(safeResult);
+      if (tokens) {
+        attachEncryptedCookie(res, GARMIN_SESSION_COOKIE, tokens, req);
+      }
+      return res;
     }
 
     if (!email || !password) {
@@ -34,6 +43,12 @@ export async function POST(req: Request) {
     }
 
     const result = await loginToGarminAccount(email, password);
+    if ('tokens' in result && result.tokens) {
+      const { tokens, ...safeResult } = result;
+      const res = NextResponse.json(safeResult);
+      attachEncryptedCookie(res, GARMIN_SESSION_COOKIE, tokens, req);
+      return res;
+    }
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('Error en login de Garmin:', error);
@@ -42,7 +57,7 @@ export async function POST(req: Request) {
         authenticated: false,
         error:
           error?.message ||
-          'No se pudo iniciar sesión en Garmin Connect. Verifica tu correo y contraseña.'
+          'No se pudo iniciar sesión en Garmin Connect. Verifica tu correo y contraseña.',
       },
       { status: 401 }
     );

@@ -111,30 +111,29 @@ class HybridGarminTokenStore {
 
   async save(tokens: GarminTokensPayload): Promise<void> {
     this.clientTokens = tokens;
-    globalMemoryTokens = tokens;
 
-    // Guardar en /tmp (siempre escribible en Vercel y local)
-    try {
-      const tmpStore = new FileTokenStore(getTmpTokensPath());
-      await tmpStore.save(tokens as any);
-    } catch {
-      // ignore
+    // En producción (Serverless multi-usuario), NO persistir tokens en /tmp ni en memoria global
+    // para evitar fugas entre invocaciones calientes o disco efímero; la sesión viaja en cookie HttpOnly cifrada.
+    if (process.env.NODE_ENV === 'production') {
+      return;
     }
 
-    // Guardar en ./tokens si el sistema de archivos lo permite (local)
+    globalMemoryTokens = tokens;
+
     try {
       const localDir = getLocalTokensPath();
-      if (fs.existsSync(localDir) || process.env.NODE_ENV !== 'production') {
-        const localStore = new FileTokenStore(localDir);
-        await localStore.save(tokens as any);
-      }
+      const localStore = new FileTokenStore(localDir);
+      await localStore.save(tokens as any);
     } catch {
-      // En Vercel process.cwd() es de solo lectura; ignorar silenciosamente
+      // ignore local disk error
     }
   }
 
   async clear(): Promise<void> {
     this.clientTokens = null;
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
     globalMemoryTokens = null;
     try {
       const tmpStore = new FileTokenStore(getTmpTokensPath());

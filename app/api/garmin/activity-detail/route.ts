@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server';
-import { fetchGarminActivityDetail } from '@/lib/garmin-service';
+import {
+  attachEncryptedCookie,
+  GARMIN_SESSION_COOKIE,
+  readEncryptedCookie,
+} from '@/lib/crypto-session';
+import {
+  fetchGarminActivityDetail,
+  GarminTokensPayload,
+} from '@/lib/garmin-service';
 import { SportCategory } from '@/lib/types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
@@ -23,13 +31,22 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    const cookieTokens = readEncryptedCookie<GarminTokensPayload>(req, GARMIN_SESSION_COOKIE);
+    const effectiveTokens = cookieTokens || (body?.garminTokens as GarminTokensPayload | null) || null;
+
     const sportCategory = (body.sportCategory || 'Cardio / Otros') as SportCategory;
     const result = await fetchGarminActivityDetail(
       activityId,
       sportCategory,
-      body.garminTokens || null
+      effectiveTokens
     );
-    return NextResponse.json(result);
+    const { tokens, ...safeResult } = result;
+    const res = NextResponse.json(safeResult);
+    if (tokens) {
+      attachEncryptedCookie(res, GARMIN_SESSION_COOKIE, tokens, req);
+    }
+    return res;
   } catch (error: any) {
     const message = error?.message || 'Error al obtener detalle de la actividad de Garmin';
     const status = message.includes('No hay sesión activa') ? 401 : 500;

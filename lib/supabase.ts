@@ -68,24 +68,19 @@ async function getCurrentAuthUserId(): Promise<string | null> {
 }
 
 /**
- * Obtener todas las rutinas guardadas en Supabase (filtradas por usuario si hay sesión activa)
+ * Obtener todas las rutinas guardadas en Supabase (requiere sesión autenticada estricta)
  */
 export async function getRoutinesFromSupabase(): Promise<StrengthRoutine[]> {
   if (!supabase) return [];
 
   const userId = await getCurrentAuthUserId();
-  let query = supabase
+  if (!userId) return [];
+
+  const { data, error } = await supabase
     .from('routines')
     .select('*')
+    .eq('user_id', userId)
     .order('updated_at', { ascending: false });
-
-  if (userId) {
-    query = query.or(`user_id.eq.${userId},user_id.is.null`);
-  } else {
-    query = query.is('user_id', null);
-  }
-
-  const { data, error } = await query;
 
   if (error) {
     console.error('Error al consultar rutinas en Supabase:', error.message);
@@ -102,19 +97,21 @@ export async function getRoutinesFromSupabase(): Promise<StrengthRoutine[]> {
 }
 
 /**
- * Guardar o actualizar una rutina en Supabase vinculándola al usuario autenticado si existe
+ * Guardar o actualizar una rutina en Supabase vinculándola al usuario autenticado
  */
 export async function saveRoutineToSupabase(routine: StrengthRoutine): Promise<boolean> {
   if (!supabase) return false;
 
   const userId = await getCurrentAuthUserId();
+  if (!userId) return false;
+
   const payload: DbRoutine = {
     id: routine.id,
     name: routine.name,
     warmup_seconds: routine.warmupSeconds,
     cooldown_seconds: routine.cooldownSeconds,
     blocks: routine.blocks,
-    ...(userId ? { user_id: userId } : {}),
+    user_id: userId,
     updated_at: new Date().toISOString()
   };
 
@@ -131,20 +128,19 @@ export async function saveRoutineToSupabase(routine: StrengthRoutine): Promise<b
 }
 
 /**
- * Eliminar una rutina de Supabase respetando propiedad del usuario
+ * Eliminar una rutina de Supabase respetando propiedad estricta del usuario
  */
 export async function deleteRoutineFromSupabase(routineId: string): Promise<boolean> {
   if (!supabase) return false;
 
   const userId = await getCurrentAuthUserId();
-  let query = supabase.from('routines').delete().eq('id', routineId);
-  if (userId) {
-    query = query.or(`user_id.eq.${userId},user_id.is.null`);
-  } else {
-    query = query.is('user_id', null);
-  }
+  if (!userId) return false;
 
-  const { error } = await query;
+  const { error } = await supabase
+    .from('routines')
+    .delete()
+    .eq('id', routineId)
+    .eq('user_id', userId);
 
   if (error) {
     console.error('Error al eliminar rutina de Supabase:', error.message);
@@ -156,23 +152,20 @@ export async function deleteRoutineFromSupabase(routineId: string): Promise<bool
 
 /**
  * Sincronizar un lote de registros de entrenamiento a Supabase sin duplicados
- * (deduplicando por fecha del día + ejercicio + índice de serie y asociando user_id)
+ * (requiere sesión autenticada estricta y asocia user_id)
  */
 export async function syncWorkoutLogsToSupabase(logs: DbWorkoutLog[]): Promise<boolean> {
   if (!supabase || logs.length === 0) return false;
 
   const userId = await getCurrentAuthUserId();
+  if (!userId) return false;
+
   const existingKeys = new Set<string>();
   try {
-    let existingQuery = supabase
+    const { data: existing } = await supabase
       .from('workout_logs')
-      .select('performed_at, exercise_title, set_index');
-    if (userId) {
-      existingQuery = existingQuery.or(`user_id.eq.${userId},user_id.is.null`);
-    } else {
-      existingQuery = existingQuery.is('user_id', null);
-    }
-    const { data: existing } = await existingQuery;
+      .select('performed_at, exercise_title, set_index')
+      .eq('user_id', userId);
     if (Array.isArray(existing)) {
       for (const row of existing) {
         const key = `${String(row.performed_at || '').slice(0, 10)}|${String(
@@ -196,7 +189,7 @@ export async function syncWorkoutLogsToSupabase(logs: DbWorkoutLog[]): Promise<b
       .toLowerCase()}|${Number(log.set_index) || 0}`;
     if (existingKeys.has(key)) continue;
     existingKeys.add(key);
-    uniqueLogs.push(userId ? { ...log, user_id: userId } : log);
+    uniqueLogs.push({ ...log, user_id: userId });
   }
 
   if (uniqueLogs.length === 0) return true;
@@ -222,18 +215,13 @@ export async function getWorkoutLogsCsvFromSupabase(): Promise<string | null> {
   if (!supabase) return null;
 
   const userId = await getCurrentAuthUserId();
-  let query = supabase
+  if (!userId) return null;
+
+  const { data, error } = await supabase
     .from('workout_logs')
     .select('*')
+    .eq('user_id', userId)
     .order('performed_at', { ascending: true });
-
-  if (userId) {
-    query = query.or(`user_id.eq.${userId},user_id.is.null`);
-  } else {
-    query = query.is('user_id', null);
-  }
-
-  const { data, error } = await query;
 
   if (error || !data || data.length === 0) {
     return null;

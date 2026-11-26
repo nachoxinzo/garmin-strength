@@ -111,7 +111,6 @@ export default function WorkoutStudioPage() {
   const [studioSubTab, setStudioSubTab] = useState<'editor' | 'guide'>('editor');
   const [routine, setRoutine] = useState<StrengthRoutine>(DEFAULT_ROUTINE);
   const [accountStatus, setAccountStatus] = useState<GarminAccountStatus | null>(null);
-  const [garminTokens, setGarminTokens] = useState<any>(null);
   const [isGarminAuthModalOpen, setIsGarminAuthModalOpen] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -190,7 +189,15 @@ export default function WorkoutStudioPage() {
   // Cargar estado de Garmin y rutina guardada al inicio
   useEffect(() => {
     setLocalTemplates(loadLocalTemplates());
-    checkGarminStatus();
+    let hasLegacyGarminMigration = false;
+    try {
+      hasLegacyGarminMigration = Boolean(localStorage.getItem('garmin_oauth_tokens'));
+    } catch {
+      // ignore
+    }
+    if (!hasLegacyGarminMigration) {
+      checkGarminStatus();
+    }
     const available = isSupabaseConfigured();
     setIsSupabaseAvailable(available);
 
@@ -198,6 +205,29 @@ export default function WorkoutStudioPage() {
     if (available && supabase) {
       loadCloudRoutines();
       loadUserProfile();
+
+      // Mostrar feedback claro si el usuario vuelve desde un enlace de confirmación de Supabase
+      if (typeof window !== 'undefined') {
+        const hash = window.location.hash || '';
+        const search = window.location.search || '';
+        const combinedAuthParams = `${hash}&${search}`;
+        if (
+          combinedAuthParams.includes('error_code=otp_expired') ||
+          combinedAuthParams.includes('error=access_denied') ||
+          combinedAuthParams.includes('error_description=')
+        ) {
+          setStatusMessage({
+            type: 'error',
+            text: 'El enlace de confirmación ha caducado o ya fue utilizado. Abre "Cuenta" para iniciar sesión o reenviar el correo de verificación.',
+          });
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        } else if (hash.includes('type=signup') && hash.includes('access_token=')) {
+          setStatusMessage({
+            type: 'success',
+            text: '¡Correo confirmado y sesión iniciada correctamente!',
+          });
+        }
+      }
 
       // Escuchar cambios de autenticación en tiempo real
       const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -216,15 +246,32 @@ export default function WorkoutStudioPage() {
       if (saved) {
         setRoutine(JSON.parse(saved));
       }
-      const savedHevyKey = localStorage.getItem('hevy_api_key');
-      if (savedHevyKey && savedHevyKey.trim()) {
-        setHevyApiKey(savedHevyKey.trim());
+
+      // Migración única de seguridad: mover secretos legados a cookies HttpOnly y limpiar localStorage
+      if (localStorage.getItem('hevy_api_configured') === 'true') {
         setIsHevyKeySaved(true);
       }
-      const savedGarminTokens = localStorage.getItem('garmin_oauth_tokens');
-      if (savedGarminTokens) {
-        const parsedTokens = JSON.parse(savedGarminTokens);
-        setGarminTokens(parsedTokens);
+      const legacyHevyKey = localStorage.getItem('hevy_api_key');
+      if (legacyHevyKey && legacyHevyKey.trim()) {
+        localStorage.removeItem('hevy_api_key');
+        fetch('/api/hevy/routines', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: legacyHevyKey.trim() }),
+        })
+          .then((r) => {
+            if (r.ok) {
+              localStorage.setItem('hevy_api_configured', 'true');
+              setIsHevyKeySaved(true);
+            }
+          })
+          .catch(() => {});
+      }
+
+      const legacyGarminTokens = localStorage.getItem('garmin_oauth_tokens');
+      if (legacyGarminTokens) {
+        const parsedTokens = JSON.parse(legacyGarminTokens);
+        localStorage.removeItem('garmin_oauth_tokens');
         checkGarminStatus(parsedTokens);
       }
     } catch (e) {
@@ -238,47 +285,37 @@ export default function WorkoutStudioPage() {
     };
   }, []);
 
-  const persistGarminTokens = (tokens: any) => {
-    if (!tokens) return;
-    setGarminTokens(tokens);
-    try {
-      localStorage.setItem('garmin_oauth_tokens', JSON.stringify(tokens));
-    } catch {
-      // ignore
-    }
-    if (supabase) {
-      supabase.auth.updateUser({ data: { garmin_tokens: tokens } }).catch(() => {});
-    }
-  };
-
   const loadUserProfile = async () => {
     try {
       const profile = await getCurrentUserProfile();
       setCurrentUser(profile);
 
-      // Si el usuario tiene guardada su Hevy API Key o Tokens de Garmin en su cuenta de Supabase, sincronizarlos automáticamente
+      // Migración y limpieza automática de secretos legados en Supabase user_metadata
       if (supabase) {
         const { data: { user } } = await supabase.auth.getUser();
         const cloudHevyKey = user?.user_metadata?.hevy_api_key;
+        const cloudGarminTokens = user?.user_metadata?.garmin_tokens;
+
         if (cloudHevyKey && typeof cloudHevyKey === 'string' && cloudHevyKey.trim()) {
-          setHevyApiKey(cloudHevyKey.trim());
-          setIsHevyKeySaved(true);
+          await fetch('/api/hevy/routines', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: cloudHevyKey.trim() }),
+          }).catch(() => {});
           try {
-            localStorage.setItem('hevy_api_key', cloudHevyKey.trim());
-          } catch {
-            // ignore
-          }
+            localStorage.setItem('hevy_api_configured', 'true');
+          } catch {}
+          setIsHevyKeySaved(true);
         }
 
-        const cloudGarminTokens = user?.user_metadata?.garmin_tokens;
         if (cloudGarminTokens && cloudGarminTokens.oauth1 && cloudGarminTokens.oauth2) {
-          setGarminTokens(cloudGarminTokens);
-          try {
-            localStorage.setItem('garmin_oauth_tokens', JSON.stringify(cloudGarminTokens));
-          } catch {
-            // ignore
-          }
-          checkGarminStatus(cloudGarminTokens);
+          await checkGarminStatus(cloudGarminTokens);
+        }
+
+        if (cloudHevyKey || cloudGarminTokens) {
+          supabase.auth
+            .updateUser({ data: { hevy_api_key: null, garmin_tokens: null } })
+            .catch(() => {});
         }
       }
     } catch (e) {
@@ -391,20 +428,18 @@ export default function WorkoutStudioPage() {
     setSelectedRoutineIds([]);
   }, [hevyTab]);
 
-  const checkGarminStatus = async (overrideTokens?: any) => {
+  const checkGarminStatus = async (legacyMigrationTokens?: any) => {
     setIsCheckingStatus(true);
     try {
-      const tokensToSend = overrideTokens !== undefined ? overrideTokens : garminTokens;
       const res = await fetch('/api/garmin/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ garminTokens: tokensToSend })
+        body: JSON.stringify(
+          legacyMigrationTokens ? { garminTokens: legacyMigrationTokens } : {}
+        )
       });
       const data = await res.json();
       setAccountStatus(data);
-      if (data?.authenticated && data?.tokens) {
-        persistGarminTokens(data.tokens);
-      }
     } catch (err) {
       console.error(err);
       setAccountStatus({ authenticated: false });
@@ -603,7 +638,7 @@ export default function WorkoutStudioPage() {
       return;
     }
 
-    if (!accountStatus?.authenticated && !garminTokens) {
+    if (!accountStatus?.authenticated) {
       setIsGarminAuthModalOpen(true);
       return;
     }
@@ -615,7 +650,7 @@ export default function WorkoutStudioPage() {
       const res = await fetch('/api/garmin/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ routine, garminTokens })
+        body: JSON.stringify({ routine })
       });
 
       const data = await res.json();
@@ -627,9 +662,6 @@ export default function WorkoutStudioPage() {
         throw new Error(data.error || 'Error al sincronizar con Garmin');
       }
 
-      if (data.tokens) {
-        persistGarminTokens(data.tokens);
-      }
       setAccountStatus(prev => ({ ...prev, authenticated: true }));
 
       setStatusMessage({
@@ -702,18 +734,6 @@ export default function WorkoutStudioPage() {
     setSelectedRoutineIds([]);
 
     try {
-      if (keyToUse) {
-        try {
-          localStorage.setItem('hevy_api_key', keyToUse);
-        } catch {
-          // ignore
-        }
-        // Guardar también en la cuenta de Supabase del usuario para no volver a pedirla en ningún dispositivo
-        if (supabase) {
-          supabase.auth.updateUser({ data: { hevy_api_key: keyToUse } }).catch(() => {});
-        }
-      }
-
       const res = await fetch('/api/hevy/routines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -729,6 +749,13 @@ export default function WorkoutStudioPage() {
       }
 
       if (keyToUse) {
+        try {
+          localStorage.setItem('hevy_api_configured', 'true');
+          localStorage.removeItem('hevy_api_key');
+        } catch {
+          // ignore
+        }
+        setHevyApiKey('');
         setIsHevyKeySaved(true);
         setIsEditingHevyKey(false);
       }
@@ -825,7 +852,7 @@ export default function WorkoutStudioPage() {
       const res = await fetch('/api/garmin/sync-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ routines: routinesToSync, garminTokens })
+        body: JSON.stringify({ routines: routinesToSync })
       });
 
       const data = await res.json();
@@ -835,10 +862,6 @@ export default function WorkoutStudioPage() {
           setIsGarminAuthModalOpen(true);
         }
         throw new Error(data.error || 'Error durante la sincronización múltiple');
-      }
-
-      if (data.tokens) {
-        persistGarminTokens(data.tokens);
       }
 
       setIsHevyModalOpen(false);
@@ -973,7 +996,7 @@ export default function WorkoutStudioPage() {
             {accountStatus?.authenticated ? (
               <button
                 onClick={() => setIsGarminAuthModalOpen(true)}
-                className="saas-btn flex items-center gap-1.5 px-3 min-h-[38px] rounded-lg bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/25 text-emerald-800 text-xs font-semibold"
+                className="saas-btn flex items-center gap-1.5 px-3 min-h-[38px] rounded-lg bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/25 text-emerald-800 dark:text-emerald-300 text-xs font-semibold"
                 title="Cuenta Garmin Connect vinculada (clic para gestionar)"
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -1021,7 +1044,7 @@ export default function WorkoutStudioPage() {
               onClick={() => setIsGarminAuthModalOpen(true)}
               className={`min-h-[42px] px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 border transition-all active:scale-[0.98] ${
                 accountStatus?.authenticated
-                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-800'
+                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-800 dark:text-emerald-300'
                   : 'bg-primary border-primary text-primary-foreground shadow-xs'
               }`}
             >
@@ -1099,13 +1122,13 @@ export default function WorkoutStudioPage() {
                       setIsMobileMenuOpen(false);
                       setIsCloudRoutinesModalOpen(true);
                     }}
-                    className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200/80 flex items-center justify-between text-sm font-semibold text-emerald-900"
+                    className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 flex items-center justify-between text-sm font-semibold text-emerald-900 dark:text-emerald-200"
                   >
                     <span className="flex items-center gap-3">
-                      <Cloud className="w-4 h-4 text-emerald-600" />
+                      <Cloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                       <span>Mis Rutinas (Nube)</span>
                     </span>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-200/80 text-emerald-950 text-xs font-bold tabular-nums">
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-950 dark:text-emerald-200 text-xs font-bold tabular-nums">
                       {cloudRoutines.length}
                     </span>
                   </button>
@@ -1117,13 +1140,13 @@ export default function WorkoutStudioPage() {
                     setIsMobileMenuOpen(false);
                     setIsHevyModalOpen(true);
                   }}
-                  className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-orange-50/70 hover:bg-orange-100/70 border border-orange-200/80 flex items-center justify-between text-sm font-semibold text-orange-900"
+                  className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/25 flex items-center justify-between text-sm font-semibold text-orange-900 dark:text-orange-200"
                 >
                   <span className="flex items-center gap-3">
-                    <FileSpreadsheet className="w-4 h-4 text-orange-600" />
+                    <FileSpreadsheet className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                     <span>Importar desde Hevy</span>
                   </span>
-                  <ArrowRight className="w-4 h-4 text-orange-600" />
+                  <ArrowRight className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                 </button>
 
                 <button
@@ -1132,13 +1155,13 @@ export default function WorkoutStudioPage() {
                     setIsMobileMenuOpen(false);
                     setIsShareModalOpen(true);
                   }}
-                  className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/70 border border-indigo-200/80 flex items-center justify-between text-sm font-semibold text-indigo-900"
+                  className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 flex items-center justify-between text-sm font-semibold text-indigo-900 dark:text-indigo-200"
                 >
                   <span className="flex items-center gap-3">
-                    <Share2 className="w-4 h-4 text-indigo-600" />
+                    <Share2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     <span>Compartir / Apple Watch</span>
                   </span>
-                  <ArrowRight className="w-4 h-4 text-indigo-600" />
+                  <ArrowRight className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 </button>
 
                 <button
@@ -1147,13 +1170,13 @@ export default function WorkoutStudioPage() {
                     setIsMobileMenuOpen(false);
                     setIsGuideModalOpen(true);
                   }}
-                  className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-blue-50/70 hover:bg-blue-100/70 border border-blue-200/80 flex items-center justify-between text-sm font-semibold text-blue-900"
+                  className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 flex items-center justify-between text-sm font-semibold text-blue-900 dark:text-blue-200"
                 >
                   <span className="flex items-center gap-3">
-                    <BookOpen className="w-4 h-4 text-blue-600" />
+                    <BookOpen className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     <span>Guía Interactiva</span>
                   </span>
-                  <ArrowRight className="w-4 h-4 text-blue-600" />
+                  <ArrowRight className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 </button>
 
                 <button
@@ -1277,14 +1300,14 @@ export default function WorkoutStudioPage() {
           <div
             className={`p-4 rounded-xl border flex items-start gap-3 shadow-sm transition-all duration-200 ${
               statusMessage.type === 'success'
-                ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
-                : 'bg-rose-50/90 border-rose-200 text-rose-950'
+                ? 'bg-emerald-50/90 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200'
+                : 'bg-rose-50/90 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-950 dark:text-rose-200'
             }`}
           >
             {statusMessage.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
             )}
             <div className="flex-1 text-sm font-medium">{statusMessage.text}</div>
             <button
@@ -1734,21 +1757,21 @@ export default function WorkoutStudioPage() {
               <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
                 <button
                   onClick={() => setIsGeneratorModalOpen(true)}
-                  className="saas-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 shadow-xs"
+                  className="saas-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-700 dark:text-indigo-300 text-xs font-semibold hover:bg-indigo-500/25 shadow-xs"
                 >
                   <Sparkles className="w-4 h-4" />
                   <span>Generador Inteligente</span>
                 </button>
                 <button
                   onClick={() => setIsHevyModalOpen(true)}
-                  className="saas-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-50 border border-orange-200/80 text-orange-700 text-xs font-semibold hover:bg-orange-100 shadow-xs"
+                  className="saas-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-700 dark:text-orange-300 text-xs font-semibold hover:bg-orange-500/25 shadow-xs"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
                   <span>Importar desde Hevy</span>
                 </button>
                 <button
                   onClick={() => setStudioSubTab('guide')}
-                  className="saas-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-800 text-xs font-semibold hover:bg-amber-100 shadow-xs"
+                  className="saas-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-semibold hover:bg-amber-500/25 shadow-xs"
                 >
                   <Award className="w-4 h-4" />
                   <span>Top Gimnasio</span>
@@ -1792,7 +1815,7 @@ export default function WorkoutStudioPage() {
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0 border border-blue-200/70 tabular-nums shadow-2xs">
+                      <span className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center shrink-0 border border-blue-500/30 tabular-nums shadow-2xs">
                         {String(index + 1).padStart(2, '0')}
                       </span>
                       <div className="min-w-0 flex-1">
@@ -1802,7 +1825,7 @@ export default function WorkoutStudioPage() {
                         <div className="flex flex-wrap items-center gap-2 mt-1">
                           <span
                             title={`ID Garmin: ${block.exercise.garminName}`}
-                            className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-blue-500/10 text-blue-700 border border-blue-500/20"
+                            className="text-xs font-medium px-2.5 py-0.5 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20"
                           >
                             {block.exercise.muscleGroup}
                           </span>
@@ -1810,14 +1833,14 @@ export default function WorkoutStudioPage() {
                             {block.exercise.equipment}
                           </span>
                           {isInSuperset && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-700 border border-indigo-500/20">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
                               <Link2 className="w-3 h-3" />
                               <span>Superserie</span>
                             </span>
                           )}
                           {record?.bestEstimated1RM ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 border border-amber-500/20 tabular-nums">
-                              <Trophy className="w-3 h-3 text-amber-600" />
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 tabular-nums">
+                              <Trophy className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                               <span>PR: {record.bestWeightKg}kg &bull; 1RM: {record.bestEstimated1RM}kg</span>
                             </span>
                           ) : null}
@@ -1835,7 +1858,7 @@ export default function WorkoutStudioPage() {
                           className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-95 ${
                             isLinkedToNext
                               ? 'bg-indigo-600 text-white border-indigo-600'
-                              : 'bg-muted/40 hover:bg-indigo-50 text-muted-foreground hover:text-indigo-700 border-border/60'
+                              : 'bg-muted/40 hover:bg-indigo-500/15 text-muted-foreground hover:text-indigo-700 dark:hover:text-indigo-300 border-border/60'
                           }`}
                         >
                           <Link2 className="w-3.5 h-3.5" />
@@ -2303,7 +2326,7 @@ export default function WorkoutStudioPage() {
                   href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`¡Hola! Te comparto la rutina de hoy (${routine.name}) para entrenar juntos: ${shareUrl}`)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 hover:-translate-y-0.5 text-center"
+                  className="py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 hover:-translate-y-0.5 text-center"
                 >
                   <span>Enviar por WhatsApp</span>
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -2520,7 +2543,7 @@ export default function WorkoutStudioPage() {
             {/* Contenido de la pestaña */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {hevyError && (
-                <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-200 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{hevyError}</span>
                 </div>
@@ -2530,15 +2553,15 @@ export default function WorkoutStudioPage() {
               {hevyTab === 'api' && (
                 <div className="space-y-4">
                   {isHevyKeySaved && !isEditingHevyKey ? (
-                    <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         <div>
-                          <p className="text-xs font-bold text-emerald-950">
+                          <p className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
                             API Key de Hevy guardada permanentemente
                           </p>
-                          <p className="text-[11px] text-emerald-700">
-                            Clave activa ({hevyApiKey ? `••••${hevyApiKey.slice(-4)}` : 'Configurada'}) sincronizada en tu navegador y cuenta
+                          <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                            Sesión cifrada en cookie segura del servidor (sin exposición en navegador)
                           </p>
                         </div>
                       </div>
@@ -2628,7 +2651,7 @@ export default function WorkoutStudioPage() {
                             <div
                               key={r.id}
                               className={`p-4 flex items-center justify-between transition-all duration-200 ${
-                                isSelected ? 'bg-blue-50/70' : 'hover:bg-muted/50'
+                                isSelected ? 'bg-blue-500/15' : 'hover:bg-muted/50'
                               }`}
                             >
                               <div className="flex items-center gap-3">
@@ -2679,7 +2702,7 @@ export default function WorkoutStudioPage() {
                   {/* Zona de Drop / Input de archivo */}
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-border hover:border-blue-400 rounded-xl p-6 text-center cursor-pointer bg-muted/20 hover:bg-blue-50/30 transition-all duration-200"
+                    className="border-2 border-dashed border-border hover:border-blue-400 rounded-xl p-6 text-center cursor-pointer bg-muted/20 hover:bg-blue-500/10 transition-all duration-200"
                   >
                     <FileSpreadsheet className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                     <p className="text-sm font-semibold text-foreground">
@@ -2719,7 +2742,7 @@ export default function WorkoutStudioPage() {
                             <div
                               key={w.id}
                               className={`p-4 flex items-center justify-between transition-all duration-200 ${
-                                isSelected ? 'bg-blue-50/70' : 'hover:bg-muted/50'
+                                isSelected ? 'bg-blue-500/15' : 'hover:bg-muted/50'
                               }`}
                             >
                               <div className="flex items-center gap-3">
@@ -2901,18 +2924,15 @@ export default function WorkoutStudioPage() {
             displayName: data.displayName,
             username: data.username
           });
-          if (data.tokens) {
-            persistGarminTokens(data.tokens);
-          }
           setStatusMessage({
             type: 'success',
-            text: `¡Cuenta Garmin Connect (${data.displayName || 'Fénix 8'}) vinculada y guardada permanentemente!`
+            text: `¡Cuenta Garmin Connect (${data.displayName || 'Fénix 8'}) vinculada de forma segura!`
           });
           setTimeout(() => setStatusMessage(null), 4000);
         }}
         onDisconnect={() => {
           setAccountStatus({ authenticated: false });
-          setGarminTokens(null);
+          fetch('/api/garmin/logout', { method: 'POST' }).catch(() => {});
           try {
             localStorage.removeItem('garmin_oauth_tokens');
           } catch {

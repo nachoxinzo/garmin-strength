@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { syncRoutineToGarmin } from '@/lib/garmin-service';
+import {
+  attachEncryptedCookie,
+  GARMIN_SESSION_COOKIE,
+  readEncryptedCookie,
+} from '@/lib/crypto-session';
+import { GarminTokensPayload, syncRoutineToGarmin } from '@/lib/garmin-service';
 import { StrengthRoutine } from '@/lib/types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
@@ -17,7 +22,9 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const routines: StrengthRoutine[] = body.routines;
-    let currentTokens = body.garminTokens || null;
+    const cookieTokens = readEncryptedCookie<GarminTokensPayload>(req, GARMIN_SESSION_COOKIE);
+    let currentTokens: GarminTokensPayload | null =
+      cookieTokens || (body?.garminTokens as GarminTokensPayload | null) || null;
 
     if (!Array.isArray(routines) || routines.length === 0) {
       return NextResponse.json(
@@ -50,14 +57,14 @@ export async function POST(req: Request) {
         results.push({
           workoutId: res.workoutId,
           workoutName: res.workoutName || routine.name,
-          success: true
+          success: true,
         });
       } catch (err: any) {
         console.error(`Error sincronizando rutina "${routine.name}":`, err);
         results.push({
           workoutName: routine.name,
           success: false,
-          error: err.message || 'Error desconocido'
+          error: err.message || 'Error desconocido',
         });
       }
 
@@ -69,13 +76,16 @@ export async function POST(req: Request) {
     const totalSuccess = results.filter((r) => r.success).length;
     const totalFailed = results.filter((r) => !r.success).length;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: totalSuccess > 0,
       totalSuccess,
       totalFailed,
       results,
-      tokens: currentTokens
     });
+    if (currentTokens) {
+      attachEncryptedCookie(response, GARMIN_SESSION_COOKIE, currentTokens, req);
+    }
+    return response;
   } catch (error: any) {
     console.error('Error en sync-batch:', error);
     return NextResponse.json(

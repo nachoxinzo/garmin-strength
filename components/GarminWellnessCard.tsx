@@ -51,23 +51,16 @@ export function GarminWellnessCard({
     setErrorMsg(null);
     setImportNotice(null);
     try {
-      const rawTokens = localStorage.getItem('garmin_oauth_tokens');
-      const garminTokens = rawTokens ? JSON.parse(rawTokens) : null;
-
       const res = await fetch('/api/garmin/wellness-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ garminTokens }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'No se pudo sincronizar con Garmin Connect.');
       }
 
-      const latestTokens = data.tokens || garminTokens;
-      if (data.tokens) {
-        localStorage.setItem('garmin_oauth_tokens', JSON.stringify(data.tokens));
-      }
       saveGarminWellnessSnapshot(data.snapshot);
       setSnapshot(data.snapshot);
 
@@ -76,13 +69,10 @@ export function GarminWellnessCard({
         const strengthRes = await fetch('/api/garmin/strength-import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ garminTokens: latestTokens }),
+          body: JSON.stringify({}),
         });
         const strengthData = await strengthRes.json();
         if (strengthRes.ok && strengthData.success) {
-          if (strengthData.tokens) {
-            localStorage.setItem('garmin_oauth_tokens', JSON.stringify(strengthData.tokens));
-          }
           const logs = Array.isArray(strengthData.logs)
             ? (strengthData.logs as DbWorkoutLog[])
             : [];
@@ -120,21 +110,14 @@ export function GarminWellnessCard({
     setErrorMsg(null);
     setImportNotice(null);
     try {
-      const rawTokens = localStorage.getItem('garmin_oauth_tokens');
-      const garminTokens = rawTokens ? JSON.parse(rawTokens) : null;
-
       const res = await fetch('/api/garmin/strength-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ garminTokens }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'No se pudieron importar las sesiones de fuerza de Garmin.');
-      }
-
-      if (data.tokens) {
-        localStorage.setItem('garmin_oauth_tokens', JSON.stringify(data.tokens));
       }
 
       const logs = Array.isArray(data.logs) ? (data.logs as DbWorkoutLog[]) : [];

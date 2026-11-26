@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server';
-import { fetchGarminWellnessSnapshot } from '@/lib/garmin-service';
+import {
+  attachEncryptedCookie,
+  GARMIN_SESSION_COOKIE,
+  readEncryptedCookie,
+} from '@/lib/crypto-session';
+import {
+  fetchGarminWellnessSnapshot,
+  GarminTokensPayload,
+} from '@/lib/garmin-service';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
@@ -15,8 +23,16 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const result = await fetchGarminWellnessSnapshot(body.garminTokens || null);
-    return NextResponse.json(result);
+    const cookieTokens = readEncryptedCookie<GarminTokensPayload>(req, GARMIN_SESSION_COOKIE);
+    const effectiveTokens = cookieTokens || (body?.garminTokens as GarminTokensPayload | null) || null;
+
+    const result = await fetchGarminWellnessSnapshot(effectiveTokens);
+    const { tokens, ...safeResult } = result;
+    const res = NextResponse.json(safeResult);
+    if (tokens) {
+      attachEncryptedCookie(res, GARMIN_SESSION_COOKIE, tokens, req);
+    }
+    return res;
   } catch (error: any) {
     const message = error?.message || 'Error al obtener datos de salud y deporte de Garmin';
     const status = message.includes('No hay sesión activa') ? 401 : 500;

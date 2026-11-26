@@ -182,19 +182,14 @@ export function WeeklyPlanModal({
     setIsSyncingWeek(true);
     setWeekSyncNotice(null);
     try {
-      const rawTokens = localStorage.getItem('garmin_oauth_tokens');
-      const garminTokens = rawTokens ? JSON.parse(rawTokens) : null;
       const res = await fetch('/api/garmin/sync-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ routines: routinesToSync, garminTokens }),
+        body: JSON.stringify({ routines: routinesToSync }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Conecta tu cuenta de Garmin antes de enviar la semana.');
-      }
-      if (data.tokens) {
-        localStorage.setItem('garmin_oauth_tokens', JSON.stringify(data.tokens));
       }
       setWeekSyncNotice({
         ok: true,
@@ -416,8 +411,8 @@ export function WeeklyPlanModal({
             <div
               className={`p-3 rounded-xl border text-xs font-medium ${
                 weekSyncNotice.ok
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                  : 'bg-rose-50 border-rose-200 text-rose-800'
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
+                  : 'bg-rose-500/15 border-rose-500/30 text-rose-800 dark:text-rose-200'
               }`}
             >
               {weekSyncNotice.text}
@@ -425,7 +420,7 @@ export function WeeklyPlanModal({
           )}
 
           {moveSourceDay && (
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
+            <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between gap-2">
               <span>
                 Selecciona el día destino para mover/intercambiar la sesión del{' '}
                 <strong>{WEEK_DAYS.find((x) => x.key === moveSourceDay)?.label}</strong>.
@@ -452,9 +447,9 @@ export function WeeklyPlanModal({
                   key={d.key}
                   className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
                     isMoveOrigin
-                      ? 'bg-amber-50/70 border-amber-400'
+                      ? 'bg-amber-500/15 border-amber-500/50'
                       : isToday
-                      ? 'bg-blue-50/60 border-blue-300'
+                      ? 'bg-blue-500/10 border-blue-500/40'
                       : 'bg-card border-border/60'
                   }`}
                 >

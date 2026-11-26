@@ -5,6 +5,7 @@ import {
   generateSmartLocalRoutine,
   MyGymProfile,
 } from '@/lib/smart-workout-engine';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { WorkoutExerciseBlock } from '@/lib/types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
         ? (body.gymProfile.availableEquipment as EquipmentType[])
         : DEFAULT_GYM_PROFILE.availableEquipment,
       avoidLowerBackFatigue: Boolean(body.gymProfile?.avoidLowerBackFatigue),
-      gymName: String(body.gymProfile?.gymName || DEFAULT_GYM_PROFILE.gymName),
+      gymName: String(body.gymProfile?.gymName || DEFAULT_GYM_PROFILE.gymName).slice(0, 60),
     };
     const durationMinutes = ([45, 60, 75, 90].includes(body.durationMinutes) ? body.durationMinutes : 60) as 45 | 60 | 75 | 90;
     const goal = (['hypertrophy', 'strength', 'powerbuilding'].includes(body.goal) ? body.goal : 'hypertrophy') as 'hypertrophy' | 'strength' | 'powerbuilding';
@@ -43,12 +44,28 @@ export async function POST(req: Request) {
       body.knownWeights && typeof body.knownWeights === 'object' ? body.knownWeights : {};
     const wellness = body.wellness && typeof body.wellness === 'object' ? body.wellness : null;
     const weeklyMuscleDeficits = Array.isArray(body.weeklyMuscleDeficits)
-      ? body.weeklyMuscleDeficits
+      ? body.weeklyMuscleDeficits.slice(0, 10).map((m: unknown) => String(m).slice(0, 40))
       : [];
     const deloadMode = Boolean(body.deloadMode);
 
+    // Proteger la cuota de GEMINI_API_KEY: exigir sesión autenticada en Supabase si está configurado;
+    // los usuarios sin sesión usan de forma segura el motor determinista local sin coste.
+    let canUsePaidGemini = false;
     const geminiKey = process.env.GEMINI_API_KEY;
-    if (!geminiKey) {
+    if (geminiKey) {
+      if (isSupabaseConfigured() && supabase) {
+        const authHeader = req.headers.get('authorization');
+        const jwt = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+        if (jwt) {
+          const { data: authData } = await supabase.auth.getUser(jwt).catch(() => ({ data: { user: null } }));
+          canUsePaidGemini = Boolean(authData?.user);
+        }
+      } else {
+        canUsePaidGemini = process.env.NODE_ENV !== 'production';
+      }
+    }
+
+    if (!geminiKey || !canUsePaidGemini) {
       const localResult = generateSmartLocalRoutine({
         prompt,
         gymProfile,
@@ -109,10 +126,13 @@ ${catalogSummary}`;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: systemInstruction }],
+          },
           contents: [
             {
               role: 'user',
-              parts: [{ text: `${systemInstruction}\n\nSOLICITUD DEL ATLETA: ${prompt}` }],
+              parts: [{ text: `SOLICITUD DEL ATLETA: ${prompt}` }],
             },
           ],
           generationConfig: {

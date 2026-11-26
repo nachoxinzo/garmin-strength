@@ -33,6 +33,7 @@ import {
 import { StrengthRoutine } from '@/lib/types';
 import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
 import { analyzeWeeklyMuscleBalance } from '@/lib/weekly-volume-analyzer';
+import { supabase } from '@/lib/supabase';
 
 interface WorkoutGeneratorModalProps {
   isOpen: boolean;
@@ -120,9 +121,17 @@ export default function WorkoutGeneratorModal({
       const weeklyMuscleDeficits = analyzeWeeklyMuscleBalance()
         .filter((m) => m.status === 'deficit')
         .map((m) => m.muscle);
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (supabase) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData?.session?.access_token;
+        if (accessToken) {
+          headers.Authorization = `Bearer ${accessToken}`;
+        }
+      }
       const res = await fetch('/api/routines/smart-generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           prompt: smartPrompt,
           gymProfile,
@@ -401,7 +410,7 @@ export default function WorkoutGeneratorModal({
               </div>
 
               {smartError && (
-                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-200 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{smartError}</span>
                 </div>
@@ -409,23 +418,23 @@ export default function WorkoutGeneratorModal({
 
               {/* Vista previa de la rutina generada */}
               {smartPreview && (
-                <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-200/80 space-y-3 animate-in fade-in duration-200">
+                <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs font-bold text-indigo-900">
+                    <div className="text-xs font-bold text-indigo-900 dark:text-indigo-200">
                       Rutina Propuesta: {smartPreview.routine.name}
                     </div>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white text-indigo-700 border border-indigo-200">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-card text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
                       {smartPreview.source === 'gemini' ? 'Gemini AI' : 'Motor Adaptativo'}
                     </span>
                   </div>
-                  <p className="text-xs text-indigo-950/80 leading-relaxed">
+                  <p className="text-xs text-indigo-950/85 dark:text-indigo-200/85 leading-relaxed">
                     {smartPreview.coachRationale}
                   </p>
                   <div className="space-y-1.5 pt-1">
                     {smartPreview.routine.blocks.map((b, i) => (
                       <div
                         key={b.id}
-                        className="flex items-center justify-between text-xs bg-white/90 px-3 py-2 rounded-lg border border-indigo-100 tabular-nums"
+                        className="flex items-center justify-between text-xs bg-card px-3 py-2 rounded-lg border border-border/70 tabular-nums"
                       >
                         <span className="font-semibold text-foreground truncate pr-2">
                           {i + 1}. {b.exercise.name}
@@ -465,7 +474,7 @@ export default function WorkoutGeneratorModal({
                       }}
                       className={`p-3 rounded-xl border text-left transition-all ${
                         split === s.id
-                          ? 'bg-indigo-50 border-indigo-400 text-indigo-950 shadow-sm'
+                          ? 'bg-indigo-500/15 border-indigo-500/50 text-indigo-950 dark:text-indigo-200 shadow-sm'
                           : 'bg-card border-border/60 text-muted-foreground hover:bg-muted/40'
                       }`}
                     >
@@ -488,12 +497,12 @@ export default function WorkoutGeneratorModal({
                       onClick={() => setSessionDay(day.id)}
                       className={`px-3.5 py-2.5 rounded-xl border text-xs font-semibold text-left flex items-center justify-between transition-all ${
                         sessionDay === day.id
-                          ? 'bg-blue-50 border-blue-400 text-blue-950'
+                          ? 'bg-blue-500/15 border-blue-500/50 text-blue-950 dark:text-blue-200'
                           : 'bg-card border-border/60 text-muted-foreground hover:bg-muted/40'
                       }`}
                     >
                       <span>{day.label}</span>
-                      {sessionDay === day.id && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+                      {sessionDay === day.id && <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
                     </button>
                   ))}
                 </div>
@@ -551,7 +560,7 @@ export default function WorkoutGeneratorModal({
                       onClick={() => setLevel(lvl.id as ExperienceLevel)}
                       className={`min-h-[40px] py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${
                         level === lvl.id
-                          ? 'bg-emerald-50 border-emerald-400 text-emerald-900'
+                          ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-900 dark:text-emerald-200'
                           : 'bg-card border-border/60 text-muted-foreground hover:bg-muted/40'
                       }`}
                     >

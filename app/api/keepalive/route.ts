@@ -1,17 +1,34 @@
+import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+function timingSafeBearerMatch(authHeader: string | null, expectedSecret: string): boolean {
+  if (!authHeader) return false;
+  const expected = `Bearer ${expectedSecret}`;
+  const a = Buffer.from(authHeader);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 /**
- * Endpoint ligero de keep-alive para mantener activo el proyecto gratuito de Supabase
- * ejecutando una consulta mínima sobre la tabla `routines`.
+ * Endpoint ligero de keep-alive para mantener activo el proyecto gratuito de Supabase.
+ * En producción exige CRON_SECRET obligatorio.
  */
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
+  if (process.env.NODE_ENV === 'production' && !cronSecret) {
+    return NextResponse.json(
+      { ok: false, error: 'CRON_SECRET no configurado en producción.' },
+      { status: 500 }
+    );
+  }
+
   if (cronSecret) {
     const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${cronSecret}`) {
+    if (!timingSafeBearerMatch(authHeader, cronSecret)) {
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     }
   }

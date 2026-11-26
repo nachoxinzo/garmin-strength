@@ -184,20 +184,14 @@ export default function ProgressDashboard() {
     setGarminImportNotice(null);
     setGarminImportError(null);
     try {
-      const rawTokens = localStorage.getItem('garmin_oauth_tokens');
-      const garminTokens = rawTokens ? JSON.parse(rawTokens) : null;
-
       const res = await fetch('/api/garmin/strength-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ garminTokens }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'No se pudieron importar las sesiones de fuerza de Garmin.');
-      }
-      if (data.tokens) {
-        localStorage.setItem('garmin_oauth_tokens', JSON.stringify(data.tokens));
       }
 
       const logs = Array.isArray(data.logs) ? (data.logs as DbWorkoutLog[]) : [];
@@ -325,8 +319,8 @@ export default function ProgressDashboard() {
             </p>
           </div>
           {deficitMuscles.length > 0 && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold shrink-0">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-xs font-semibold shrink-0">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               <span>{deficitMuscles.length} grupos con margen de estímulo</span>
             </span>
           )}
@@ -346,10 +340,10 @@ export default function ProgressDashboard() {
                   <span
                     className={`font-semibold tabular-nums inline-flex items-center gap-1 ${
                       m.status === 'deficit'
-                        ? 'text-amber-700'
+                        ? 'text-amber-700 dark:text-amber-400'
                         : m.status === 'optimal'
-                        ? 'text-emerald-700'
-                        : 'text-blue-700'
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : 'text-blue-700 dark:text-blue-400'
                     }`}
                   >
                     {m.status === 'optimal' && <CheckCircle2 className="w-3 h-3" />}
@@ -384,7 +378,7 @@ export default function ProgressDashboard() {
       <div className="space-y-6">
         {renderMuscleBalanceCard()}
         <div className="bg-card rounded-2xl border border-border/80 p-8 sm:p-12 text-center saas-card max-w-xl mx-auto my-4 animate-in fade-in duration-150">
-        <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-5 border border-blue-100 shadow-xs">
+        <div className="w-16 h-16 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto mb-5 border border-blue-500/30 shadow-xs">
           <TrendingUp className="w-8 h-8" />
         </div>
         <h3 className="text-lg font-bold text-foreground mb-2">
@@ -415,12 +409,12 @@ export default function ProgressDashboard() {
         </div>
 
         {garminImportNotice && (
-          <div className="mt-4 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
+          <div className="mt-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
             {garminImportNotice}
           </div>
         )}
         {garminImportError && (
-          <div className="mt-4 rounded-xl bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700">
+          <div className="mt-4 rounded-xl bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">
             {garminImportError}
           </div>
         )}
@@ -455,19 +449,19 @@ export default function ProgressDashboard() {
       <div className="bg-card rounded-xl border border-border/80 p-4 saas-card space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
               <BarChart2 className="w-4 h-4" />
             </div>
             <div>
               <div className="text-xs font-semibold text-foreground flex flex-wrap items-center gap-2">
                 <span>Origen de Datos:</span>
                 {hasCloudSource ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <Cloud className="w-3 h-3 text-emerald-600" />
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                    <Cloud className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                     Supabase Cloud
                   </span>
                 ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
                     Historial Local (Hevy)
                   </span>
                 )}
@@ -534,12 +528,12 @@ export default function ProgressDashboard() {
         </div>
 
         {garminImportNotice && (
-          <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
+          <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
             {garminImportNotice}
           </div>
         )}
         {garminImportError && (
-          <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700">
+          <div className="rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">
             {garminImportError}
           </div>
         )}
@@ -550,14 +544,14 @@ export default function ProgressDashboard() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* Selector de Ejercicio con Buscador */}
           <div className="flex-1 max-w-md">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
               Ejercicio para Analizar
             </label>
             <div className="relative">
               <select
                 value={selectedExercise}
                 onChange={e => setSelectedExercise(e.target.value)}
-                className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                className="w-full min-h-[42px] bg-background hover:bg-muted/40 border border-border/80 rounded-xl px-3.5 py-2.5 text-base sm:text-sm font-bold text-foreground outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 transition-all cursor-pointer"
               >
                 {filteredExercises.map(ex => (
                   <option key={ex} value={ex}>
@@ -570,18 +564,18 @@ export default function ProgressDashboard() {
 
           {/* Selector de Métrica */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Métrica de Visualización
             </label>
-            <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
+            <div className="flex flex-wrap items-center gap-1.5 bg-muted p-1 rounded-xl border border-border/70">
               {(['maxWeight', 'estimated1RM', 'totalVolume', 'bestSetVolume'] as MetricMode[]).map(m => (
                 <button
                   key={m}
                   onClick={() => setMetric(m)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     metric === m
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'bg-card text-foreground shadow-xs border border-border/60'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {m === 'maxWeight' && 'Peso Máximo'}
@@ -596,62 +590,62 @@ export default function ProgressDashboard() {
 
         {/* Resumen Superior del Ejercicio Seleccionado */}
         {currentStats && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-slate-100">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-border/60">
             {/* PR Peso Máximo */}
-            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/60">
-              <div className="flex items-center justify-between text-slate-500">
+            <div className="bg-muted/35 rounded-xl p-3 border border-border/70">
+              <div className="flex items-center justify-between text-muted-foreground">
                 <span className="text-[11px] font-bold uppercase">Récord de Carga</span>
                 <Trophy className="w-3.5 h-3.5 text-amber-500" />
               </div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 tabular-nums mt-1">
-                {currentStats.allTimeMaxWeight.weight} <span className="text-xs font-normal text-slate-500">kg</span>
+              <div className="text-xl sm:text-2xl font-black text-foreground tabular-nums mt-1">
+                {currentStats.allTimeMaxWeight.weight} <span className="text-xs font-normal text-muted-foreground">kg</span>
               </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
+              <div className="text-[10px] text-muted-foreground mt-0.5">
                 {currentStats.allTimeMaxWeight.date || 'Sin fecha'}
               </div>
             </div>
 
             {/* 1RM Estimado */}
-            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/60">
-              <div className="flex items-center justify-between text-slate-500">
+            <div className="bg-muted/35 rounded-xl p-3 border border-border/70">
+              <div className="flex items-center justify-between text-muted-foreground">
                 <span className="text-[11px] font-bold uppercase">1RM Pico</span>
                 <Zap className="w-3.5 h-3.5 text-blue-500" />
               </div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 tabular-nums mt-1">
-                {currentStats.allTimeEstimated1RM.e1rm} <span className="text-xs font-normal text-slate-500">kg</span>
+              <div className="text-xl sm:text-2xl font-black text-foreground tabular-nums mt-1">
+                {currentStats.allTimeEstimated1RM.e1rm} <span className="text-xs font-normal text-muted-foreground">kg</span>
               </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
+              <div className="text-[10px] text-muted-foreground mt-0.5">
                 {currentStats.allTimeEstimated1RM.weight}k × {currentStats.allTimeEstimated1RM.reps}r
               </div>
             </div>
 
             {/* Mejor Serie en Volumen */}
-            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/60">
-              <div className="flex items-center justify-between text-slate-500">
+            <div className="bg-muted/35 rounded-xl p-3 border border-border/70">
+              <div className="flex items-center justify-between text-muted-foreground">
                 <span className="text-[11px] font-bold uppercase">Mejor Serie Tonelaje</span>
                 <Flame className="w-3.5 h-3.5 text-orange-500" />
               </div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 tabular-nums mt-1">
-                {currentStats.allTimeMaxSetVolume.volume} <span className="text-xs font-normal text-slate-500">kg</span>
+              <div className="text-xl sm:text-2xl font-black text-foreground tabular-nums mt-1">
+                {currentStats.allTimeMaxSetVolume.volume} <span className="text-xs font-normal text-muted-foreground">kg</span>
               </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
+              <div className="text-[10px] text-muted-foreground mt-0.5">
                 {currentStats.allTimeMaxSetVolume.weight}k × {currentStats.allTimeMaxSetVolume.reps}r
               </div>
             </div>
 
             {/* Sesiones y Progreso */}
-            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/60">
-              <div className="flex items-center justify-between text-slate-500">
+            <div className="bg-muted/35 rounded-xl p-3 border border-border/70">
+              <div className="flex items-center justify-between text-muted-foreground">
                 <span className="text-[11px] font-bold uppercase">Sesiones</span>
                 <Calendar className="w-3.5 h-3.5 text-emerald-500" />
               </div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 tabular-nums mt-1">
+              <div className="text-xl sm:text-2xl font-black text-foreground tabular-nums mt-1">
                 {currentStats.totalSessions}
               </div>
               {percentageChange ? (
                 <div
                   className={`text-[10px] font-bold flex items-center gap-0.5 mt-0.5 ${
-                    percentageChange.diff >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                    percentageChange.diff >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
                   }`}
                 >
                   {percentageChange.diff >= 0 ? (
@@ -666,7 +660,7 @@ export default function ProgressDashboard() {
                   </span>
                 </div>
               ) : (
-                <div className="text-[10px] text-slate-400 mt-0.5">Primer registro</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Primer registro</div>
               )}
             </div>
           </div>
@@ -674,24 +668,24 @@ export default function ProgressDashboard() {
       </div>
 
       {/* Gráfica Interactiva SVG */}
-      <div className="bg-white rounded-xl border border-slate-200/90 p-5 sm:p-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.03)] space-y-4">
+      <div className="bg-card rounded-xl border border-border/80 p-5 sm:p-6 saas-card space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-blue-600" />
+              <h3 className="font-bold text-foreground text-base flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <span>{metricLabels[metric].title}</span>
               </h3>
               {chartData?.trend && (
                 <span
                   className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
                     chartData.trend.isPlateau
-                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30'
                       : chartData.trend.direction === 'up'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                       : chartData.trend.direction === 'down'
-                      ? 'bg-rose-50 text-rose-700 border-rose-200'
-                      : 'bg-slate-100 text-slate-700 border-slate-200'
+                      ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                      : 'bg-muted text-muted-foreground border-border'
                   }`}
                 >
                   {chartData.trend.isPlateau
@@ -700,11 +694,11 @@ export default function ProgressDashboard() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">{metricLabels[metric].desc}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{metricLabels[metric].desc}</p>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200/60">
+            <div className="inline-flex items-center gap-1 bg-muted p-1 rounded-lg border border-border/70">
               {(['1M', '3M', '6M', 'ALL'] as TimeRangeMode[]).map((r) => (
                 <button
                   key={r}
@@ -712,8 +706,8 @@ export default function ProgressDashboard() {
                   onClick={() => setTimeRange(r)}
                   className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
                     timeRange === r
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'bg-card text-foreground shadow-xs border border-border/60'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {r === 'ALL' ? 'Todo' : r}
@@ -722,14 +716,14 @@ export default function ProgressDashboard() {
             </div>
 
             {hoveredPoint && (
-              <div className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200/80 text-right animate-in fade-in duration-100">
-                <div className="text-xs font-black text-blue-900 tabular-nums">
+              <div className="px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-500/30 text-right animate-in fade-in duration-100">
+                <div className="text-xs font-black text-blue-900 dark:text-blue-200 tabular-nums">
                   {metric === 'maxWeight' && `${hoveredPoint.maxWeight} kg`}
                   {metric === 'estimated1RM' && `${hoveredPoint.bestEstimated1RM} kg`}
                   {metric === 'totalVolume' && `${hoveredPoint.totalVolume} kg`}
                   {metric === 'bestSetVolume' && `${hoveredPoint.bestSetVolume} kg`}
                 </div>
-                <div className="text-[10px] text-blue-600">{hoveredPoint.formattedDate}</div>
+                <div className="text-[10px] text-blue-600 dark:text-blue-400">{hoveredPoint.formattedDate}</div>
               </div>
             )}
           </div>
@@ -761,11 +755,20 @@ export default function ProgressDashboard() {
                       y1={y}
                       x2="780"
                       y2={y}
-                      stroke="#F1F5F9"
+                      stroke="currentColor"
+                      className="text-border"
                       strokeWidth="1.5"
                       strokeDasharray="4 4"
                     />
-                    <text x="32" y={y + 4} fill="#94A3B8" fontSize="10" textAnchor="end" fontFamily="monospace">
+                    <text
+                      x="32"
+                      y={y + 4}
+                      fill="currentColor"
+                      className="text-muted-foreground"
+                      fontSize="10"
+                      textAnchor="end"
+                      fontFamily="monospace"
+                    >
                       {val}
                     </text>
                   </g>
@@ -837,7 +840,8 @@ export default function ProgressDashboard() {
                           <text
                             x={c.x}
                             y="265"
-                            fill="#64748B"
+                            fill="currentColor"
+                            className="text-muted-foreground"
                             fontSize="10"
                             textAnchor="middle"
                             fontFamily="monospace"
@@ -852,7 +856,7 @@ export default function ProgressDashboard() {
               })()}
             </svg>
           ) : (
-            <div className="h-full flex items-center justify-center text-sm text-slate-400">
+            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
               No hay datos suficientes para graficar este ejercicio.
             </div>
           )}
@@ -869,14 +873,14 @@ export default function ProgressDashboard() {
           : [];
         if (alternatives.length === 0) return null;
         return (
-          <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-4 sm:p-5 space-y-3">
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 sm:p-5 space-y-3">
             <div className="flex items-start gap-2.5">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <h4 className="text-xs sm:text-sm font-bold text-amber-950">
+                <h4 className="text-xs sm:text-sm font-bold text-amber-950 dark:text-amber-200">
                   Meseta detectada en {selectedExercise} (últimas 3 sesiones)
                 </h4>
-                <p className="text-xs text-amber-900/85 mt-0.5">
+                <p className="text-xs text-amber-900/85 dark:text-amber-200/80 mt-0.5">
                   Según la evidencia de periodización, rotar a una variante biomecánicamente equivalente reactiva la progresión sin perder el estímulo muscular:
                 </p>
               </div>
@@ -885,10 +889,10 @@ export default function ProgressDashboard() {
               {alternatives.map((alt) => (
                 <div
                   key={alt.exercise.id}
-                  className="rounded-lg bg-white border border-amber-200/70 p-3 space-y-1"
+                  className="rounded-lg bg-card border border-amber-500/30 p-3 space-y-1"
                 >
-                  <div className="text-xs font-bold text-slate-900">{alt.exercise.name}</div>
-                  <div className="text-[11px] text-slate-500">
+                  <div className="text-xs font-bold text-foreground">{alt.exercise.name}</div>
+                  <div className="text-[11px] text-muted-foreground">
                     {alt.exercise.equipment} &bull; {alt.reason}
                   </div>
                 </div>
@@ -902,34 +906,34 @@ export default function ProgressDashboard() {
       {currentStats && (
         <div className="bg-card rounded-xl border border-border/80 p-5 saas-card space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="font-bold text-slate-900 text-sm">Historial Cronológico de Sesiones</h4>
-            <span className="text-xs text-slate-500 font-medium">
+            <h4 className="font-bold text-foreground text-sm">Historial Cronológico de Sesiones</h4>
+            <span className="text-xs text-muted-foreground font-medium">
               {currentStats.progression.length} registros
             </span>
           </div>
 
-          <div className="divide-y divide-slate-100 border border-slate-200/80 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+          <div className="divide-y divide-border/60 border border-border/80 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
             {currentStats.progression
               .slice()
               .reverse()
               .map((s, idx) => (
                 <div
                   key={idx}
-                  className="p-3 sm:px-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-xs"
+                  className="p-3 sm:px-4 flex items-center justify-between hover:bg-muted/40 transition-colors text-xs"
                 >
                   <div>
-                    <span className="font-bold text-slate-900 text-sm">{s.formattedDate}</span>
-                    <span className="text-slate-400 ml-2 font-medium">({s.workoutTitle})</span>
-                    <div className="text-slate-500 text-[11px] mt-0.5">
+                    <span className="font-bold text-foreground text-sm">{s.formattedDate}</span>
+                    <span className="text-muted-foreground ml-2 font-medium">({s.workoutTitle})</span>
+                    <div className="text-muted-foreground text-[11px] mt-0.5">
                       {s.setsCount} series registradas · {s.totalReps} repeticiones totales
                     </div>
                   </div>
 
                   <div className="text-right">
-                    <div className="font-mono font-bold text-slate-900 text-sm">
-                      {s.maxWeight} kg <span className="text-[10px] text-slate-400 font-normal">máx</span>
+                    <div className="font-mono font-bold text-foreground text-sm tabular-nums">
+                      {s.maxWeight} kg <span className="text-[10px] text-muted-foreground font-normal">máx</span>
                     </div>
-                    <div className="text-[11px] text-blue-600 font-semibold font-mono">
+                    <div className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold font-mono tabular-nums">
                       {s.totalVolume} kg vol.
                     </div>
                   </div>

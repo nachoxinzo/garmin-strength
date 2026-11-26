@@ -4,6 +4,12 @@ import path from 'path';
 import { mapHevyToGarminCatalog } from '@/lib/hevy-mapper';
 import { StrengthRoutine, WorkoutExerciseBlock } from '@/lib/types';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import {
+  attachEncryptedCookie,
+  clearEncryptedCookie,
+  HEVY_SESSION_COOKIE,
+  readEncryptedCookie,
+} from '@/lib/crypto-session';
 
 const HEVY_API_BASE = 'https://api.hevyapp.com/v1';
 
@@ -113,8 +119,10 @@ async function handleFetchHevyRoutines(req: Request, bodyKey?: string | null) {
     }
 
     const headerKey = req.headers.get('x-hevy-api-key');
+    const cookieKey =
+      readEncryptedCookie<{ apiKey: string }>(req, HEVY_SESSION_COOKIE)?.apiKey || null;
     const providedKey = (bodyKey && bodyKey.trim()) || (headerKey && headerKey.trim()) || null;
-    const apiKey = providedKey || getHevyApiKey();
+    const apiKey = providedKey || cookieKey || getHevyApiKey();
 
     if (!apiKey) {
       return NextResponse.json(
@@ -304,11 +312,15 @@ async function handleFetchHevyRoutines(req: Request, bodyKey?: string | null) {
       });
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       authenticated: true,
       count: mappedRoutines.length,
       routines: mappedRoutines
     });
+    if (providedKey) {
+      attachEncryptedCookie(response, HEVY_SESSION_COOKIE, { apiKey: providedKey }, req);
+    }
+    return response;
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || 'Error conectando con Hevy API' },
@@ -325,4 +337,9 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const bodyKey = typeof body?.apiKey === 'string' ? body.apiKey : null;
   return handleFetchHevyRoutines(req, bodyKey);
+}
+
+export async function DELETE(req: Request) {
+  const res = NextResponse.json({ success: true });
+  return clearEncryptedCookie(res, HEVY_SESSION_COOKIE, req);
 }

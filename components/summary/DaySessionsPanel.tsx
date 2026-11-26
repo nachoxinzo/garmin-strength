@@ -152,25 +152,17 @@ export function DaySessionsPanel({
 
     setLoadingGarminId(act.activityId);
     try {
-      const rawTokens = localStorage.getItem('garmin_oauth_tokens');
-      const garminTokens = rawTokens ? JSON.parse(rawTokens) : null;
-
       const res = await fetch('/api/garmin/activity-detail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           activityId: act.activityId,
           sportCategory: act.sportCategory,
-          garminTokens,
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'No se pudo cargar el detalle de la actividad.');
-      }
-
-      if (data.tokens) {
-        localStorage.setItem('garmin_oauth_tokens', JSON.stringify(data.tokens));
       }
 
       setDetailsCache((prev) => ({

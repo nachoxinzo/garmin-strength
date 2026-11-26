@@ -108,35 +108,35 @@ export default function GarminAuthModal({
 
         <div className="p-6 space-y-5">
           {error && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-200 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
           {isConnected ? (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-emerald-50/90 border border-emerald-200 flex items-center gap-3.5">
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3.5">
                 <div className="w-11 h-11 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                       Sesión Activa y Guardada
                     </span>
                   </div>
-                  <p className="font-bold text-slate-900 text-sm truncate mt-0.5">
+                  <p className="font-bold text-foreground text-sm truncate mt-0.5">
                     {accountStatus?.displayName || 'Garmin Connect'}
                   </p>
                   {accountStatus?.username && (
-                    <p className="text-xs text-slate-500 truncate">{accountStatus.username}</p>
+                    <p className="text-xs text-muted-foreground truncate">{accountStatus.username}</p>
                   )}
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 flex items-start gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <div className="p-3.5 rounded-xl bg-muted/50 border border-border/70 text-xs text-muted-foreground flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
                 <span>
                   Tus tokens OAuth de Garmin están sincronizados en tu cuenta para que no tengas que volver a iniciar sesión al enviar entrenamientos al reloj.
                 </span>
@@ -146,14 +146,14 @@ export default function GarminAuthModal({
                 <button
                   type="button"
                   onClick={() => setShowReconnectForm(true)}
-                  className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all"
+                  className="min-h-[40px] px-3.5 py-2 rounded-xl bg-muted hover:bg-accent text-foreground border border-border/60 text-xs font-semibold transition-all"
                 >
                   Cambiar o reconectar cuenta
                 </button>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-all"
+                  className="min-h-[40px] px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-all"
                 >
                   Listo
                 </button>
@@ -163,62 +163,62 @@ export default function GarminAuthModal({
             <form onSubmit={handleLogin} className="space-y-4">
               {!requiresMfa ? (
                 <>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Introduce tus credenciales de <strong>Garmin Connect</strong>. Se generará un token seguro que quedará guardado en tu cuenta para enviar tus rutinas al <strong>Fénix 8</strong> con un clic.
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Introduce tus credenciales de <strong className="text-foreground">Garmin Connect</strong>. Se generará un token seguro que quedará guardado en tu cuenta para enviar tus rutinas al <strong className="text-foreground">Fénix 8</strong> con un clic.
                   </p>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                       Email de Garmin Connect
                     </label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <Mail className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
                         type="email"
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="tu-correo@ejemplo.com"
-                        className="w-full bg-slate-50 focus:bg-white border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-base sm:text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        className="w-full min-h-[42px] bg-background text-foreground placeholder:text-muted-foreground border border-border/80 rounded-xl pl-10 pr-3.5 py-2.5 text-base sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                       Contraseña de Garmin
                     </label>
                     <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <Lock className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
                         type="password"
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••••••"
-                        className="w-full bg-slate-50 focus:bg-white border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-base sm:text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        className="w-full min-h-[42px] bg-background text-foreground placeholder:text-muted-foreground border border-border/80 rounded-xl pl-10 pr-3.5 py-2.5 text-base sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                       />
                     </div>
                   </div>
                 </>
               ) : (
                 <div className="space-y-3">
-                  <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900">
+                  <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-xs text-blue-900 dark:text-blue-200">
                     Garmin ha enviado un código de verificación de seguridad (2FA) a tu correo o teléfono.
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
                       Código de verificación (MFA)
                     </label>
                     <div className="relative">
-                      <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <KeyRound className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
                         type="text"
                         required
                         value={mfaCode}
                         onChange={(e) => setMfaCode(e.target.value)}
                         placeholder="Ej: 123456"
-                        className="w-full bg-slate-50 focus:bg-white border border-slate-200 rounded-xl pl-10 pr-3.5 py-2.5 text-base sm:text-sm text-slate-900 font-mono outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        className="w-full min-h-[42px] bg-background text-foreground placeholder:text-muted-foreground border border-border/80 rounded-xl pl-10 pr-3.5 py-2.5 text-base sm:text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                       />
                     </div>
                   </div>
@@ -230,7 +230,7 @@ export default function GarminAuthModal({
                   <button
                     type="button"
                     onClick={() => setShowReconnectForm(false)}
-                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
+                    className="min-h-[42px] px-4 py-2.5 rounded-xl bg-muted hover:bg-accent text-foreground border border-border/60 text-xs font-semibold"
                   >
                     Cancelar
                   </button>
