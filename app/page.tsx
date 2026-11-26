@@ -1586,6 +1586,21 @@ export default function WorkoutStudioPage() {
                 ),
               }));
             }}
+            onSwapLiveExercise={(blockId, alternativeExercise, newWeightKg) => {
+              setRoutine((prev) => ({
+                ...prev,
+                blocks: prev.blocks.map((b) =>
+                  b.id === blockId
+                    ? {
+                        ...b,
+                        exercise: alternativeExercise,
+                        weightKg: newWeightKg,
+                        suggestedWeightKg: newWeightKg,
+                      }
+                    : b
+                ),
+              }));
+            }}
           />
         ) : currentMainTab === 'progress' ? (
           <ProgressDashboard />

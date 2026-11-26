@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { RefreshCw, Check, Zap, Filter, Dumbbell, X } from 'lucide-react';
-import { CatalogExercise, EquipmentType } from '@/lib/exercise-catalog';
+import React, { useMemo, useState } from 'react';
+import { RefreshCw, Check, Zap, Filter, Dumbbell, Search, X } from 'lucide-react';
+import { CatalogExercise, EquipmentType, EXERCISE_CATALOG } from '@/lib/exercise-catalog';
 import { getSimilarExercises } from '@/lib/exercise-alternatives';
 
 interface ExerciseSwapModalProps {
@@ -21,14 +21,53 @@ export default function ExerciseSwapModal({
   onSelectAlternative,
 }: ExerciseSwapModalProps) {
   const [equipmentFilter, setEquipmentFilter] = useState<EquipmentType | 'Todas'>('Todas');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const alternatives = useMemo(
+    () =>
+      getSimilarExercises(
+        currentExercise.id,
+        currentWeightKg,
+        equipmentFilter === 'Todas' ? undefined : equipmentFilter
+      ),
+    [currentExercise.id, currentWeightKg, equipmentFilter]
+  );
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+
+  const displayedAlternatives = useMemo(() => {
+    if (!normalizedQuery) return alternatives;
+
+    const matchingSuggested = alternatives.filter(
+      (alt) =>
+        alt.exercise.name.toLowerCase().includes(normalizedQuery) ||
+        alt.exercise.muscleGroup.toLowerCase().includes(normalizedQuery) ||
+        alt.exercise.pattern.toLowerCase().includes(normalizedQuery)
+    );
+
+    const suggestedIds = new Set(matchingSuggested.map((a) => a.exercise.id));
+    const catalogExtras = EXERCISE_CATALOG.filter((ex) => {
+      if (ex.id === currentExercise.id || suggestedIds.has(ex.id)) return false;
+      if (equipmentFilter !== 'Todas' && ex.equipment !== equipmentFilter) return false;
+      return (
+        ex.name.toLowerCase().includes(normalizedQuery) ||
+        ex.muscleGroup.toLowerCase().includes(normalizedQuery) ||
+        ex.pattern.toLowerCase().includes(normalizedQuery)
+      );
+    })
+      .slice(0, 12)
+      .map((ex) => ({
+        exercise: ex,
+        matchScore: ex.muscleGroup === currentExercise.muscleGroup ? 70 : 50,
+        reason: `Búsqueda en catálogo · ${ex.muscleGroup} (${ex.pattern})`,
+        recommendedWeightKg:
+          ex.equipment === currentExercise.equipment ? currentWeightKg : undefined,
+      }));
+
+    return [...matchingSuggested, ...catalogExtras];
+  }, [alternatives, normalizedQuery, currentExercise, equipmentFilter, currentWeightKg]);
 
   if (!isOpen) return null;
-
-  const alternatives = getSimilarExercises(
-    currentExercise.id,
-    currentWeightKg,
-    equipmentFilter === 'Todas' ? undefined : equipmentFilter
-  );
 
   const equipmentOptions: (EquipmentType | 'Todas')[] = [
     'Todas',
@@ -88,37 +127,59 @@ export default function ExerciseSwapModal({
           </div>
         </div>
 
-        {/* Filtros de Equipamiento */}
-        <div className="px-4 py-2.5 bg-card border-b border-border/60 flex items-center gap-1.5 overflow-x-auto text-xs">
-          <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0 mr-1" />
-          {equipmentOptions.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => setEquipmentFilter(opt)}
-              className={`min-h-[34px] px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-all ${
-                equipmentFilter === opt
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-muted hover:bg-accent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
+        {/* Filtros de Equipamiento + Buscador rápido */}
+        <div className="px-4 py-2.5 bg-card border-b border-border/60 space-y-2 text-xs">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar sustituto o cualquier ejercicio del catálogo..."
+              className="w-full min-h-[38px] pl-8 pr-8 py-1.5 text-base sm:text-xs bg-muted/40 focus:bg-background border border-border/70 rounded-lg text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-blue-500/25"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto">
+            <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0 mr-1" />
+            {equipmentOptions.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setEquipmentFilter(opt)}
+                className={`min-h-[34px] px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-all ${
+                  equipmentFilter === opt
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-muted hover:bg-accent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Lista de Alternativas Biomecánicas */}
         <div className="p-4 sm:p-5 overflow-y-auto space-y-3 flex-1">
-          {alternatives.length === 0 ? (
+          {displayedAlternatives.length === 0 ? (
             <div className="text-center py-8">
               <Dumbbell className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
               <p className="text-sm font-medium text-foreground">No hay alternativas con este filtro</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Prueba seleccionando &quot;Todas&quot; en el equipamiento.
+                Prueba seleccionando &quot;Todas&quot; en el equipamiento o cambia el texto buscado.
               </p>
             </div>
           ) : (
-            alternatives.map((alt) => (
+            displayedAlternatives.map((alt) => (
               <div
                 key={alt.exercise.id}
                 className="p-3.5 rounded-xl border border-border/80 hover:border-blue-500/60 hover:bg-blue-500/5 bg-muted/20 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
@@ -171,7 +232,7 @@ export default function ExerciseSwapModal({
 
         {/* Pie */}
         <div className="p-3.5 bg-muted/35 border-t border-border/60 flex justify-between items-center text-xs text-muted-foreground">
-          <span>{alternatives.length} alternativas biomecánicas encontradas</span>
+          <span>{displayedAlternatives.length} alternativas encontradas</span>
           <button
             type="button"
             onClick={onClose}

@@ -29,7 +29,8 @@ import {
   getChallenges,
   createChallenge,
   respondToChallenge,
-  compareExerciseWithFriend
+  getFriendHeadToHeadComparison,
+  FriendHeadToHeadData,
 } from '@/lib/social-service';
 import {
   applyWeightModeToRoutine,
@@ -77,8 +78,12 @@ export default function SocialDashboard({
 
   // Comparativa Cara a Cara
   const [compareFriendId, setCompareFriendId] = useState<string>('');
-  const [compareExercise, setCompareExercise] = useState<string>('bench_press_barbell');
-  const [comparisonData, setComparisonData] = useState<{ userLogs: any[]; friendLogs: any[] } | null>(null);
+  const [compareRange, setCompareRange] = useState<7 | 30 | 90 | 'all'>('all');
+  const [compareExerciseKey, setCompareExerciseKey] = useState<string>('');
+  const [compareFilterMode, setCompareFilterMode] = useState<'all' | 'shared'>('all');
+  const [compareSearch, setCompareSearch] = useState<string>('');
+  const [headToHeadData, setHeadToHeadData] = useState<FriendHeadToHeadData | null>(null);
+  const [isLoadingCompare, setIsLoadingCompare] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -183,17 +188,34 @@ export default function SocialDashboard({
     await loadUserData();
   };
 
-  // Cargar comparativa cuando cambie amigo o ejercicio
+  // Cargar comparativa completa cuando cambie amigo o rango temporal
   useEffect(() => {
+    let active = true;
     async function fetchCompare() {
-      if (!compareFriendId || !compareExercise) return;
-      const ex = EXERCISE_CATALOG.find(e => e.id === compareExercise);
-      if (!ex) return;
-      const data = await compareExerciseWithFriend(ex.name, compareFriendId);
-      setComparisonData(data);
+      if (!compareFriendId) return;
+      setIsLoadingCompare(true);
+      try {
+        const data = await getFriendHeadToHeadComparison(compareFriendId, compareRange);
+        if (!active) return;
+        setHeadToHeadData(data);
+        if (data && data.exercises.length > 0) {
+          setCompareExerciseKey((prev) =>
+            data.exercises.some((ex) => ex.exerciseKey === prev)
+              ? prev
+              : data.exercises[0].exerciseKey
+          );
+        } else {
+          setCompareExerciseKey('');
+        }
+      } finally {
+        if (active) setIsLoadingCompare(false);
+      }
     }
     fetchCompare();
-  }, [compareFriendId, compareExercise]);
+    return () => {
+      active = false;
+    };
+  }, [compareFriendId, compareRange]);
 
   const acceptedFriends = friendships.filter(f => f.status === 'accepted');
   const pendingRequests = friendships.filter(f => f.status === 'pending' && !f.isSender);
@@ -296,7 +318,7 @@ export default function SocialDashboard({
           }`}
         >
           <TrendingUp className="w-4 h-4" />
-          <span>Gráfica Cara a Cara</span>
+          <span>Comparativa</span>
         </button>
 
         <button
@@ -531,48 +553,98 @@ export default function SocialDashboard({
         </div>
       )}
 
-      {/* CONTENIDO 2: COMPARADOR CARA A CARA */}
-      {activeTab === 'compare' && (
-        <div className="bg-card rounded-xl border border-border/80 p-5 shadow-xs space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                Seleccionar Compañero
-              </label>
-              <select
-                value={compareFriendId}
-                onChange={e => setCompareFriendId(e.target.value)}
-                className="w-full min-h-[42px] px-3 py-2 text-base sm:text-sm bg-background border border-border/80 rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-              >
-                {acceptedFriends.map(f => (
-                  <option key={f.friend.id} value={f.friend.id}>
-                    {f.friend.display_name} (@{f.friend.username})
-                  </option>
-                ))}
-              </select>
+      {/* CONTENIDO 2: COMPARADOR CARA A CARA COMPLETO */}
+      {activeTab === 'compare' && (() => {
+        const selectedFriendProfile = acceptedFriends.find(
+          (f) => f.friend.id === compareFriendId
+        )?.friend;
+        const friendLabel = selectedFriendProfile?.display_name || 'Amigo';
+        const sharedCount = headToHeadData
+          ? headToHeadData.exercises.filter((e) => e.isShared).length
+          : 0;
+        const selectedExerciseRow =
+          headToHeadData?.exercises.find((e) => e.exerciseKey === compareExerciseKey) ||
+          headToHeadData?.exercises[0] ||
+          null;
+        const filteredRows = (headToHeadData?.exercises || []).filter((row) => {
+          if (compareFilterMode === 'shared' && !row.isShared) return false;
+          if (
+            compareSearch.trim() &&
+            !row.exerciseTitle.toLowerCase().includes(compareSearch.trim().toLowerCase())
+          ) {
+            return false;
+          }
+          return true;
+        });
+
+        const ratioWidths = (a: number, b: number) => {
+          const total = a + b;
+          if (total <= 0) return { aPct: 50, bPct: 50 };
+          return {
+            aPct: Math.round((a / total) * 100),
+            bPct: Math.round((b / total) * 100),
+          };
+        };
+
+        return (
+          <div className="bg-card rounded-xl border border-border/80 p-4 sm:p-5 shadow-xs space-y-5">
+            {/* Controles superiores: Amigo y Rango temporal */}
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div className="flex-1 sm:max-w-xs">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                  Seleccionar Compañero
+                </label>
+                {acceptedFriends.length === 0 ? (
+                  <div className="text-xs text-muted-foreground py-2">
+                    Añade y acepta un amigo primero en la pestaña Amigos.
+                  </div>
+                ) : (
+                  <select
+                    value={compareFriendId}
+                    onChange={(e) => setCompareFriendId(e.target.value)}
+                    className="w-full min-h-[42px] px-3 py-2 text-base sm:text-sm bg-background border border-border/80 rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  >
+                    {acceptedFriends.map((f) => (
+                      <option key={f.friend.id} value={f.friend.id}>
+                        {f.friend.display_name} (@{f.friend.username})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Periodo
+                </span>
+                <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/70">
+                  {(
+                    [
+                      { id: 7, label: '7d' },
+                      { id: 30, label: '30d' },
+                      { id: 90, label: '90d' },
+                      { id: 'all', label: 'Todo' },
+                    ] as const
+                  ).map((rng) => (
+                    <button
+                      key={String(rng.id)}
+                      type="button"
+                      onClick={() => setCompareRange(rng.id)}
+                      className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                        compareRange === rng.id
+                          ? 'bg-card text-foreground shadow-xs border border-border/80'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {rng.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                Ejercicio a Comparar
-              </label>
-              <select
-                value={compareExercise}
-                onChange={e => setCompareExercise(e.target.value)}
-                className="w-full min-h-[42px] px-3 py-2 text-base sm:text-sm bg-background border border-border/80 rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-              >
-                {EXERCISE_CATALOG.map(e => (
-                  <option key={e.id} value={e.id}>
-                    {e.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Gráfica Comparativa */}
-          <div className="pt-4 border-t border-border/60">
-            <div className="flex items-center justify-between mb-4">
+            {/* Leyenda Tú vs Amigo */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-border/60">
               <div className="flex items-center gap-4 text-xs font-semibold text-foreground">
                 <div className="flex items-center gap-1.5">
                   <span className="w-3 h-3 rounded-full bg-blue-600 inline-block" />
@@ -580,38 +652,388 @@ export default function SocialDashboard({
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" />
-                  <span>Amigo</span>
+                  <span>{friendLabel}</span>
                 </div>
               </div>
+              {headToHeadData && sharedCount > 0 && (
+                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/25 tabular-nums">
+                  {sharedCount} ejercicios en común
+                </span>
+              )}
             </div>
 
-            {!comparisonData || (comparisonData.userLogs.length === 0 && comparisonData.friendLogs.length === 0) ? (
+            {isLoadingCompare ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-pulse">
+                {[1, 2, 3, 4].map((n) => (
+                  <div key={n} className="h-28 rounded-xl bg-muted/50 border border-border/50" />
+                ))}
+              </div>
+            ) : !headToHeadData ||
+              (headToHeadData.me.totalSets === 0 && headToHeadData.friend.totalSets === 0) ? (
               <div className="h-48 rounded-xl bg-muted/30 border border-dashed border-border flex flex-col items-center justify-center text-muted-foreground text-xs p-4 text-center">
                 <Dumbbell className="w-8 h-8 mb-2 text-muted-foreground/50" />
-                <span>No hay registros suficientes registrados en la nube para este ejercicio aún.</span>
-                <span className="text-[11px] text-muted-foreground mt-0.5">Entrenad y guardad vuestros registros en Supabase para ver la comparativa.</span>
+                <span>No hay entrenamientos registrados en la nube en este periodo.</span>
+                <span className="text-[11px] text-muted-foreground mt-0.5">
+                  Completa sesiones o sincroniza tus entrenamientos para comparar volumen, 1RM y marcas.
+                </span>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/25">
-                    <div className="text-xs text-blue-700 dark:text-blue-300 font-medium">Tus Registros</div>
-                    <div className="text-lg font-bold text-blue-900 dark:text-blue-100 mt-1 tabular-nums">
-                      {comparisonData.userLogs.length} series
+              <div className="space-y-6">
+                {headToHeadData.me.totalSets > 0 && headToHeadData.friend.totalSets === 0 && (
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3.5 text-xs text-amber-900 dark:text-amber-200">
+                    <strong>{friendLabel}</strong> aún no muestra registros en la nube para este periodo (asegúrate de haber sincronizado entrenos y ejecutado la política SQL de lectura entre amigos en Supabase).
+                  </div>
+                )}
+
+                {/* 4 Tarjetas Comparativas Globales */}
+                {(() => {
+                  const { me, friend } = headToHeadData;
+                  const volW = ratioWidths(me.totalVolumeKg, friend.totalVolumeKg);
+                  const rmW = ratioWidths(me.bestEstimated1RMKg, friend.bestEstimated1RMKg);
+                  const maxW = ratioWidths(me.maxWeightKg, friend.maxWeightKg);
+                  const sessW = ratioWidths(me.sessionsCount, friend.sessionsCount);
+                  const volDiff = me.totalVolumeKg - friend.totalVolumeKg;
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      {/* Volumen Total */}
+                      <div className="rounded-xl bg-muted/25 border border-border/70 p-4 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            Volumen Total
+                          </span>
+                          <span className="text-[11px] font-bold tabular-nums text-foreground">
+                            {volDiff === 0
+                              ? 'Empate'
+                              : volDiff > 0
+                              ? `+${volDiff.toLocaleString()} kg tú`
+                              : `+${Math.abs(volDiff).toLocaleString()} kg ${friendLabel}`}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between gap-2 tabular-nums">
+                          <span className="text-lg font-extrabold text-blue-600 dark:text-blue-400">
+                            {me.totalVolumeKg.toLocaleString()} kg
+                          </span>
+                          <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
+                            {friend.totalVolumeKg.toLocaleString()} kg
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden flex">
+                          <div className="bg-blue-600 h-full" style={{ width: `${volW.aPct}%` }} />
+                          <div className="bg-emerald-500 h-full" style={{ width: `${volW.bPct}%` }} />
+                        </div>
+                      </div>
+
+                      {/* 1RM Máximo Estimado */}
+                      <div className="rounded-xl bg-muted/25 border border-border/70 p-4 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            1RM Máximo (1 rep máx.)
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between gap-2 tabular-nums">
+                          <div className="min-w-0">
+                            <div className="text-lg font-extrabold text-blue-600 dark:text-blue-400">
+                              {me.bestEstimated1RMKg} kg
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate max-w-[160px]">
+                              {me.best1RMExercise}
+                            </div>
+                          </div>
+                          <div className="text-right min-w-0">
+                            <div className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
+                              {friend.bestEstimated1RMKg} kg
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate max-w-[160px]">
+                              {friend.best1RMExercise}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden flex">
+                          <div className="bg-blue-600 h-full" style={{ width: `${rmW.aPct}%` }} />
+                          <div className="bg-emerald-500 h-full" style={{ width: `${rmW.bPct}%` }} />
+                        </div>
+                      </div>
+
+                      {/* Peso Máximo Levantado */}
+                      <div className="rounded-xl bg-muted/25 border border-border/70 p-4 space-y-2.5">
+                        <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          Peso Máximo Levantado
+                        </div>
+                        <div className="flex items-baseline justify-between gap-2 tabular-nums">
+                          <div className="min-w-0">
+                            <div className="text-lg font-extrabold text-blue-600 dark:text-blue-400">
+                              {me.maxWeightKg} kg
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate max-w-[160px]">
+                              {me.maxWeightExercise}
+                            </div>
+                          </div>
+                          <div className="text-right min-w-0">
+                            <div className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
+                              {friend.maxWeightKg} kg
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate max-w-[160px]">
+                              {friend.maxWeightExercise}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden flex">
+                          <div className="bg-blue-600 h-full" style={{ width: `${maxW.aPct}%` }} />
+                          <div className="bg-emerald-500 h-full" style={{ width: `${maxW.bPct}%` }} />
+                        </div>
+                      </div>
+
+                      {/* Constancia y Trabajo */}
+                      <div className="rounded-xl bg-muted/25 border border-border/70 p-4 space-y-2.5">
+                        <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          Constancia y Trabajo
+                        </div>
+                        <div className="flex items-baseline justify-between gap-2 tabular-nums text-xs">
+                          <div>
+                            <div className="text-base font-extrabold text-blue-600 dark:text-blue-400">
+                              {me.sessionsCount} ses. &bull; {me.totalSets} ser.
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
+                              Media: {me.avgVolumePerSessionKg.toLocaleString()} kg/ses.
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                              {friend.sessionsCount} ses. &bull; {friend.totalSets} ser.
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
+                              Media: {friend.avgVolumePerSessionKg.toLocaleString()} kg/ses.
+                            </div>
+                          </div>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden flex">
+                          <div className="bg-blue-600 h-full" style={{ width: `${sessW.aPct}%` }} />
+                          <div className="bg-emerald-500 h-full" style={{ width: `${sessW.bPct}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Comparativa de Ejercicio en Detalle */}
+                {selectedExerciseRow && (
+                  <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          Comparativa de Ejercicio en Detalle
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Peso máximo a 1 repetición (1RM), carga punta, mejor serie y tonelaje
+                        </p>
+                      </div>
+                      <select
+                        aria-label="Seleccionar ejercicio para comparar en detalle"
+                        value={selectedExerciseRow.exerciseKey}
+                        onChange={(e) => setCompareExerciseKey(e.target.value)}
+                        className="w-full sm:w-72 min-h-[42px] px-3 py-2 text-base sm:text-xs font-semibold bg-background border border-border/80 rounded-lg text-foreground outline-none focus:ring-2 focus:ring-blue-500/25"
+                      >
+                        {headToHeadData.exercises.map((ex) => (
+                          <option key={ex.exerciseKey} value={ex.exerciseKey}>
+                            {ex.isShared ? `En común: ${ex.exerciseTitle}` : ex.exerciseTitle}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs tabular-nums">
+                      <div className="rounded-lg bg-card border border-border/70 p-3">
+                        <div className="text-[11px] text-muted-foreground font-semibold">1RM (1 rep máx.)</div>
+                        <div className="mt-1 font-bold text-blue-600 dark:text-blue-400">
+                          Tú: {selectedExerciseRow.myStats.estimated1RMKg} kg
+                        </div>
+                        <div className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {friendLabel}: {selectedExerciseRow.friendStats.estimated1RMKg} kg
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-card border border-border/70 p-3">
+                        <div className="text-[11px] text-muted-foreground font-semibold">Peso Máximo</div>
+                        <div className="mt-1 font-bold text-blue-600 dark:text-blue-400">
+                          Tú: {selectedExerciseRow.myStats.maxWeightKg} kg
+                        </div>
+                        <div className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {friendLabel}: {selectedExerciseRow.friendStats.maxWeightKg} kg
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-card border border-border/70 p-3">
+                        <div className="text-[11px] text-muted-foreground font-semibold">Mejor Serie</div>
+                        <div className="mt-1 font-bold text-blue-600 dark:text-blue-400">
+                          {selectedExerciseRow.myStats.bestSetLabel}
+                        </div>
+                        <div className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {selectedExerciseRow.friendStats.bestSetLabel}
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-card border border-border/70 p-3">
+                        <div className="text-[11px] text-muted-foreground font-semibold">Volumen Ejercicio</div>
+                        <div className="mt-1 font-bold text-blue-600 dark:text-blue-400">
+                          {selectedExerciseRow.myStats.totalVolumeKg.toLocaleString()} kg
+                        </div>
+                        <div className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {selectedExerciseRow.friendStats.totalVolumeKg.toLocaleString()} kg
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-card border border-border/70 p-3 col-span-2 sm:col-span-1">
+                        <div className="text-[11px] text-muted-foreground font-semibold">Series / Reps</div>
+                        <div className="mt-1 font-bold text-blue-600 dark:text-blue-400">
+                          {selectedExerciseRow.myStats.totalSets}s &bull; {selectedExerciseRow.myStats.totalReps}r
+                        </div>
+                        <div className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {selectedExerciseRow.friendStats.totalSets}s &bull; {selectedExerciseRow.friendStats.totalReps}r
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/25">
-                    <div className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">Registros de tu Amigo</div>
-                    <div className="text-lg font-bold text-emerald-900 dark:text-emerald-100 mt-1 tabular-nums">
-                      {comparisonData.friendLogs.length} series
+                )}
+
+                {/* Tabla Comparativa por Ejercicios (Mobile-First sticky) */}
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Desglose Comparativo por Ejercicios ({filteredRows.length})
+                    </h4>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-muted/60 border border-border/70 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setCompareFilterMode('all')}
+                          className={`px-2.5 py-1 rounded-md font-semibold ${
+                            compareFilterMode === 'all'
+                              ? 'bg-card text-foreground shadow-2xs'
+                              : 'text-muted-foreground'
+                          }`}
+                        >
+                          Todos ({headToHeadData.exercises.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCompareFilterMode('shared')}
+                          className={`px-2.5 py-1 rounded-md font-semibold ${
+                            compareFilterMode === 'shared'
+                              ? 'bg-card text-foreground shadow-2xs'
+                              : 'text-muted-foreground'
+                          }`}
+                        >
+                          Solo en común ({sharedCount})
+                        </button>
+                      </div>
+
+                      <input
+                        type="text"
+                        value={compareSearch}
+                        onChange={(e) => setCompareSearch(e.target.value)}
+                        placeholder="Filtrar ejercicio..."
+                        className="min-h-[38px] px-3 py-1.5 text-base sm:text-xs bg-background border border-border/80 rounded-lg text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-blue-500/25"
+                      />
                     </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border/80 overflow-x-auto [-webkit-overflow-scrolling:touch]">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-muted/50 border-b border-border/70 text-[11px] uppercase tracking-wider text-muted-foreground">
+                          <th className="py-2.5 px-3 font-bold sticky left-0 z-10 bg-muted/95 backdrop-blur-xs min-w-[175px]">
+                            Ejercicio
+                          </th>
+                          <th className="py-2.5 px-3 font-bold text-right whitespace-nowrap">
+                            1RM (Tú / {friendLabel})
+                          </th>
+                          <th className="py-2.5 px-3 font-bold text-right whitespace-nowrap">
+                            Peso Máx.
+                          </th>
+                          <th className="py-2.5 px-3 font-bold text-right whitespace-nowrap">
+                            Volumen Total
+                          </th>
+                          <th className="py-2.5 px-3 font-bold text-right whitespace-nowrap">
+                            Series
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60 tabular-nums">
+                        {filteredRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                              No hay ejercicios que coincidan con el filtro actual.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredRows.map((row) => (
+                            <tr
+                              key={row.exerciseKey}
+                              onClick={() => setCompareExerciseKey(row.exerciseKey)}
+                              className={`cursor-pointer transition-colors hover:bg-muted/35 ${
+                                selectedExerciseRow?.exerciseKey === row.exerciseKey
+                                  ? 'bg-blue-500/5'
+                                  : ''
+                              }`}
+                            >
+                              <td className="py-2.5 px-3 font-semibold text-foreground sticky left-0 z-10 bg-card shadow-[2px_0_6px_-2px_rgba(15,23,42,0.08)]">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="truncate max-w-[165px]">{row.exerciseTitle}</span>
+                                  {row.isShared && (
+                                    <span className="px-1.5 py-0.2 rounded bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 text-[9px] font-bold shrink-0">
+                                      Común
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                <span className="font-bold text-blue-600 dark:text-blue-400">
+                                  {row.myStats.estimated1RMKg}
+                                </span>
+                                <span className="text-muted-foreground mx-1">/</span>
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                  {row.friendStats.estimated1RMKg}
+                                </span>
+                                <span className="text-muted-foreground ml-0.5">kg</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                <span className="font-semibold text-blue-600 dark:text-blue-400">
+                                  {row.myStats.maxWeightKg}
+                                </span>
+                                <span className="text-muted-foreground mx-1">/</span>
+                                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                  {row.friendStats.maxWeightKg}
+                                </span>
+                                <span className="text-muted-foreground ml-0.5">kg</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                <span className="font-semibold text-blue-600 dark:text-blue-400">
+                                  {row.myStats.totalVolumeKg.toLocaleString()}
+                                </span>
+                                <span className="text-muted-foreground mx-1">/</span>
+                                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                  {row.friendStats.totalVolumeKg.toLocaleString()}
+                                </span>
+                                <span className="text-muted-foreground ml-0.5">kg</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                <span className="text-blue-600 dark:text-blue-400 font-semibold">
+                                  {row.myStats.totalSets}
+                                </span>
+                                <span className="text-muted-foreground mx-1">/</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                                  {row.friendStats.totalSets}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
             )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* CONTENIDO 3: AMIGOS Y BÚSQUEDA */}
       {activeTab === 'friends' && (

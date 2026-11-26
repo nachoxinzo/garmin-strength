@@ -16,6 +16,7 @@ import {
   Play,
   Plus,
   RotateCcw,
+  Shuffle,
   SkipForward,
   Sparkles,
   Target,
@@ -27,6 +28,7 @@ import {
   VolumeX
 } from 'lucide-react';
 import { StrengthRoutine } from '@/lib/types';
+import { CatalogExercise } from '@/lib/exercise-catalog';
 import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
 import {
   DbWorkoutLog,
@@ -46,6 +48,8 @@ import { generateSingleWarmupSet, generateWarmupRamp } from '@/lib/warmup-calcul
 import { calculateBarbellPlates } from '@/lib/plate-calculator';
 import { ExerciseNoteRecord, loadExerciseNotes } from '@/lib/exercise-notes';
 import { Exercise3DModal } from './Exercise3DModal';
+import ExerciseSwapModal from './ExerciseSwapModal';
+import { NumericInput } from './NumericInput';
 import { useWakeLock } from '@/lib/use-wake-lock';
 
 type PrBadgeType = '1rm' | 'volume' | 'both';
@@ -90,6 +94,7 @@ interface LiveTrackerTabProps {
   onSelectSavedRoutine?: (routine: StrengthRoutine) => void;
   onOpenHevyImport?: () => void;
   onUpdateRestSeconds?: (blockId: string | 'ALL', restSeconds: number) => void;
+  onSwapLiveExercise?: (blockId: string, alternativeExercise: CatalogExercise, newWeightKg: number) => void;
 }
 
 function computeEpley1RM(weightKg: number, reps: number): number {
@@ -151,6 +156,7 @@ export function LiveTrackerTab({
   onSelectSavedRoutine,
   onOpenHevyImport,
   onUpdateRestSeconds,
+  onSwapLiveExercise,
 }: LiveTrackerTabProps) {
   const [history, setHistory] = useState<Record<string, ExerciseProgressRecord>>({});
   const [notesMap, setNotesMap] = useState<Record<string, ExerciseNoteRecord>>({});
@@ -180,7 +186,9 @@ export function LiveTrackerTab({
   const [isRestRunning, setIsRestRunning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [editingRestExIndex, setEditingRestExIndex] = useState<number | null>(null);
+  const [swappingExIndex, setSwappingExIndex] = useState<number | null>(null);
   const skipNextRoutineSyncRef = useRef(false);
+  const finishCtaRef = useRef<HTMLDivElement | null>(null);
 
   // Mantener pantalla encendida mientras el entreno está activo
   useWakeLock(isSessionActive && !isFinished);
@@ -277,6 +285,13 @@ export function LiveTrackerTab({
     }
     return { completedSets, totalSets, volumeKg: Math.round(volumeKg) };
   }, [liveExercises]);
+
+  const lastExercise = liveExercises[liveExercises.length - 1];
+  const lastSetOfWorkout = lastExercise?.sets[lastExercise.sets.length - 1];
+  const isLastSetCompleted = Boolean(lastSetOfWorkout?.completed);
+  const areAllSetsCompleted = stats.totalSets > 0 && stats.completedSets === stats.totalSets;
+  const showBottomFinishCta =
+    !isFinished && liveExercises.length > 0 && (isLastSetCompleted || areAllSetsCompleted);
 
   const handleStartSession = () => {
     setIsSessionActive(true);
@@ -388,12 +403,27 @@ export function LiveTrackerTab({
       }
       triggerVibration(detectedPrType ? [120, 60, 120, 60, 220] : [80]);
 
-      // Lanzar descanso automáticamente al marcar la serie como realizada
-      const restSecs = targetExercise.restSeconds ?? 90;
-      if (restSecs > 0) {
-        setRestTotal(restSecs);
-        setRestRemaining(restSecs);
-        setIsRestRunning(true);
+      const isLastExerciseSet =
+        exIndex === liveExercises.length - 1 && setIndex === targetExercise.sets.length - 1;
+      const remainingIncompleteOther = liveExercises.some((ex, eIdx) =>
+        ex.sets.some((s, sIdx) => !(eIdx === exIndex && sIdx === setIndex) && !s.completed)
+      );
+      const completesFinalWorkoutSet = isLastExerciseSet || !remainingIncompleteOther;
+
+      if (completesFinalWorkoutSet) {
+        setIsRestRunning(false);
+        setRestRemaining(0);
+        setTimeout(() => {
+          finishCtaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 80);
+      } else {
+        // Lanzar descanso automáticamente al marcar la serie como realizada
+        const restSecs = targetExercise.restSeconds ?? 90;
+        if (restSecs > 0) {
+          setRestTotal(restSecs);
+          setRestRemaining(restSecs);
+          setIsRestRunning(true);
+        }
       }
     }
   };
@@ -516,6 +546,28 @@ export function LiveTrackerTab({
     if (delta > 0) {
       setRestTotal((t) => Math.max(t, next));
     }
+  };
+
+  const handleConfirmSwapExercise = (alternativeExercise: CatalogExercise, newWeightKg: number) => {
+    if (swappingExIndex === null) return;
+    const targetBlockId = liveExercises[swappingExIndex]?.blockId;
+    setLiveExercises((prev) =>
+      prev.map((ex, idx) => {
+        if (idx !== swappingExIndex) return ex;
+        return {
+          ...ex,
+          exercise: alternativeExercise,
+          sets: ex.sets.map((s) =>
+            s.completed || s.isWarmup ? s : { ...s, weightKg: newWeightKg }
+          ),
+        };
+      })
+    );
+    if (onSwapLiveExercise && targetBlockId) {
+      skipNextRoutineSyncRef.current = true;
+      onSwapLiveExercise(targetBlockId, alternativeExercise, newWeightKg);
+    }
+    setSwappingExIndex(null);
   };
 
   const handleFinishWorkout = () => {
@@ -1139,14 +1191,24 @@ export function LiveTrackerTab({
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSwappingExIndex(exIndex)}
+                    title="Cambiar este ejercicio por una alternativa similar"
+                    className="saas-btn min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-semibold"
+                  >
+                    <Shuffle className="w-3.5 h-3.5" />
+                    <span>Cambiar</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setActive3DExercise(ex.exercise)}
                     title="Ver técnica correcta en 3D sin pausar tu cronómetro"
-                    className="saas-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 text-xs font-semibold"
+                    className="saas-btn min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30 text-xs font-semibold"
                   >
-                    <Box className="w-3.5 h-3.5 text-blue-600" />
+                    <Box className="w-3.5 h-3.5" />
                     <span>Ayuda 3D</span>
                   </button>
 
@@ -1193,17 +1255,13 @@ export function LiveTrackerTab({
                     </button>
 
                     <div className="flex items-center gap-1.5 bg-card border border-border/80 rounded-lg px-2.5 min-h-[42px]">
-                      <input
-                        type="number"
+                      <NumericInput
+                        value={ex.restSeconds}
+                        onChange={(val) => updateExerciseRestSeconds(exIndex, val)}
                         min={0}
                         max={600}
-                        step={5}
-                        aria-label="Segundos de descanso"
-                        value={ex.restSeconds}
-                        onChange={(e) =>
-                          updateExerciseRestSeconds(exIndex, parseInt(e.target.value, 10) || 0)
-                        }
-                        className="w-16 text-center font-bold text-foreground bg-transparent text-base sm:text-sm tabular-nums outline-none"
+                        ariaLabel="Segundos de descanso"
+                        className="w-16 text-center font-bold text-foreground bg-transparent outline-none"
                       />
                       <span className="text-xs text-muted-foreground font-semibold">seg</span>
                     </div>
@@ -1368,27 +1426,25 @@ export function LiveTrackerTab({
                     </div>
 
                     <div className="col-span-3">
-                      <input
-                        type="number"
-                        step={1.25}
-                        min={0}
+                      <NumericInput
                         value={setRow.weightKg}
-                        onChange={(e) =>
-                          updateSetField(exIndex, setIndex, 'weightKg', parseFloat(e.target.value) || 0)
-                        }
-                        className="w-full min-h-[38px] text-center font-bold text-foreground bg-card border border-border/70 rounded-lg text-base sm:text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        onChange={(val) => updateSetField(exIndex, setIndex, 'weightKg', val)}
+                        allowDecimal
+                        min={0}
+                        max={1000}
+                        ariaLabel="Peso en kilogramos"
+                        className="w-full min-h-[38px] text-center font-bold text-foreground bg-card border border-border/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                       />
                     </div>
 
                     <div className="col-span-2">
-                      <input
-                        type="number"
-                        min={0}
+                      <NumericInput
                         value={setRow.reps}
-                        onChange={(e) =>
-                          updateSetField(exIndex, setIndex, 'reps', parseInt(e.target.value) || 0)
-                        }
-                        className="w-full min-h-[38px] text-center font-bold text-foreground bg-card border border-border/70 rounded-lg text-base sm:text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        onChange={(val) => updateSetField(exIndex, setIndex, 'reps', val)}
+                        min={0}
+                        max={500}
+                        ariaLabel="Repeticiones"
+                        className="w-full min-h-[38px] text-center font-bold text-foreground bg-card border border-border/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                       />
                     </div>
 
@@ -1467,6 +1523,32 @@ export function LiveTrackerTab({
         })}
       </div>
 
+      {/* Botón contextual al completar la última serie del entrenamiento */}
+      {showBottomFinishCta && (
+        <div
+          ref={finishCtaRef}
+          className="rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/40 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in slide-in-from-bottom-3 duration-200"
+        >
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Última serie completada</span>
+            </div>
+            <p className="text-sm font-bold text-foreground tabular-nums">
+              {stats.completedSets}/{stats.totalSets} series &bull; {stats.volumeKg} kg &bull; {formatDuration(elapsedSeconds)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleFinishWorkout}
+            className="saas-btn min-h-[48px] px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold inline-flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20"
+          >
+            <CheckCircle2 className="w-5 h-5" />
+            <span>Finalizar Entrenamiento</span>
+          </button>
+        </div>
+      )}
+
       {/* Barra Flotante del Temporizador de Descanso Automático */}
       {isRestRunning && restRemaining > 0 && (
         <div className="fixed bottom-4 left-4 right-4 z-40 max-w-md mx-auto bg-slate-900 text-white rounded-2xl p-4 shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-bottom-4 duration-200">
@@ -1539,6 +1621,19 @@ export function LiveTrackerTab({
         machineLabel={active3DExercise ? expertMap.get(active3DExercise.id)?.machineLabel : undefined}
         onClose={() => setActive3DExercise(null)}
       />
+
+      {/* Modal de Sustitución de Ejercicio en Vivo */}
+      {swappingExIndex !== null && liveExercises[swappingExIndex] && (
+        <ExerciseSwapModal
+          currentExercise={liveExercises[swappingExIndex].exercise}
+          currentWeightKg={
+            liveExercises[swappingExIndex].sets.find((s) => !s.isWarmup)?.weightKg ?? 20
+          }
+          isOpen={true}
+          onClose={() => setSwappingExIndex(null)}
+          onSelectAlternative={handleConfirmSwapExercise}
+        />
+      )}
     </div>
   );
 }
