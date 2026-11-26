@@ -51,7 +51,9 @@ import {
   StickyNote,
   AlertTriangle,
   BookOpen,
-  LayoutDashboard
+  LayoutDashboard,
+  Inbox,
+  Users
 } from 'lucide-react';
 import { InteractiveGuideModal, GuideTargetAction } from '@/components/InteractiveGuideModal';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -79,7 +81,14 @@ import {
 } from '@/lib/progressive-overload-engine';
 import { StrengthRoutine, WorkoutExerciseBlock, GarminAccountStatus } from '@/lib/types';
 import { parseHevyCSV, ParsedHevyWorkout } from '@/lib/hevy-csv-parser';
-import { encodeRoutineToShareUrl } from '@/lib/share-utils';
+import { decodeCompactRoutine, encodeRoutineToShareUrl } from '@/lib/share-utils';
+import {
+  applyWeightModeToRoutine,
+  createShortShareLink,
+  getUnreadReceivedCount,
+  sendRoutineToFriend,
+  WeightAdaptMode,
+} from '@/lib/routine-sharing-service';
 import ProgressDashboard from '@/components/ProgressDashboard';
 import { SummaryTab } from '@/components/SummaryTab';
 import SocialDashboard from '@/components/SocialDashboard';
@@ -90,7 +99,7 @@ import AuthModal from '@/components/AuthModal';
 import GarminAuthModal from '@/components/GarminAuthModal';
 import ExerciseSwapModal from '@/components/ExerciseSwapModal';
 import WorkoutGeneratorModal from '@/components/WorkoutGeneratorModal';
-import { UserProfile, getCurrentUserProfile } from '@/lib/social-service';
+import { Friendship, UserProfile, getCurrentUserProfile, getFriendships } from '@/lib/social-service';
 import {
   supabase,
   isSupabaseConfigured,
@@ -171,8 +180,23 @@ export default function WorkoutStudioPage() {
   const [isBatchSavingToApp, setIsBatchSavingToApp] = useState(false);
   const [savedHevyIds, setSavedHevyIds] = useState<string[]>([]);
 
-  // Modal para compartir con Apple Watch / Amigo
+  // Modal para compartir con Amigos / Apple Watch
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareModalTab, setShareModalTab] = useState<'link' | 'friend'>('link');
+  const [shortShareResult, setShortShareResult] = useState<{
+    url: string;
+    shareCode: string | null;
+    note?: string;
+  } | null>(null);
+  const [isGeneratingShortLink, setIsGeneratingShortLink] = useState(false);
+  const [shareFriends, setShareFriends] = useState<Friendship[]>([]);
+  const [selectedFriendRecipientId, setSelectedFriendRecipientId] = useState('');
+  const [shareFriendMessage, setShareFriendMessage] = useState('');
+  const [isSendingToFriend, setIsSendingToFriend] = useState(false);
+  const [shareFriendFeedback, setShareFriendFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+  const [unreadSharesCount, setUnreadSharesCount] = useState(0);
+  const [incomingSharedRoutine, setIncomingSharedRoutine] = useState<StrengthRoutine | null>(null);
+  const [incomingWeightMode, setIncomingWeightMode] = useState<WeightAdaptMode>('keep');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedAppleNotes, setCopiedAppleNotes] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -244,10 +268,41 @@ export default function WorkoutStudioPage() {
       authSubscription = data.subscription;
     }
 
-    try {
+      try {
       const saved = localStorage.getItem('garmin_strength_current_routine');
       if (saved) {
         setRoutine(JSON.parse(saved));
+      }
+
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get('tab');
+        const importedFlag = params.get('imported');
+        const compactImport = params.get('import');
+
+        if (compactImport) {
+          const decoded = decodeCompactRoutine(compactImport);
+          if (decoded) {
+            setIncomingWeightMode('keep');
+            setIncomingSharedRoutine(decoded);
+          }
+          window.history.replaceState(null, '', window.location.pathname);
+        } else if (tabParam === 'live') {
+          setCurrentMainTab('live');
+          if (importedFlag === '1') {
+            setStatusMessage({
+              type: 'success',
+              text: '¡Rutina compartida guardada y lista para entrenar En Vivo!',
+            });
+          }
+          window.history.replaceState(null, '', window.location.pathname);
+        } else if (importedFlag === '1') {
+          setStatusMessage({
+            type: 'success',
+            text: '¡Rutina compartida guardada en tu app y cargada en el Diseñador!',
+          });
+          window.history.replaceState(null, '', window.location.pathname);
+        }
       }
 
       // Migración única de seguridad: mover secretos legados a cookies HttpOnly y limpiar localStorage
@@ -993,12 +1048,68 @@ export default function WorkoutStudioPage() {
   }, []);
 
   const shareUrl = routine ? `${currentOrigin}/live?data=${encodeRoutineToShareUrl(routine)}` : '';
+  const displayedShareUrl = shortShareResult?.url || shareUrl;
+
+  useEffect(() => {
+    if (!currentUser) {
+      setUnreadSharesCount(0);
+      return;
+    }
+    getUnreadReceivedCount().then(setUnreadSharesCount).catch(() => {});
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!isShareModalOpen) return;
+    setShareFriendFeedback(null);
+    setCopiedLink(false);
+
+    if (routine && routine.blocks.length > 0) {
+      setIsGeneratingShortLink(true);
+      createShortShareLink(routine, currentUser?.display_name)
+        .then((res) => setShortShareResult({ url: res.url, shareCode: res.shareCode, note: res.note }))
+        .finally(() => setIsGeneratingShortLink(false));
+    } else {
+      setShortShareResult(null);
+    }
+
+    if (currentUser) {
+      getFriendships().then((list) => {
+        const accepted = list.filter((f) => f.status === 'accepted');
+        setShareFriends(accepted);
+        if (accepted.length > 0 && !selectedFriendRecipientId) {
+          setSelectedFriendRecipientId(accepted[0].friend.id);
+        }
+      });
+    } else {
+      setShareFriends([]);
+    }
+  }, [isShareModalOpen]);
 
   const handleCopyShareLink = () => {
-    if (!shareUrl) return;
-    navigator.clipboard.writeText(shareUrl);
+    if (!displayedShareUrl) return;
+    navigator.clipboard.writeText(displayedShareUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const handleSendToFriendSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFriendRecipientId || routine.blocks.length === 0) return;
+    setIsSendingToFriend(true);
+    setShareFriendFeedback(null);
+    try {
+      const res = await sendRoutineToFriend({
+        recipientId: selectedFriendRecipientId,
+        routine,
+        message: shareFriendMessage,
+      });
+      setShareFriendFeedback({ ok: res.success, text: res.message });
+      if (res.success) {
+        setShareFriendMessage('');
+      }
+    } finally {
+      setIsSendingToFriend(false);
+    }
   };
 
   // Filtro del catálogo
@@ -1376,7 +1487,7 @@ export default function WorkoutStudioPage() {
 
             <button
               onClick={() => setCurrentMainTab('social')}
-              className={`saas-btn min-h-[42px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap ${
+              className={`saas-btn min-h-[42px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 py-1.5 px-1 sm:px-3.5 rounded-lg text-[10px] sm:text-xs font-semibold whitespace-nowrap relative ${
                 currentMainTab === 'social'
                   ? 'bg-card text-foreground shadow-xs border border-border/80'
                   : 'text-muted-foreground hover:text-foreground border border-transparent'
@@ -1385,6 +1496,11 @@ export default function WorkoutStudioPage() {
               <Swords className={`w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 ${currentMainTab === 'social' ? 'text-indigo-600' : ''}`} />
               <span className="sm:hidden">Retos</span>
               <span className="hidden sm:inline">Amigos &amp; Retos</span>
+              {unreadSharesCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[9px] font-bold tabular-nums">
+                  {unreadSharesCount}
+                </span>
+              )}
             </button>
           </nav>
 
@@ -1451,7 +1567,21 @@ export default function WorkoutStudioPage() {
         ) : currentMainTab === 'progress' ? (
           <ProgressDashboard />
         ) : currentMainTab === 'social' ? (
-          <SocialDashboard onOpenAuth={() => setIsAuthModalOpen(true)} />
+          <SocialDashboard
+            onOpenAuth={() => setIsAuthModalOpen(true)}
+            onUnreadSharesChange={setUnreadSharesCount}
+            onImportReceivedRoutine={async (importedRoutine, goLive) => {
+              await saveHevyRoutinesToApp([importedRoutine]);
+              setRoutine(importedRoutine);
+              setCurrentMainTab(goLive ? 'live' : 'studio');
+              setStatusMessage({
+                type: 'success',
+                text: goLive
+                  ? `Rutina "${importedRoutine.name}" guardada y lista en Entreno en Vivo.`
+                  : `Rutina "${importedRoutine.name}" guardada en la App y abierta en el Diseñador.`,
+              });
+            }}
+          />
         ) : (
           <div className="space-y-6">
             {/* Sub-navegación de Rutinas: Diseñador vs Top Gimnasio */}
@@ -2391,19 +2521,19 @@ export default function WorkoutStudioPage() {
         )}
       </main>
 
-      {/* --- MODAL COMPARTIR RUTINA / APPLE WATCH --- */}
+      {/* --- MODAL COMPARTIR RUTINA (ENLACE CORTO + AMIGOS + APPLE WATCH) --- */}
       {isShareModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-card rounded-2xl border border-border/60 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-card text-foreground rounded-2xl border border-border/80 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
             {/* Cabecera */}
-            <div className="p-6 border-b border-border/60 flex items-center justify-between">
+            <div className="p-5 sm:p-6 border-b border-border/60 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
                   <Share2 className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground text-base sm:text-lg">Compartir Rutina</h3>
-                  <p className="text-xs text-muted-foreground">Para entrenar juntos con Apple Watch o móvil</p>
+                  <p className="text-xs text-muted-foreground">Envíala por enlace corto, WhatsApp o directo a un amigo</p>
                 </div>
               </div>
               <button
@@ -2415,124 +2545,385 @@ export default function WorkoutStudioPage() {
               </button>
             </div>
 
+            {/* Pestañas Enlace vs Enviar a Amigo */}
+            <div className="px-5 pt-4">
+              <div className="grid grid-cols-2 gap-1 p-1 bg-muted rounded-xl border border-border/60 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setShareModalTab('link')}
+                  className={`min-h-[38px] rounded-lg inline-flex items-center justify-center gap-1.5 transition-all ${
+                    shareModalTab === 'link'
+                      ? 'bg-card text-foreground shadow-xs border border-border/60'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  <span>Enlace &amp; WhatsApp</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShareModalTab('friend')}
+                  className={`min-h-[38px] rounded-lg inline-flex items-center justify-center gap-1.5 transition-all ${
+                    shareModalTab === 'friend'
+                      ? 'bg-card text-foreground shadow-xs border border-border/60'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Enviar a un Amigo</span>
+                </button>
+              </div>
+            </div>
+
             {/* Contenido */}
-            <div className="p-6 space-y-4 text-sm">
-              <div className="bg-muted/30 p-4 rounded-xl border border-border/60 space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Enlace directo a la sesión
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={shareUrl}
-                    className="w-full text-xs font-mono bg-card border border-border/60 rounded-lg px-3 py-2 text-foreground truncate select-all outline-none"
-                  />
-                  <button
-                    onClick={handleCopyShareLink}
-                    className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 shrink-0 active:scale-95 flex items-center gap-1.5"
-                  >
-                    {copiedLink ? (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        <span>¡Copiado!</span>
-                      </>
+            <div className="p-5 sm:p-6 space-y-4 text-sm overflow-y-auto">
+              {shareModalTab === 'link' ? (
+                <>
+                  <div className="bg-muted/30 p-4 rounded-xl border border-border/60 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        {shortShareResult?.shareCode ? 'Enlace corto para guardar / entrenar' : 'Enlace directo compacto'}
+                      </span>
+                      {shortShareResult?.shareCode && (
+                        <span className="px-2 py-0.5 rounded-md bg-blue-500/15 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-mono text-[11px] font-bold">
+                          Código: {shortShareResult.shareCode}
+                        </span>
+                      )}
+                    </div>
+
+                    {routine.blocks.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">
+                        Añade al menos un ejercicio a la rutina actual para generar un enlace compartible.
+                      </p>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copiar</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={isGeneratingShortLink ? 'Generando enlace...' : displayedShareUrl}
+                            className="w-full min-h-[40px] text-xs font-mono bg-background border border-border/80 rounded-lg px-3 py-2 text-foreground truncate select-all outline-none"
+                          />
+                          <button
+                            type="button"
+                            disabled={isGeneratingShortLink}
+                            onClick={handleCopyShareLink}
+                            className="min-h-[40px] px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-all shrink-0 active:scale-95 flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            {copiedLink ? (
+                              <>
+                                <Check className="w-3.5 h-3.5" />
+                                <span>¡Copiado!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copiar</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        {shortShareResult?.note && (
+                          <p className="text-[11px] text-muted-foreground">{shortShareResult.note}</p>
+                        )}
                       </>
                     )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Botones de acción rápida */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <a
-                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`¡Hola! Te comparto la rutina de hoy (${routine.name}) para entrenar juntos: ${shareUrl}`)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 hover:-translate-y-0.5 text-center"
-                >
-                  <span>Enviar por WhatsApp</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-
-                <a
-                  href={shareUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="py-2.5 px-3 rounded-xl bg-primary hover:opacity-90 text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 hover:-translate-y-0.5 text-center"
-                >
-                  <span>Probar Modo Live</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              </div>
-
-              {/* Opciones directas Apple Watch Serie 4 */}
-              <div className="bg-slate-900 text-white rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 font-semibold text-xs">
-                    <Watch className="w-4 h-4 text-blue-400" />
-                    <span>Cargar en Apple Watch (Serie 4 / watchOS)</span>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold">
-                    3 métodos
-                  </span>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <a
-                    href={`${shareUrl}&watch=1`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="py-2.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-center"
-                  >
-                    <Watch className="w-3.5 h-3.5 shrink-0" />
-                    <span>Modo Reloj OLED</span>
-                  </a>
+                  {/* Botones de acción rápida */}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <a
+                      href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`¡Hola! Te comparto mi rutina "${routine.name}" en IronSync para guardarla o entrenar juntos: ${displayedShareUrl}`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="min-h-[42px] py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-center"
+                    >
+                      <span>Enviar por WhatsApp</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
 
-                  <button
-                    type="button"
-                    onClick={() => downloadAppleWatchCalendarIcs(routine)}
-                    className="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    <Calendar className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>Calendario (.ics)</span>
-                  </button>
+                    <a
+                      href={displayedShareUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="min-h-[42px] py-2.5 px-3 rounded-xl bg-primary hover:opacity-90 text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-center"
+                    >
+                      <span>Abrir Vista Previa</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
 
+                  {/* Opciones directas Apple Watch Serie 4 */}
+                  <div className="bg-slate-900 text-white rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 font-semibold text-xs">
+                        <Watch className="w-4 h-4 text-blue-400" />
+                        <span>Cargar en Apple Watch (Serie 4 / watchOS)</span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold">
+                        3 métodos
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <a
+                        href={`${shareUrl}&watch=1`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="py-2.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-center"
+                      >
+                        <Watch className="w-3.5 h-3.5 shrink-0" />
+                        <span>Modo Reloj OLED</span>
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={() => downloadAppleWatchCalendarIcs(routine)}
+                        className="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>Calendario (.ics)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(formatAppleWatchNotesText(routine));
+                          setCopiedAppleNotes(true);
+                          setTimeout(() => setCopiedAppleNotes(false), 2500);
+                        }}
+                        className="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        {copiedAppleNotes ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>¡Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>Notas / Watch</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      <strong>Modo Reloj OLED:</strong> si le envías el enlace por WhatsApp/iMessage y lo toca desde su Apple Watch Serie 4, se abre adaptado a su pantalla OLED con botón gigante de serie y descanso.
+                    </p>
+                  </div>
+                </>
+              ) : !currentUser ? (
+                <div className="bg-muted/30 border border-border/70 rounded-xl p-6 text-center space-y-3">
+                  <Users className="w-9 h-9 text-indigo-500 mx-auto" />
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-foreground">Inicia sesión para enviar a amigos</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Conecta tu cuenta para enviar rutinas directo a la bandeja de entrada de tus amigos en IronSync.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(formatAppleWatchNotesText(routine));
-                      setCopiedAppleNotes(true);
-                      setTimeout(() => setCopiedAppleNotes(false), 2500);
+                      setIsShareModalOpen(false);
+                      setIsAuthModalOpen(true);
                     }}
-                    className="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                    className="min-h-[40px] px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold"
                   >
-                    {copiedAppleNotes ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span>¡Copiado!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span>Notas / Watch</span>
-                      </>
-                    )}
+                    Abrir Cuenta / Iniciar Sesión
                   </button>
                 </div>
+              ) : shareFriends.length === 0 ? (
+                <div className="bg-muted/30 border border-border/70 rounded-xl p-6 text-center space-y-3">
+                  <Users className="w-9 h-9 text-muted-foreground/60 mx-auto" />
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-foreground">Aún no tienes amigos agregados</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Agrega primero a tu compañero en la pestaña Amigos &amp; Retos con su código de atleta ({currentUser.friend_code}).
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsShareModalOpen(false);
+                      setCurrentMainTab('social');
+                    }}
+                    className="min-h-[40px] px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold"
+                  >
+                    Ir a Amigos &amp; Retos
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSendToFriendSubmit} className="space-y-4">
+                  <div className="p-3.5 rounded-xl bg-muted/30 border border-border/60 text-xs flex items-center justify-between">
+                    <span className="text-muted-foreground">Rutina a enviar:</span>
+                    <strong className="text-foreground">
+                      {routine.name} ({routine.blocks.length} ej.)
+                    </strong>
+                  </div>
 
-                <p className="text-[11px] text-slate-300 leading-relaxed">
-                  <strong>Modo Reloj OLED:</strong> si le envías el enlace por WhatsApp/iMessage y lo toca desde su Apple Watch Serie 4, se abre adaptado a su pantalla OLED con botón gigante de serie y descanso. <strong>Calendario (.ics):</strong> añádelo en el iPhone y aparecerá offline en la app Calendario del reloj.
-                </p>
-              </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
+                      Elige destinatario
+                    </label>
+                    <select
+                      required
+                      value={selectedFriendRecipientId}
+                      onChange={(e) => setSelectedFriendRecipientId(e.target.value)}
+                      className="w-full min-h-[42px] px-3 py-2 text-base sm:text-sm bg-background text-foreground border border-border/80 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/25"
+                    >
+                      {shareFriends.map((f) => (
+                        <option key={f.friend.id} value={f.friend.id}>
+                          {f.friend.display_name} (@{f.friend.username})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground/80 mb-1.5">
+                      Nota opcional para tu amigo
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={160}
+                      value={shareFriendMessage}
+                      onChange={(e) => setShareFriendMessage(e.target.value)}
+                      placeholder="Ej: Prueba esta de pierna hoy, baja peso si vas justo"
+                      className="w-full min-h-[42px] px-3 py-2 text-base sm:text-sm bg-background text-foreground placeholder:text-muted-foreground border border-border/80 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/25"
+                    />
+                  </div>
+
+                  {shareFriendFeedback && (
+                    <div
+                      className={`p-3 rounded-xl border text-xs font-medium ${
+                        shareFriendFeedback.ok
+                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-800 dark:text-emerald-200'
+                          : 'bg-rose-500/15 border-rose-500/30 text-rose-800 dark:text-rose-200'
+                      }`}
+                    >
+                      {shareFriendFeedback.text}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isSendingToFriend || routine.blocks.length === 0 || !selectedFriendRecipientId}
+                    className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-2 shadow-sm transition-all"
+                  >
+                    <Inbox className="w-4 h-4" />
+                    <span>{isSendingToFriend ? 'Enviando...' : 'Enviar Rutina a su Bandeja'}</span>
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* --- MODAL VISTA PREVIA DE RUTINA COMPARTIDA (?import=...) --- */}
+      {incomingSharedRoutine && (() => {
+        const adaptedIncoming = applyWeightModeToRoutine(incomingSharedRoutine, incomingWeightMode);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+            <div className="bg-card text-foreground rounded-2xl border border-border/80 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[88vh] flex flex-col">
+              <div className="p-5 border-b border-border/60 flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                    Rutina compartida contigo
+                  </span>
+                  <h3 className="font-bold text-foreground text-lg mt-0.5">{adaptedIncoming.name}</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIncomingSharedRoutine(null)}
+                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+                  aria-label="Cerrar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 overflow-y-auto space-y-4">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-semibold text-muted-foreground mr-1">Cargas:</span>
+                  {(
+                    [
+                      { id: 'keep', label: 'Originales (100%)' },
+                      { id: 'zero', label: '0 kg' },
+                      { id: 'scale85', label: '85%' },
+                      { id: 'scale75', label: '75%' },
+                    ] as { id: WeightAdaptMode; label: string }[]
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setIncomingWeightMode(opt.id)}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                        incomingWeightMode === opt.id
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-muted/40 text-muted-foreground border-border/60 hover:text-foreground'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="divide-y divide-border/60 border border-border/80 rounded-xl overflow-hidden bg-muted/20">
+                  {adaptedIncoming.blocks.map((b, idx) => (
+                    <div key={b.id} className="px-3.5 py-2.5 flex items-center justify-between text-xs">
+                      <span className="font-semibold text-foreground truncate pr-2">
+                        {idx + 1}. {b.exercise.name}
+                      </span>
+                      <span className="font-mono text-muted-foreground shrink-0 tabular-nums">
+                        {b.sets}&times;{b.reps} &bull; {b.weightKg} kg
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await saveHevyRoutinesToApp([adaptedIncoming]);
+                      setRoutine(adaptedIncoming);
+                      setIncomingSharedRoutine(null);
+                      setCurrentMainTab('live');
+                      setStatusMessage({
+                        type: 'success',
+                        text: `Rutina "${adaptedIncoming.name}" guardada y lista en Entreno en Vivo.`,
+                      });
+                    }}
+                    className="flex-1 min-h-[42px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center justify-center gap-1.5"
+                  >
+                    <Play className="w-4 h-4" />
+                    <span>Guardar y En Vivo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await saveHevyRoutinesToApp([adaptedIncoming]);
+                      setRoutine(adaptedIncoming);
+                      setIncomingSharedRoutine(null);
+                      setCurrentMainTab('studio');
+                      setStatusMessage({
+                        type: 'success',
+                        text: `Rutina "${adaptedIncoming.name}" guardada en tu app y abierta en el Diseñador.`,
+                      });
+                    }}
+                    className="min-h-[42px] px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center justify-center gap-1.5"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Guardar y Editar</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* --- MODAL MIS RUTINAS EN LA NUBE (SUPABASE) --- */}
       {isCloudRoutinesModalOpen && (

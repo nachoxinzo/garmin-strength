@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Users,
   Trophy,
@@ -8,15 +9,13 @@ import {
   TrendingUp,
   UserPlus,
   Search,
-  Check,
-  X,
-  Clock,
-  Flame,
-  Award,
-  ArrowRight,
-  Shield,
+  Inbox,
+  Play,
+  Save,
+  Trash2,
   Dumbbell,
-  Share2
+  Share2,
+  X
 } from 'lucide-react';
 import {
   UserProfile,
@@ -32,17 +31,35 @@ import {
   respondToChallenge,
   compareExerciseWithFriend
 } from '@/lib/social-service';
+import {
+  applyWeightModeToRoutine,
+  getReceivedRoutines,
+  ReceivedRoutineShare,
+  updateReceivedRoutineStatus,
+  WeightAdaptMode,
+} from '@/lib/routine-sharing-service';
+import { StrengthRoutine } from '@/lib/types';
 import { EXERCISE_CATALOG } from '@/lib/exercise-catalog';
 
 interface SocialDashboardProps {
   onOpenAuth: () => void;
+  onImportReceivedRoutine?: (routine: StrengthRoutine, goLive: boolean) => Promise<void> | void;
+  onUnreadSharesChange?: (count: number) => void;
 }
 
-export default function SocialDashboard({ onOpenAuth }: SocialDashboardProps) {
+export default function SocialDashboard({
+  onOpenAuth,
+  onImportReceivedRoutine,
+  onUnreadSharesChange,
+}: SocialDashboardProps) {
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [challenges, setChallenges] = useState<GymChallenge[]>([]);
-  const [activeTab, setActiveTab] = useState<'challenges' | 'compare' | 'friends'>('challenges');
+  const [receivedShares, setReceivedShares] = useState<ReceivedRoutineShare[]>([]);
+  const [shareWeightModes, setShareWeightModes] = useState<Record<string, WeightAdaptMode>>({});
+  const [importCodeInput, setImportCodeInput] = useState('');
+  const [activeTab, setActiveTab] = useState<'received' | 'challenges' | 'compare' | 'friends'>('received');
 
   // Búsqueda de amigos
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,15 +88,42 @@ export default function SocialDashboard({ onOpenAuth }: SocialDashboardProps) {
     const profile = await getCurrentUserProfile();
     setCurrentUser(profile);
     if (profile) {
-      const friends = await getFriendships();
+      const [friends, chs, received] = await Promise.all([
+        getFriendships(),
+        getChallenges(),
+        getReceivedRoutines(),
+      ]);
       setFriendships(friends);
-      const chs = await getChallenges();
       setChallenges(chs);
+      setReceivedShares(received);
+      onUnreadSharesChange?.(received.filter((r) => r.status === 'unread').length);
       const accepted = friends.filter(f => f.status === 'accepted');
       if (accepted.length > 0 && !compareFriendId) {
         setCompareFriendId(accepted[0].friend.id);
       }
     }
+  };
+
+  const handleImportFriendRoutine = async (share: ReceivedRoutineShare, goLive: boolean) => {
+    const mode = shareWeightModes[share.id] || 'keep';
+    const adapted = applyWeightModeToRoutine(share.routine, mode);
+    if (onImportReceivedRoutine) {
+      await onImportReceivedRoutine(adapted, goLive);
+    }
+    await updateReceivedRoutineStatus(share.id, 'imported');
+    await loadUserData();
+  };
+
+  const handleDismissFriendRoutine = async (shareId: string) => {
+    await updateReceivedRoutineStatus(shareId, 'dismissed');
+    await loadUserData();
+  };
+
+  const handleOpenCodeImport = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleaned = importCodeInput.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!cleaned) return;
+    router.push(`/r/${cleaned}`);
   };
 
   // Buscar perfiles
@@ -218,7 +262,19 @@ export default function SocialDashboard({ onOpenAuth }: SocialDashboardProps) {
       </div>
 
       {/* Sub-navegación Social */}
-      <div className="flex border-b border-border/80 gap-6 text-sm font-semibold overflow-x-auto">
+      <div className="flex border-b border-border/80 gap-5 text-sm font-semibold overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('received')}
+          className={`pb-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === 'received'
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Inbox className="w-4 h-4" />
+          <span>Rutinas Recibidas ({receivedShares.length})</span>
+        </button>
+
         <button
           onClick={() => setActiveTab('challenges')}
           className={`pb-3 flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
@@ -255,6 +311,139 @@ export default function SocialDashboard({ onOpenAuth }: SocialDashboardProps) {
           <span>Amigos ({acceptedFriends.length})</span>
         </button>
       </div>
+
+      {/* CONTENIDO 0: RUTINAS RECIBIDAS + IMPORTAR POR CÓDIGO */}
+      {activeTab === 'received' && (
+        <div className="space-y-4">
+          <div className="bg-card rounded-xl border border-border/80 p-4 shadow-xs space-y-2.5">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Importar rutina con código corto (/r/CODIGO)
+            </h4>
+            <form onSubmit={handleOpenCodeImport} className="flex gap-2">
+              <input
+                type="text"
+                value={importCodeInput}
+                onChange={(e) => setImportCodeInput(e.target.value.toUpperCase())}
+                placeholder="Ej: A7K2P9X4"
+                maxLength={16}
+                className="flex-1 min-h-[42px] px-3 py-2 text-base sm:text-sm font-mono uppercase bg-background text-foreground placeholder:text-muted-foreground border border-border/80 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/25"
+              />
+              <button
+                type="submit"
+                disabled={!importCodeInput.trim()}
+                className="min-h-[42px] px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold inline-flex items-center gap-1.5"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Abrir código</span>
+              </button>
+            </form>
+          </div>
+
+          {receivedShares.length === 0 ? (
+            <div className="bg-card rounded-xl border border-border/80 p-8 text-center space-y-2">
+              <Inbox className="w-10 h-10 text-muted-foreground/50 mx-auto" />
+              <h4 className="font-bold text-foreground text-sm">Aún no has recibido rutinas de amigos</h4>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Cuando un amigo comparta una rutina contigo desde &quot;Compartir → Enviar a un Amigo&quot;, aparecerá aquí lista para guardarla o entrenarla En Vivo.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {receivedShares.map((share) => {
+                const selectedMode = shareWeightModes[share.id] || 'keep';
+                const totalSets = share.routine.blocks.reduce((a, b) => a + b.sets, 0);
+                return (
+                  <div
+                    key={share.id}
+                    className="bg-card rounded-xl border border-border/80 p-4 shadow-xs space-y-3"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-foreground text-sm">{share.routine.name}</h4>
+                          {share.status === 'unread' && (
+                            <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 text-[10px] font-bold">
+                              Nueva
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Enviada por{' '}
+                          <strong className="text-foreground">
+                            {share.sender?.display_name || 'Amigo'}
+                          </strong>{' '}
+                          &bull; {share.routine.blocks.length} ejercicios &bull; {totalSets} series
+                        </p>
+                        {share.message && (
+                          <p className="text-xs text-foreground/85 bg-muted/40 border border-border/60 rounded-lg px-2.5 py-1.5 mt-2">
+                            &ldquo;{share.message}&rdquo;
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDismissFriendRoutine(share.id)}
+                        title="Descartar"
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-muted-foreground mr-1">
+                        Cargas:
+                      </span>
+                      {(
+                        [
+                          { id: 'keep', label: '100%' },
+                          { id: 'zero', label: '0 kg' },
+                          { id: 'scale85', label: '85%' },
+                          { id: 'scale75', label: '75%' },
+                        ] as { id: WeightAdaptMode; label: string }[]
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() =>
+                            setShareWeightModes((prev) => ({ ...prev, [share.id]: opt.id }))
+                          }
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
+                            selectedMode === opt.id
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-muted/40 text-muted-foreground border-border/60 hover:text-foreground'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleImportFriendRoutine(share, true)}
+                        className="min-h-[38px] px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1.5"
+                      >
+                        <Play className="w-3.5 h-3.5" />
+                        <span>Guardar y En Vivo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleImportFriendRoutine(share, false)}
+                        className="min-h-[38px] px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center gap-1.5"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Guardar y Editar</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* CONTENIDO 1: RETOS ("PICARSE") */}
       {activeTab === 'challenges' && (
