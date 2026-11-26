@@ -1421,6 +1421,21 @@ export default function WorkoutStudioPage() {
                     <span>Comprobar Garmin Connect</span>
                   </span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    window.dispatchEvent(new CustomEvent('ironsync:open-install-guide'));
+                  }}
+                  className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-card hover:bg-muted/50 border border-border/60 flex items-center justify-between text-sm font-semibold text-foreground"
+                >
+                  <span className="flex items-center gap-3">
+                    <Smartphone className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span>Instalar App (iPhone / Android)</span>
+                  </span>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                </button>
               </div>
             </div>
 
@@ -1563,6 +1578,14 @@ export default function WorkoutStudioPage() {
               setStatusMessage({ type: 'success', text: summaryText });
             }}
             onApplyNextProgression={() => handleApplyProgressiveOverload('optimal')}
+            onUpdateRestSeconds={(blockId, restSeconds) => {
+              setRoutine((prev) => ({
+                ...prev,
+                blocks: prev.blocks.map((b) =>
+                  blockId === 'ALL' || b.id === blockId ? { ...b, restSeconds } : b
+                ),
+              }));
+            }}
           />
         ) : currentMainTab === 'progress' ? (
           <ProgressDashboard />

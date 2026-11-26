@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   Award,
@@ -89,6 +89,7 @@ interface LiveTrackerTabProps {
   savedRoutines?: StrengthRoutine[];
   onSelectSavedRoutine?: (routine: StrengthRoutine) => void;
   onOpenHevyImport?: () => void;
+  onUpdateRestSeconds?: (blockId: string | 'ALL', restSeconds: number) => void;
 }
 
 function computeEpley1RM(weightKg: number, reps: number): number {
@@ -149,6 +150,7 @@ export function LiveTrackerTab({
   savedRoutines = [],
   onSelectSavedRoutine,
   onOpenHevyImport,
+  onUpdateRestSeconds,
 }: LiveTrackerTabProps) {
   const [history, setHistory] = useState<Record<string, ExerciseProgressRecord>>({});
   const [notesMap, setNotesMap] = useState<Record<string, ExerciseNoteRecord>>({});
@@ -177,6 +179,8 @@ export function LiveTrackerTab({
   const [restTotal, setRestTotal] = useState(0);
   const [isRestRunning, setIsRestRunning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [editingRestExIndex, setEditingRestExIndex] = useState<number | null>(null);
+  const skipNextRoutineSyncRef = useRef(false);
 
   // Mantener pantalla encendida mientras el entreno está activo
   useWakeLock(isSessionActive && !isFinished);
@@ -188,6 +192,11 @@ export function LiveTrackerTab({
   }, []);
 
   useEffect(() => {
+    if (skipNextRoutineSyncRef.current) {
+      skipNextRoutineSyncRef.current = false;
+      return;
+    }
+
     // Solo inicializar si no hay una sesión activa en curso con datos ya marcados
     setLiveExercises((prev) => {
       const hasAnyCompleted = prev.some((ex) => ex.sets.some((s) => s.completed));
@@ -196,7 +205,7 @@ export function LiveTrackerTab({
       return routine.blocks.map((block) => ({
         blockId: block.id,
         exercise: block.exercise,
-        restSeconds: block.restSeconds || 90,
+        restSeconds: block.restSeconds ?? 90,
         supersetGroupId: block.supersetGroupId,
         effort: 'optimal',
         sets: Array.from({ length: block.sets }, (_, i) => ({
@@ -289,7 +298,7 @@ export function LiveTrackerTab({
       routine.blocks.map((block) => ({
         blockId: block.id,
         exercise: block.exercise,
-        restSeconds: block.restSeconds || 90,
+        restSeconds: block.restSeconds ?? 90,
         supersetGroupId: block.supersetGroupId,
         effort: 'optimal',
         sets: Array.from({ length: block.sets }, (_, i) => ({
@@ -380,7 +389,7 @@ export function LiveTrackerTab({
       triggerVibration(detectedPrType ? [120, 60, 120, 60, 220] : [80]);
 
       // Lanzar descanso automáticamente al marcar la serie como realizada
-      const restSecs = targetExercise.restSeconds || 90;
+      const restSecs = targetExercise.restSeconds ?? 90;
       if (restSecs > 0) {
         setRestTotal(restSecs);
         setRestRemaining(restSecs);
@@ -478,6 +487,35 @@ export function LiveTrackerTab({
     setLiveExercises((prev) =>
       prev.map((ex, eIdx) => (eIdx === exIndex ? { ...ex, effort } : ex))
     );
+  };
+
+  const updateExerciseRestSeconds = (exIndex: number, nextSeconds: number) => {
+    const clamped = Math.max(0, Math.min(600, Math.round(nextSeconds)));
+    const targetBlockId = liveExercises[exIndex]?.blockId;
+    setLiveExercises((prev) =>
+      prev.map((ex, eIdx) => (eIdx === exIndex ? { ...ex, restSeconds: clamped } : ex))
+    );
+    if (onUpdateRestSeconds && targetBlockId) {
+      skipNextRoutineSyncRef.current = true;
+      onUpdateRestSeconds(targetBlockId, clamped);
+    }
+  };
+
+  const applyRestToAllExercises = (nextSeconds: number) => {
+    const clamped = Math.max(0, Math.min(600, Math.round(nextSeconds)));
+    setLiveExercises((prev) => prev.map((ex) => ({ ...ex, restSeconds: clamped })));
+    if (onUpdateRestSeconds) {
+      skipNextRoutineSyncRef.current = true;
+      onUpdateRestSeconds('ALL', clamped);
+    }
+  };
+
+  const adjustActiveRestRemaining = (delta: number) => {
+    const next = delta < 0 ? Math.max(5, restRemaining + delta) : restRemaining + delta;
+    setRestRemaining(next);
+    if (delta > 0) {
+      setRestTotal((t) => Math.max(t, next));
+    }
   };
 
   const handleFinishWorkout = () => {
@@ -1112,12 +1150,108 @@ export function LiveTrackerTab({
                     <span>Ayuda 3D</span>
                   </button>
 
-                  <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5 bg-muted/40 px-3 py-1.5 rounded-lg border border-border/60 tabular-nums">
-                    <Timer className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>{ex.restSeconds}s</span>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditingRestExIndex((prev) => (prev === exIndex ? null : exIndex))
+                    }
+                    aria-expanded={editingRestExIndex === exIndex}
+                    aria-label="Modificar tiempo de descanso"
+                    title="Modificar tiempo de descanso entre series"
+                    className={`saas-btn min-h-[38px] text-xs inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border tabular-nums font-semibold transition-all ${
+                      editingRestExIndex === exIndex
+                        ? 'bg-emerald-500/15 hover:bg-emerald-500/20 border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                        : 'bg-muted/40 hover:bg-muted border-border/60 text-foreground'
+                    }`}
+                  >
+                    <Timer className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>{ex.restSeconds === 0 ? 'Sin descanso' : `${ex.restSeconds}s`}</span>
+                  </button>
                 </div>
               </div>
+
+              {/* Panel Inline de Modificación de Descanso */}
+              {editingRestExIndex === exIndex && (
+                <div className="rounded-xl bg-muted/35 border border-border/70 p-3.5 space-y-3 animate-in fade-in duration-150">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                      <Timer className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>Descanso entre series</span>
+                    </div>
+                    <span className="text-xs font-bold tabular-nums px-2 py-0.5 rounded-md bg-card border border-border/70 text-foreground">
+                      {ex.restSeconds === 0 ? 'Desactivado (0s)' : `${formatDuration(ex.restSeconds)} (${ex.restSeconds}s)`}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateExerciseRestSeconds(exIndex, ex.restSeconds - 15)}
+                      className="saas-btn min-h-[42px] px-3 py-2 rounded-lg bg-card hover:bg-accent border border-border/80 text-xs font-bold text-foreground tabular-nums"
+                    >
+                      -15s
+                    </button>
+
+                    <div className="flex items-center gap-1.5 bg-card border border-border/80 rounded-lg px-2.5 min-h-[42px]">
+                      <input
+                        type="number"
+                        min={0}
+                        max={600}
+                        step={5}
+                        aria-label="Segundos de descanso"
+                        value={ex.restSeconds}
+                        onChange={(e) =>
+                          updateExerciseRestSeconds(exIndex, parseInt(e.target.value, 10) || 0)
+                        }
+                        className="w-16 text-center font-bold text-foreground bg-transparent text-base sm:text-sm tabular-nums outline-none"
+                      />
+                      <span className="text-xs text-muted-foreground font-semibold">seg</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => updateExerciseRestSeconds(exIndex, ex.restSeconds + 15)}
+                      className="saas-btn min-h-[42px] px-3 py-2 rounded-lg bg-card hover:bg-accent border border-border/80 text-xs font-bold text-foreground tabular-nums"
+                    >
+                      +15s
+                    </button>
+
+                    <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
+                      {[0, 45, 60, 90, 120, 180].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => updateExerciseRestSeconds(exIndex, preset)}
+                          className={`min-h-[38px] px-2.5 py-1 rounded-lg text-xs font-semibold border tabular-nums transition-all active:scale-[0.98] ${
+                            ex.restSeconds === preset
+                              ? 'bg-emerald-600 border-emerald-600 text-white shadow-2xs'
+                              : 'bg-card hover:bg-accent border-border/70 text-foreground'
+                          }`}
+                        >
+                          {preset}s
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/50">
+                    <button
+                      type="button"
+                      onClick={() => applyRestToAllExercises(ex.restSeconds)}
+                      className="saas-btn min-h-[38px] px-3 py-1.5 rounded-lg bg-card hover:bg-accent border border-border/80 text-xs font-semibold text-foreground"
+                    >
+                      Aplicar {ex.restSeconds}s a todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingRestExIndex(null)}
+                      className="saas-btn min-h-[38px] px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                    >
+                      Listo
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Píldora Contextual de Calentamiento (Opción B) encima de Serie 1 */}
               {(() => {
@@ -1351,20 +1485,27 @@ export function LiveTrackerTab({
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => setRestRemaining((r) => Math.max(5, r - 15))}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold tabular-nums"
+                onClick={() => adjustActiveRestRemaining(-15)}
+                className="min-h-[40px] px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold tabular-nums"
               >
                 -15s
               </button>
               <button
                 type="button"
-                onClick={() => setRestRemaining((r) => r + 15)}
-                className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold tabular-nums"
+                onClick={() => adjustActiveRestRemaining(15)}
+                className="min-h-[40px] px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold tabular-nums"
               >
                 +15s
+              </button>
+              <button
+                type="button"
+                onClick={() => adjustActiveRestRemaining(30)}
+                className="min-h-[40px] px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold tabular-nums"
+              >
+                +30s
               </button>
               <button
                 type="button"
@@ -1372,7 +1513,7 @@ export function LiveTrackerTab({
                   setIsRestRunning(false);
                   setRestRemaining(0);
                 }}
-                className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-bold inline-flex items-center gap-1"
+                className="min-h-[40px] px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-bold inline-flex items-center gap-1"
               >
                 <SkipForward className="w-3.5 h-3.5" />
                 <span>Saltar</span>

@@ -1,9 +1,12 @@
-const CACHE_NAME = 'ironsync-pwa-v3';
+const CACHE_NAME = 'ironsync-pwa-v4';
 const STATIC_ASSETS = [
   '/',
   '/live',
   '/manifest.json',
   '/icon.svg',
+  '/apple-touch-icon.png',
+  '/icon-192.png',
+  '/icon-512.png',
   '/pr-celebration.gif',
   '/api/exercises',
 ];

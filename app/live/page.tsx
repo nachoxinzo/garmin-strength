@@ -185,22 +185,30 @@ function LiveWorkoutContent() {
     }
     triggerHaptic([120, 80, 120]);
 
+    const restSecs = currentBlock.restSeconds ?? 90;
+
     // ¿Quedan más series de este mismo ejercicio?
     if (currentSetIndex < currentBlock.sets) {
       setCurrentSetIndex(prev => prev + 1);
-      // Iniciar descanso
-      setPhase('rest');
-      setRestSecondsRemaining(currentBlock.restSeconds || 90);
-      setIsTimerRunning(true);
+      if (restSecs > 0) {
+        setPhase('rest');
+        setRestSecondsRemaining(restSecs);
+        setIsTimerRunning(true);
+      } else {
+        setPhase('work');
+      }
     } else {
       // Fin de las series de este ejercicio: avanzar al siguiente
       if (currentBlockIndex + 1 < routine.blocks.length) {
         setCurrentBlockIndex(prev => prev + 1);
         setCurrentSetIndex(1);
-        // Descanso entre ejercicios
-        setPhase('rest');
-        setRestSecondsRemaining(currentBlock.restSeconds || 90);
-        setIsTimerRunning(true);
+        if (restSecs > 0) {
+          setPhase('rest');
+          setRestSecondsRemaining(restSecs);
+          setIsTimerRunning(true);
+        } else {
+          setPhase('work');
+        }
       } else {
         // ¿Hay enfriamiento?
         if (routine.cooldownSeconds > 0) {
@@ -225,7 +233,30 @@ function LiveWorkoutContent() {
   };
 
   const addRestTime = (seconds: number) => {
-    setRestSecondsRemaining(prev => Math.max(0, prev + seconds));
+    setRestSecondsRemaining(prev =>
+      seconds < 0 ? Math.max(5, prev + seconds) : prev + seconds
+    );
+  };
+
+  // Ajuste en tiempo real de descanso, pesos y repeticiones
+  const setLiveRest = (seconds: number) => {
+    if (!routine) return;
+    const clamped = Math.max(0, Math.min(600, Math.round(seconds)));
+    setRoutine(prev => {
+      if (!prev) return prev;
+      const newBlocks = [...prev.blocks];
+      const cur = newBlocks[currentBlockIndex];
+      if (!cur) return prev;
+      newBlocks[currentBlockIndex] = { ...cur, restSeconds: clamped };
+      return { ...prev, blocks: newBlocks };
+    });
+  };
+
+  const updateLiveRest = (delta: number) => {
+    if (!routine) return;
+    const cur = routine.blocks[currentBlockIndex];
+    if (!cur) return;
+    setLiveRest((cur.restSeconds ?? 90) + delta);
   };
 
   // Ajuste en tiempo real de pesos y repeticiones (para adaptar a cada persona en el gym)
@@ -323,7 +354,14 @@ function LiveWorkoutContent() {
               <div className="text-4xl font-mono font-extrabold tabular-nums text-white">
                 {formatTime(restSecondsRemaining)}
               </div>
-              <div className="flex items-center gap-2 w-full pt-1">
+              <div className="flex items-center gap-1.5 w-full pt-1">
+                <button
+                  type="button"
+                  onClick={() => addRestTime(-15)}
+                  className="px-2.5 py-2.5 rounded-full bg-slate-900 border border-slate-700 text-xs font-semibold active:scale-95"
+                >
+                  -15s
+                </button>
                 <button
                   type="button"
                   onClick={() => addRestTime(30)}
@@ -517,12 +555,64 @@ function LiveWorkoutContent() {
                   </div>
                 </div>
               </div>
+
+              {/* Modificación en vivo del descanso entre series */}
+              <div className="mt-3 pt-3 border-t border-slate-800 bg-slate-950/60 p-3 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-slate-400 uppercase font-bold">
+                    Descanso entre series
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => updateLiveRest(-15)}
+                      className="min-h-[34px] px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs active:scale-95"
+                    >
+                      -15s
+                    </button>
+                    <span className="text-sm font-bold text-white tabular-nums min-w-[54px] text-center">
+                      {(currentBlock.restSeconds ?? 90) === 0
+                        ? '0s'
+                        : `${currentBlock.restSeconds ?? 90}s`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => updateLiveRest(15)}
+                      className="min-h-[34px] px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs active:scale-95"
+                    >
+                      +15s
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                  {[60, 90, 120, 180].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setLiveRest(preset)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border tabular-nums transition-all active:scale-95 ${
+                        (currentBlock.restSeconds ?? 90) === preset
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      {preset}s
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Próximo paso de vista previa */}
             <div className="text-xs text-slate-500">
               {currentSetIndex < currentBlock.sets ? (
-                <span>Siguiente: Serie {currentSetIndex + 1} tras {currentBlock.restSeconds}s de descanso</span>
+                <span>
+                  Siguiente: Serie {currentSetIndex + 1}
+                  {(currentBlock.restSeconds ?? 90) > 0
+                    ? ` tras ${currentBlock.restSeconds ?? 90}s de descanso`
+                    : ' (sin descanso)'}
+                </span>
               ) : nextBlock ? (
                 <span>Siguiente ejercicio: <strong className="text-slate-400">{nextBlock.exercise.name}</strong></span>
               ) : (
@@ -555,16 +645,32 @@ function LiveWorkoutContent() {
               </div>
             </div>
 
-            <div className="flex items-center justify-center gap-2 pt-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
               <button
+                type="button"
+                onClick={() => addRestTime(-15)}
+                className="min-h-[42px] px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:bg-slate-800 active:scale-95 tabular-nums"
+              >
+                -15s
+              </button>
+              <button
+                type="button"
+                onClick={() => addRestTime(15)}
+                className="min-h-[42px] px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:bg-slate-800 active:scale-95 tabular-nums"
+              >
+                +15s
+              </button>
+              <button
+                type="button"
                 onClick={() => addRestTime(30)}
-                className="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:bg-slate-800 active:scale-95"
+                className="min-h-[42px] px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:bg-slate-800 active:scale-95 tabular-nums"
               >
                 +30s
               </button>
               <button
+                type="button"
                 onClick={skipRest}
-                className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white shadow-md active:scale-95 flex items-center gap-1.5"
+                className="min-h-[42px] px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white shadow-md active:scale-95 flex items-center gap-1.5"
               >
                 <SkipForward className="w-4 h-4" />
                 <span>Saltar Descanso</span>
