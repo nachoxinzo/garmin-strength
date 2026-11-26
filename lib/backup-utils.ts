@@ -25,18 +25,57 @@ export function loadLocalTemplates(): StrengthRoutine[] {
   }
 }
 
+function makeTemplateId(): string {
+  return `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export function saveLocalTemplate(routine: StrengthRoutine): StrengthRoutine[] {
   const existing = loadLocalTemplates();
   const cleanName = routine.name.trim() || 'Plantilla';
   const entry: StrengthRoutine = {
     ...routine,
-    id: `tpl-${Date.now()}`,
+    id: makeTemplateId(),
     name: cleanName,
   };
   const filtered = existing.filter(
     (t) => t.name.toLowerCase() !== cleanName.toLowerCase()
   );
-  const next = [entry, ...filtered].slice(0, 12);
+  const next = [entry, ...filtered].slice(0, 30);
+  try {
+    localStorage.setItem(LOCAL_TEMPLATES_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+  return next;
+}
+
+export function saveLocalTemplatesBatch(routines: StrengthRoutine[]): StrengthRoutine[] {
+  const valid = routines.filter((r) => r && Array.isArray(r.blocks) && r.blocks.length > 0);
+  if (valid.length === 0) return loadLocalTemplates();
+
+  const existing = loadLocalTemplates();
+  const importedNames = new Set(
+    valid.map((r) => (r.name.trim() || 'Plantilla').toLowerCase())
+  );
+  const keptExisting = existing.filter(
+    (t) => !importedNames.has((t.name.trim() || 'Plantilla').toLowerCase())
+  );
+
+  const dedupedIncoming: StrengthRoutine[] = [];
+  const seenIncoming = new Set<string>();
+  for (const r of valid) {
+    const cleanName = r.name.trim() || 'Plantilla';
+    const key = cleanName.toLowerCase();
+    if (seenIncoming.has(key)) continue;
+    seenIncoming.add(key);
+    dedupedIncoming.push({
+      ...r,
+      id: makeTemplateId(),
+      name: cleanName,
+    });
+  }
+
+  const next = [...dedupedIncoming, ...keptExisting].slice(0, 30);
   try {
     localStorage.setItem(LOCAL_TEMPLATES_KEY, JSON.stringify(next));
   } catch {

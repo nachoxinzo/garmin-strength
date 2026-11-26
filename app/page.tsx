@@ -60,6 +60,7 @@ import {
   downloadLocalBackupJson,
   loadLocalTemplates,
   saveLocalTemplate,
+  saveLocalTemplatesBatch,
 } from '@/lib/backup-utils';
 import { EXERCISE_CATALOG, CatalogExercise } from '@/lib/exercise-catalog';
 import { EnrichedExpertExercise } from '@/lib/expert-gym-guide';
@@ -164,9 +165,11 @@ export default function WorkoutStudioPage() {
   const [hevyCsvWorkouts, setHevyCsvWorkouts] = useState<ParsedHevyWorkout[]>([]);
   const [hevyError, setHevyError] = useState<string | null>(null);
 
-  // Selección múltiple para sincronización por lotes
+  // Selección múltiple para sincronización / guardado por lotes
   const [selectedRoutineIds, setSelectedRoutineIds] = useState<string[]>([]);
   const [isBatchSyncing, setIsBatchSyncing] = useState(false);
+  const [isBatchSavingToApp, setIsBatchSavingToApp] = useState(false);
+  const [savedHevyIds, setSavedHevyIds] = useState<string[]>([]);
 
   // Modal para compartir con Apple Watch / Amigo
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -770,12 +773,113 @@ export default function WorkoutStudioPage() {
     }
   };
 
-  // Auto-cargar rutinas de Hevy al abrir el modal si ya hay clave guardada
+  // Auto-cargar rutinas de Hevy al abrir el modal si ya hay clave o cookie guardada
   useEffect(() => {
-    if (isHevyModalOpen && hevyTab === 'api' && hevyApiKey.trim() && hevyApiRoutines.length === 0 && !isLoadingHevyApi) {
-      fetchHevyRoutines(hevyApiKey.trim());
+    if (
+      isHevyModalOpen &&
+      hevyTab === 'api' &&
+      (hevyApiKey.trim() || isHevyKeySaved) &&
+      !isEditingHevyKey &&
+      hevyApiRoutines.length === 0 &&
+      !isLoadingHevyApi
+    ) {
+      fetchHevyRoutines(hevyApiKey.trim() || undefined);
     }
-  }, [isHevyModalOpen, hevyTab]);
+    if (isHevyModalOpen) {
+      setSavedHevyIds([]);
+    }
+  }, [isHevyModalOpen, hevyTab, isHevyKeySaved, isEditingHevyKey]);
+
+  // Lista unificada de rutinas guardadas (Nube + Plantillas locales, sin duplicar por nombre)
+  const allSavedRoutines = React.useMemo(() => {
+    const map = new Map<string, StrengthRoutine>();
+    for (const r of cloudRoutines) {
+      if (r?.blocks?.length) {
+        map.set(r.name.trim().toLowerCase(), r);
+      }
+    }
+    for (const t of localTemplates) {
+      if (t?.blocks?.length) {
+        const key = t.name.trim().toLowerCase();
+        if (!map.has(key)) map.set(key, t);
+      }
+    }
+    return Array.from(map.values());
+  }, [cloudRoutines, localTemplates]);
+
+  const saveHevyRoutinesToApp = async (routinesToSave: StrengthRoutine[]) => {
+    const valid = routinesToSave.filter((r) => r && r.blocks.length > 0);
+    if (valid.length === 0) return { localCount: 0, cloudCount: 0 };
+
+    const updatedTemplates = saveLocalTemplatesBatch(valid);
+    setLocalTemplates(updatedTemplates);
+
+    let cloudCount = 0;
+    if (isSupabaseAvailable && currentUser) {
+      for (const r of valid) {
+        const ok = await saveRoutineToSupabase(r);
+        if (ok) cloudCount++;
+      }
+      await loadCloudRoutines();
+    }
+    return { localCount: valid.length, cloudCount };
+  };
+
+  const handleSaveSingleHevyRoutine = async (itemId: string, importedRoutine: StrengthRoutine) => {
+    const res = await saveHevyRoutinesToApp([importedRoutine]);
+    setSavedHevyIds((prev) => (prev.includes(itemId) ? prev : [...prev, itemId]));
+    setStatusMessage({
+      type: 'success',
+      text:
+        res.cloudCount > 0
+          ? `Rutina "${importedRoutine.name}" guardada en la App y en tu nube. Ya puedes usarla en Entreno en Vivo.`
+          : `Rutina "${importedRoutine.name}" guardada en la App (Plantillas). Ya puedes usarla en Entreno en Vivo.`,
+    });
+  };
+
+  const handleStartHevyRoutineLive = async (importedRoutine: StrengthRoutine) => {
+    await saveHevyRoutinesToApp([importedRoutine]);
+    setRoutine(importedRoutine);
+    setIsHevyModalOpen(false);
+    setCurrentMainTab('live');
+    setStatusMessage({
+      type: 'success',
+      text: `Rutina "${importedRoutine.name}" guardada y cargada en Entreno en Vivo.`,
+    });
+  };
+
+  const handleBatchSaveHevyToApp = async () => {
+    if (selectedRoutineIds.length === 0) return;
+    setIsBatchSavingToApp(true);
+    setHevyError(null);
+    try {
+      const routinesToSave: StrengthRoutine[] = [];
+      currentList.forEach((item) => {
+        if (selectedRoutineIds.includes(item.id) && item.routine) {
+          routinesToSave.push(item.routine);
+        }
+      });
+      if (routinesToSave.length === 0) return;
+
+      const res = await saveHevyRoutinesToApp(routinesToSave);
+      if (routine.blocks.length === 0) {
+        setRoutine(routinesToSave[0]);
+      }
+      setIsHevyModalOpen(false);
+      setSelectedRoutineIds([]);
+      setStatusMessage({
+        type: 'success',
+        text:
+          res.cloudCount > 0
+            ? `¡${res.localCount} rutinas de Hevy guardadas en la App y en tu nube! Disponibles en Plantillas y Entreno en Vivo.`
+            : `¡${res.localCount} rutinas de Hevy guardadas en la App! Ya están disponibles en Plantillas y Entreno en Vivo.`,
+      });
+    } catch (err: any) {
+      setHevyError(err?.message || 'No se pudieron guardar las rutinas seleccionadas.');
+    } finally {
+      setIsBatchSavingToApp(false);
+    }
+  };
 
   // --- HEVY: Procesar archivo CSV subido ---
   const handleCsvFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -909,7 +1013,7 @@ export default function WorkoutStudioPage() {
   const muscleGroups = ['Todos', 'Pecho', 'Espalda', 'Piernas', 'Hombros', 'Brazos', 'Core'];
 
   return (
-    <div className="min-h-screen pb-28 ambient-canvas text-foreground overflow-x-hidden">
+    <div className="min-h-screen pb-12 ambient-canvas text-foreground overflow-x-hidden">
       {/* Barra de Navegación Superior Ejecutiva (Linear / Vercel Style) */}
       <header className="sticky top-0 z-30 bg-card/90 backdrop-blur-xl border-b border-border/80 pt-[env(safe-area-inset-top)]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-15 sm:h-16 flex items-center justify-between gap-3">
@@ -1325,6 +1429,15 @@ export default function WorkoutStudioPage() {
         ) : currentMainTab === 'live' ? (
           <LiveTrackerTab
             routine={routine}
+            savedRoutines={allSavedRoutines}
+            onSelectSavedRoutine={(selected) => {
+              setRoutine(selected);
+              setStatusMessage({
+                type: 'success',
+                text: `Rutina "${selected.name}" lista para entrenar en vivo.`,
+              });
+            }}
+            onOpenHevyImport={() => setIsHevyModalOpen(true)}
             onOpenCatalog={() => {
               setCurrentMainTab('studio');
               setIsSelectorOpen(true);
@@ -1409,23 +1522,79 @@ export default function WorkoutStudioPage() {
         <section className="bg-card rounded-xl border border-border/80 p-5 sm:p-7 saas-card">
           <div className="space-y-6">
             <div className="flex flex-col gap-4">
-              <div className="w-full max-w-md">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Nombre en el Reloj
-                  </label>
-                  <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
-                    {routine.name.length}/16 car.
-                  </span>
+              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                <div className="w-full lg:max-w-md">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Nombre en el Reloj
+                    </label>
+                    <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
+                      {routine.name.length}/16 car.
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    maxLength={16}
+                    value={routine.name}
+                    onChange={e => setRoutine({ ...routine, name: e.target.value })}
+                    className="w-full text-lg sm:text-xl font-semibold text-foreground bg-muted/45 hover:bg-muted/70 focus:bg-card border border-border/80 rounded-lg px-3.5 py-2.5 transition-all duration-150 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    placeholder="Ej: Push Dia 1 F8"
+                  />
                 </div>
-                <input
-                  type="text"
-                  maxLength={16}
-                  value={routine.name}
-                  onChange={e => setRoutine({ ...routine, name: e.target.value })}
-                  className="w-full text-lg sm:text-xl font-semibold text-foreground bg-muted/45 hover:bg-muted/70 focus:bg-card border border-border/80 rounded-lg px-3.5 py-2.5 transition-all duration-150 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  placeholder="Ej: Push Dia 1 F8"
-                />
+
+                {/* Acciones principales de ejecución y envío (antes en barra flotante) */}
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentMainTab('live')}
+                    disabled={routine.blocks.length === 0}
+                    className="saas-btn min-h-[42px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs disabled:opacity-50"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    <span>En Vivo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSyncToGarmin}
+                    disabled={isSyncing || routine.blocks.length === 0}
+                    className="saas-btn btn-glow-blue min-h-[42px] inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:bg-blue-700 text-primary-foreground text-xs font-semibold disabled:opacity-50"
+                  >
+                    {isSyncing ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                        <span>Sincronizando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                        <span>Enviar a Garmin</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadFit}
+                    disabled={isDownloading || routine.blocks.length === 0}
+                    title="Descargar archivo .FIT para Garmin"
+                    className="saas-btn min-h-[42px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-card hover:bg-accent text-foreground text-xs font-semibold border border-border/80 disabled:opacity-50"
+                  >
+                    <Download className={`w-3.5 h-3.5 text-muted-foreground ${isDownloading ? 'animate-bounce' : ''}`} />
+                    <span>.FIT</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsShareModalOpen(true)}
+                    disabled={routine.blocks.length === 0}
+                    title="Compartir con un amigo o Apple Watch"
+                    className="saas-btn lg:hidden min-h-[42px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-card hover:bg-accent text-foreground text-xs font-semibold border border-border/80 disabled:opacity-50"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>Compartir</span>
+                  </button>
+                </div>
               </div>
 
               {/* Acciones de Sesión con Jerarquía Ejecutiva */}
@@ -1535,6 +1704,22 @@ export default function WorkoutStudioPage() {
                               </button>
                               <button
                                 type="button"
+                                onClick={() => {
+                                  setRoutine(tpl);
+                                  setIsTemplatesOpen(false);
+                                  setCurrentMainTab('live');
+                                  setStatusMessage({
+                                    type: 'success',
+                                    text: `Plantilla "${tpl.name}" lista en Entreno en Vivo.`,
+                                  });
+                                }}
+                                title="Entrenar en vivo"
+                                className="p-1.5 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300"
+                              >
+                                <Play className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => setLocalTemplates(deleteLocalTemplate(tpl.id))}
                                 aria-label="Eliminar plantilla"
                                 className="p-1 text-muted-foreground hover:text-rose-600"
@@ -1621,9 +1806,9 @@ export default function WorkoutStudioPage() {
                     type="button"
                     onClick={() => handleLogCompletedInStudio('optimal')}
                     title="Registrar sesión completada hoy para calcular la próxima progresión"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     <span>Registrar Hecho</span>
                   </button>
 
@@ -2200,64 +2385,6 @@ export default function WorkoutStudioPage() {
             </div>
           )}
         </section>
-
-        {/* Dock Flotante Ejecutivo de Acción */}
-        <div className="fixed bottom-0 sm:bottom-4 left-0 right-0 z-20 px-0 sm:px-6 pointer-events-none">
-          <div className="max-w-3xl mx-auto pointer-events-auto bg-card/95 backdrop-blur-xl border-t sm:border border-border/90 sm:rounded-2xl pt-3 px-4 sm:px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:py-3 shadow-[0_8px_30px_rgba(15,23,42,0.08)] flex items-center justify-between gap-4">
-            <div className="hidden sm:block min-w-0">
-              <span className="text-xs font-semibold text-foreground truncate block">
-                {routine.name || 'Sesión Actual'}
-              </span>
-              <span className="text-[11px] text-muted-foreground tabular-nums">
-                {routine.blocks.length} ejercicios &middot; {totalSets} series &middot; ~{estimatedMinutes} min
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              {/* Botón Compartir / Apple Watch */}
-              <button
-                onClick={() => setIsShareModalOpen(true)}
-                disabled={routine.blocks.length === 0}
-                title="Compartir con un amigo o Apple Watch"
-                className="saas-btn inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg bg-card hover:bg-accent text-foreground text-xs sm:text-sm font-medium border border-border/80 disabled:opacity-50 min-h-[42px] shrink-0"
-              >
-                <Share2 className="w-4 h-4 text-indigo-600" />
-                <span className="hidden sm:inline">Compartir</span>
-              </button>
-
-              {/* Botón Exportar FIT */}
-              <button
-                onClick={handleDownloadFit}
-                disabled={isDownloading || routine.blocks.length === 0}
-                className="saas-btn inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg bg-card hover:bg-accent text-foreground text-xs sm:text-sm font-medium border border-border/80 disabled:opacity-50 min-h-[42px] whitespace-nowrap shrink-0"
-              >
-                <Download className={`w-4 h-4 text-muted-foreground ${isDownloading ? 'animate-bounce' : ''}`} />
-                <span>.FIT</span>
-              </button>
-
-              {/* Botón Sincronizar Garmin Connect */}
-              <button
-                onClick={handleSyncToGarmin}
-                disabled={isSyncing || routine.blocks.length === 0}
-                className="saas-btn btn-glow-blue flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-lg bg-primary hover:bg-blue-700 text-primary-foreground text-xs sm:text-sm font-semibold disabled:opacity-50 min-h-[42px] whitespace-nowrap"
-              >
-                {isSyncing ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-                    <span className="sm:hidden">Enviando...</span>
-                    <span className="hidden sm:inline">Sincronizando con Garmin...</span>
-                  </>
-                ) : (
-                  <>
-                    <CloudUpload className="w-4 h-4 shrink-0" />
-                    <span className="sm:hidden">Enviar a Garmin</span>
-                    <span className="hidden sm:inline">Enviar a mi Garmin</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
               </>
             )}
           </div>
@@ -2451,7 +2578,23 @@ export default function WorkoutStudioPage() {
                         {r.blocks.length} ejercicios &bull; {r.blocks.reduce((acc, b) => acc + b.sets, 0)} series
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRoutine(r);
+                          setIsCloudRoutinesModalOpen(false);
+                          setCurrentMainTab('live');
+                          setStatusMessage({
+                            type: 'success',
+                            text: `Rutina "${r.name}" lista en Entreno en Vivo.`,
+                          });
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-all active:scale-95"
+                      >
+                        <Play className="w-3 h-3" />
+                        <span>En Vivo</span>
+                      </button>
                       <button
                         onClick={() => {
                           setRoutine(r);
@@ -2461,13 +2604,13 @@ export default function WorkoutStudioPage() {
                             text: `Rutina "${r.name}" cargada en el editor.`
                           });
                         }}
-                        className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                        className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
                       >
-                        Cargar
+                        Editar
                       </button>
                       <button
                         onClick={() => handleDeleteCloudRoutine(r.id, r.name)}
-                        className="p-2 text-muted-foreground hover:text-rose-600 rounded-lg border border-border/60 hover:bg-rose-50 transition-colors"
+                        className="p-2 text-muted-foreground hover:text-rose-600 rounded-lg border border-border/60 hover:bg-rose-500/10 transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -2647,17 +2790,18 @@ export default function WorkoutStudioPage() {
                       <div className="divide-y divide-border/60 border border-border/60 rounded-xl overflow-hidden bg-card max-h-72 overflow-y-auto">
                         {hevyApiRoutines.map(r => {
                           const isSelected = selectedRoutineIds.includes(r.id);
+                          const isAlreadySaved = savedHevyIds.includes(r.id);
                           return (
                             <div
                               key={r.id}
-                              className={`p-4 flex items-center justify-between transition-all duration-200 ${
+                              className={`p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all duration-200 ${
                                 isSelected ? 'bg-blue-500/15' : 'hover:bg-muted/50'
                               }`}
                             >
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
                                 <button
                                   onClick={() => toggleSelectRoutine(r.id)}
-                                  className="text-muted-foreground hover:text-blue-600 transition-colors p-1"
+                                  className="text-muted-foreground hover:text-blue-600 transition-colors p-1 shrink-0"
                                 >
                                   {isSelected ? (
                                     <CheckSquare className="w-5 h-5 text-blue-600" />
@@ -2665,21 +2809,51 @@ export default function WorkoutStudioPage() {
                                     <Square className="w-5 h-5 text-muted-foreground/50" />
                                   )}
                                 </button>
-                                <div>
-                                  <div className="font-semibold text-foreground text-sm">{r.title}</div>
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-foreground text-sm truncate">{r.title}</div>
                                   <div className="text-xs text-muted-foreground mt-0.5 tabular-nums">
                                     {r.exerciseCount} ejercicios · {r.totalSets} series
                                   </div>
                                 </div>
                               </div>
 
-                              <button
-                                onClick={() => applyHevyRoutine(r.routine)}
-                                className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg bg-card hover:bg-muted text-foreground text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 border border-border/60"
-                              >
-                                <span>Cargar</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex flex-wrap items-center gap-1.5 shrink-0 pl-9 sm:pl-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveSingleHevyRoutine(r.id, r.routine)}
+                                  title="Guardar rutina en la aplicación"
+                                  className={`min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                    isAlreadySaved
+                                      ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-700 dark:text-emerald-300'
+                                      : 'bg-card hover:bg-muted text-foreground border-border/70'
+                                  }`}
+                                >
+                                  {isAlreadySaved ? (
+                                    <Check className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Save className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                  )}
+                                  <span>{isAlreadySaved ? 'Guardada' : 'Guardar'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartHevyRoutineLive(r.routine)}
+                                  title="Guardar e iniciar Entreno en Vivo"
+                                  className="min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-all active:scale-95"
+                                >
+                                  <Play className="w-3.5 h-3.5" />
+                                  <span>En Vivo</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyHevyRoutine(r.routine)}
+                                  title="Abrir en el Diseñador"
+                                  className="min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-card hover:bg-muted text-foreground text-xs font-semibold border border-border/70 transition-all"
+                                >
+                                  <span>Editar</span>
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
@@ -2738,17 +2912,18 @@ export default function WorkoutStudioPage() {
                       <div className="divide-y divide-border/60 border border-border/60 rounded-xl overflow-hidden bg-card max-h-72 overflow-y-auto">
                         {hevyCsvWorkouts.slice(0, 20).map(w => {
                           const isSelected = selectedRoutineIds.includes(w.id);
+                          const isAlreadySaved = savedHevyIds.includes(w.id);
                           return (
                             <div
                               key={w.id}
-                              className={`p-4 flex items-center justify-between transition-all duration-200 ${
+                              className={`p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all duration-200 ${
                                 isSelected ? 'bg-blue-500/15' : 'hover:bg-muted/50'
                               }`}
                             >
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
                                 <button
                                   onClick={() => toggleSelectRoutine(w.id)}
-                                  className="text-muted-foreground hover:text-blue-600 transition-colors p-1"
+                                  className="text-muted-foreground hover:text-blue-600 transition-colors p-1 shrink-0"
                                 >
                                   {isSelected ? (
                                     <CheckSquare className="w-5 h-5 text-blue-600" />
@@ -2756,21 +2931,51 @@ export default function WorkoutStudioPage() {
                                     <Square className="w-5 h-5 text-muted-foreground/50" />
                                   )}
                                 </button>
-                                <div>
-                                  <div className="font-semibold text-foreground text-sm">{w.name}</div>
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-foreground text-sm truncate">{w.name}</div>
                                   <div className="text-xs text-muted-foreground mt-0.5 tabular-nums">
                                     Fecha: {w.date} · {w.exerciseCount} ejercicios ({w.totalSets} series)
                                   </div>
                                 </div>
                               </div>
 
-                              <button
-                                onClick={() => applyHevyRoutine(w.routine)}
-                                className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg bg-card hover:bg-muted text-foreground text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 border border-border/60"
-                              >
-                                <span>Cargar</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex flex-wrap items-center gap-1.5 shrink-0 pl-9 sm:pl-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveSingleHevyRoutine(w.id, w.routine)}
+                                  title="Guardar rutina en la aplicación"
+                                  className={`min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                    isAlreadySaved
+                                      ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-700 dark:text-emerald-300'
+                                      : 'bg-card hover:bg-muted text-foreground border-border/70'
+                                  }`}
+                                >
+                                  {isAlreadySaved ? (
+                                    <Check className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Save className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                  )}
+                                  <span>{isAlreadySaved ? 'Guardada' : 'Guardar'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartHevyRoutineLive(w.routine)}
+                                  title="Guardar e iniciar Entreno en Vivo"
+                                  className="min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-all active:scale-95"
+                                >
+                                  <Play className="w-3.5 h-3.5" />
+                                  <span>En Vivo</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applyHevyRoutine(w.routine)}
+                                  title="Abrir en el Diseñador"
+                                  className="min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-card hover:bg-muted text-foreground text-xs font-semibold border border-border/70 transition-all"
+                                >
+                                  <span>Editar</span>
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
@@ -2781,35 +2986,51 @@ export default function WorkoutStudioPage() {
               )}
             </div>
 
-            {/* Barra Inferior del Modal con Botón de Sincronización Múltiple */}
+            {/* Barra Inferior del Modal con Guardar en App + Sincronización Múltiple */}
             {selectedRoutineIds.length > 0 && (
-              <div className="p-4 bg-slate-900 text-white flex items-center justify-between gap-3 border-t border-slate-800 animate-in slide-in-from-bottom-2 duration-150">
+              <div className="p-4 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-800 animate-in slide-in-from-bottom-2 duration-150">
                 <div>
                   <span className="text-sm font-semibold block">
                     {selectedRoutineIds.length} {selectedRoutineIds.length === 1 ? 'rutina seleccionada' : 'rutinas seleccionadas'}
                   </span>
                   <span className="text-xs text-slate-400">
-                    Se compilarán y subirán a Garmin Connect juntas
+                    Guárdalas en la app para entrenar en vivo o envíalas a Garmin Connect
                   </span>
                 </div>
 
-                <button
-                  onClick={handleBatchSyncToGarmin}
-                  disabled={isBatchSyncing}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold shadow-md transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 shrink-0"
-                >
-                  {isBatchSyncing ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Sincronizando {selectedRoutineIds.length} rutinas...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CloudUpload className="w-4 h-4" />
-                      <span>Sincronizar {selectedRoutineIds.length} a Garmin Fénix 8</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleBatchSaveHevyToApp}
+                    disabled={isBatchSavingToApp || isBatchSyncing}
+                    className="min-h-[40px] inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
+                  >
+                    <Save className={`w-4 h-4 ${isBatchSavingToApp ? 'animate-pulse' : ''}`} />
+                    <span>
+                      {isBatchSavingToApp
+                        ? 'Guardando...'
+                        : `Guardar ${selectedRoutineIds.length} en la App`}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={handleBatchSyncToGarmin}
+                    disabled={isBatchSyncing || isBatchSavingToApp}
+                    className="min-h-[40px] inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {isBatchSyncing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Sincronizando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CloudUpload className="w-4 h-4" />
+                        <span>Enviar {selectedRoutineIds.length} a Garmin</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
           </div>

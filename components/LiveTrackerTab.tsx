@@ -9,7 +9,9 @@ import {
   CheckCircle2,
   Clock,
   Dumbbell,
+  FileSpreadsheet,
   Flame,
+  FolderOpen,
   Pause,
   Play,
   Plus,
@@ -84,6 +86,9 @@ interface LiveTrackerTabProps {
   onOpenCatalog: () => void;
   onWorkoutSaved: (updatedHistory: Record<string, ExerciseProgressRecord>, summaryText: string) => void;
   onApplyNextProgression?: () => void;
+  savedRoutines?: StrengthRoutine[];
+  onSelectSavedRoutine?: (routine: StrengthRoutine) => void;
+  onOpenHevyImport?: () => void;
 }
 
 function computeEpley1RM(weightKg: number, reps: number): number {
@@ -140,7 +145,10 @@ export function LiveTrackerTab({
   routine,
   onOpenCatalog,
   onWorkoutSaved,
-  onApplyNextProgression
+  onApplyNextProgression,
+  savedRoutines = [],
+  onSelectSavedRoutine,
+  onOpenHevyImport,
 }: LiveTrackerTabProps) {
   const [history, setHistory] = useState<Record<string, ExerciseProgressRecord>>({});
   const [notesMap, setNotesMap] = useState<Record<string, ExerciseNoteRecord>>({});
@@ -631,30 +639,115 @@ export function LiveTrackerTab({
 
   if (routine.blocks.length === 0) {
     return (
-      <div className="bg-card rounded-2xl border border-dashed border-border/80 p-10 text-center saas-card space-y-4">
-        <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200/70 flex items-center justify-center mx-auto text-blue-600">
+      <div className="bg-card rounded-2xl border border-dashed border-border/80 p-8 sm:p-10 text-center saas-card space-y-6">
+        <div className="w-14 h-14 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center mx-auto text-blue-600 dark:text-blue-400">
           <Dumbbell className="w-7 h-7" />
         </div>
         <div className="space-y-1 max-w-md mx-auto">
           <h3 className="text-lg font-bold text-foreground">No hay rutina cargada para entrenar</h3>
           <p className="text-sm text-muted-foreground">
-            Añade ejercicios en el Diseñador o genera una sesión con el Asistente IA para empezar tu Entreno en Vivo.
+            Añade ejercicios en el Diseñador, importa tu rutina desde Hevy o elige una de tus rutinas guardadas para empezar tu Entreno en Vivo.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onOpenCatalog}
-          className="saas-btn btn-glow-blue inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Añadir Ejercicios</span>
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-2.5">
+          <button
+            type="button"
+            onClick={onOpenCatalog}
+            className="saas-btn btn-glow-blue min-h-[42px] inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Añadir Ejercicios</span>
+          </button>
+          {onOpenHevyImport && (
+            <button
+              type="button"
+              onClick={onOpenHevyImport}
+              className="saas-btn min-h-[42px] inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-sm font-semibold"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Importar de Hevy</span>
+            </button>
+          )}
+        </div>
+
+        {savedRoutines.length > 0 && onSelectSavedRoutine && (
+          <div className="pt-5 border-t border-border/60 text-left space-y-3">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <FolderOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Tus rutinas guardadas — elige una para entrenar ahora</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {savedRoutines.map((sr) => (
+                <button
+                  key={sr.id}
+                  type="button"
+                  onClick={() => onSelectSavedRoutine(sr)}
+                  className="p-3.5 rounded-xl border border-border/80 bg-muted/30 hover:bg-blue-500/10 hover:border-blue-500/40 text-left transition-all flex items-center justify-between gap-2 group"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-foreground truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                      {sr.name}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                      {sr.blocks.length} ejercicios &bull;{' '}
+                      {sr.blocks.reduce((acc, b) => acc + b.sets, 0)} series
+                    </div>
+                  </div>
+                  <span className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Play className="w-3.5 h-3.5" />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="space-y-6 pb-20">
+      {/* Selector rápido de rutina guardada / Hevy antes de iniciar */}
+      {!isSessionActive && !isFinished && (savedRoutines.length > 0 || onOpenHevyImport) && (
+        <div className="bg-card rounded-xl border border-border/70 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <FolderOpen className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span className="text-muted-foreground">Rutina activa:</span>
+            <strong className="text-foreground truncate">{routine.name}</strong>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {savedRoutines.length > 0 && onSelectSavedRoutine && (
+              <select
+                aria-label="Cambiar a otra rutina guardada"
+                value=""
+                onChange={(e) => {
+                  const chosen = savedRoutines.find((sr) => sr.id === e.target.value);
+                  if (chosen) onSelectSavedRoutine(chosen);
+                }}
+                className="min-h-[40px] bg-background text-foreground border border-border/80 rounded-lg px-3 text-base sm:text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500/25"
+              >
+                <option value="">Cambiar rutina guardada...</option>
+                {savedRoutines.map((sr) => (
+                  <option key={sr.id} value={sr.id}>
+                    {sr.name} ({sr.blocks.length} ej.)
+                  </option>
+                ))}
+              </select>
+            )}
+            {onOpenHevyImport && (
+              <button
+                type="button"
+                onClick={onOpenHevyImport}
+                className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Importar Hevy</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Cabecera Sticky de Sesión en Vivo */}
       <section className="bg-card rounded-2xl border border-border/60 p-5 sm:p-6 saas-card sticky top-[120px] z-10">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
