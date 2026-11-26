@@ -101,12 +101,12 @@ export function Exercise3DModal({
                 onClick={() => setHighlightMuscles((h) => !h)}
                 className={`min-h-[40px] px-3 py-2 rounded-lg border text-xs font-semibold inline-flex items-center gap-1.5 transition-all active:scale-[0.98] ${
                   highlightMuscles
-                    ? 'bg-blue-500/15 border-blue-500/30 text-blue-700 dark:text-blue-300'
+                    ? 'bg-rose-500/15 border-rose-500/35 text-rose-700 dark:text-rose-300'
                     : 'bg-muted/50 border-border/60 text-muted-foreground'
                 }`}
               >
                 {highlightMuscles ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                <span>Músculo ({exercise.muscleGroup})</span>
+                <span>Mapa Muscular</span>
               </button>
 
               <button

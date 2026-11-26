@@ -1653,7 +1653,7 @@ export default function WorkoutStudioPage() {
           <div className="space-y-6">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-                <div className="w-full lg:max-w-md">
+                <div className="w-full lg:max-w-sm lg:flex-1">
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Nombre en el Reloj
@@ -1674,6 +1674,17 @@ export default function WorkoutStudioPage() {
 
                 {/* Acciones principales de ejecución y envío (antes en barra flotante) */}
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsShareModalOpen(true)}
+                    disabled={routine.blocks.length === 0}
+                    title="Compartir con un amigo o Apple Watch"
+                    className="saas-btn min-h-[42px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold border border-indigo-500/30 shadow-2xs disabled:opacity-50"
+                  >
+                    <Share2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Compartir</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setCurrentMainTab('live')}
@@ -1712,17 +1723,6 @@ export default function WorkoutStudioPage() {
                   >
                     <Download className={`w-3.5 h-3.5 text-muted-foreground ${isDownloading ? 'animate-bounce' : ''}`} />
                     <span>.FIT</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsShareModalOpen(true)}
-                    disabled={routine.blocks.length === 0}
-                    title="Compartir con un amigo o Apple Watch"
-                    className="saas-btn lg:hidden min-h-[42px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-card hover:bg-accent text-foreground text-xs font-semibold border border-border/80 disabled:opacity-50"
-                  >
-                    <Share2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                    <span>Compartir</span>
                   </button>
                 </div>
               </div>

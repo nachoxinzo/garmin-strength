@@ -26,6 +26,9 @@ export type MachineRigType =
   | 'cable_dual_crossover'
   | 'dip_station'
   | 'pullup_rig'
+  | 'hip_thrust_bench'
+  | 'preacher_bench'
+  | 'roman_chair'
   | 'free_bench_flat'
   | 'free_bench_incline'
   | 'free_standing';
@@ -42,6 +45,7 @@ export interface RigUpdateContext {
   rightElbow: THREE.Vector3;
   pelvis: THREE.Vector3;
   chest: THREE.Vector3;
+  barCenter?: THREE.Vector3;
 }
 
 export interface GymRigResult {
@@ -49,6 +53,7 @@ export interface GymRigResult {
   rigType: MachineRigType;
   label: string;
   usesOwnBarbell: boolean;
+  smithRailZ?: number;
   cameraPos: [number, number, number];
   cameraTarget: [number, number, number];
   update: (ctx: RigUpdateContext) => void;
@@ -122,6 +127,12 @@ export function resolveMachineRig(exercise: CatalogExercise): MachineRigType {
   // Fondos en paralelas
   if (id === 'dips_chest' || id === 'triceps_dip_weighted') return 'dip_station';
 
+  // Bancos específicos (Hip Thrust, Scott, Silla Romana)
+  if (id === 'hip_thrust_barbell') return 'hip_thrust_bench';
+  if (id === 'preacher_curl_ez_bar' || id === 'preacher_curl_dumbbell') return 'preacher_bench';
+  if (id === 'back_extension') return 'roman_chair';
+  if (id === 'chest_supported_dumbbell_row') return 'free_bench_incline';
+
   // Estaciones de poleas
   if (exercise.equipment === 'Polea') {
     if (
@@ -131,7 +142,10 @@ export function resolveMachineRig(exercise: CatalogExercise): MachineRigType {
     ) {
       return 'cable_dual_crossover';
     }
-    if (id.includes('lat_pulldown') || id === 'straight_arm_pulldown') {
+    if (id === 'straight_arm_pulldown') {
+      return 'cable_high_pushdown';
+    }
+    if (id.includes('lat_pulldown')) {
       return 'cable_high_bar';
     }
     if (id === 'triceps_overhead_cable') {
@@ -361,6 +375,7 @@ export function buildGymEquipmentRig(
 
   let label: string = exercise.equipment;
   let usesOwnBarbell = false;
+  let smithRailZ: number | undefined;
   let cameraPos: [number, number, number] = [2.25, 1.75, 2.65];
   let cameraTarget: [number, number, number] = [0, 0.9, 0];
 
@@ -381,12 +396,13 @@ export function buildGymEquipmentRig(
     const railX = 0.66;
     const railZ =
       rigType === 'smith_flat_bench'
-        ? -0.24
+        ? -0.26
         : rigType === 'smith_incline_bench'
-        ? -0.14
+        ? -0.15
         : rigType === 'smith_shoulder_press'
-        ? 0.06
-        : -0.04;
+        ? 0.14
+        : -0.06;
+    smithRailZ = railZ;
     const frameRearZ = railZ - 0.36;
     const frameHeight = 2.15;
 
@@ -452,9 +468,9 @@ export function buildGymEquipmentRig(
     guidedBar.position.set(0, 1.0, railZ);
     group.add(guidedBar);
 
-    updaters.push(({ leftHand, rightHand }) => {
-      const midY = (leftHand.y + rightHand.y) * 0.5;
-      guidedBar.position.y = Math.max(0.62, Math.min(2.0, midY));
+    updaters.push(({ leftHand, rightHand, barCenter }) => {
+      const targetY = barCenter ? barCenter.y : (leftHand.y + rightHand.y) * 0.5;
+      guidedBar.position.y = Math.max(0.58, Math.min(2.05, targetY));
     });
   }
 
@@ -510,7 +526,7 @@ export function buildGymEquipmentRig(
     updaters.push(({ c }) => {
       // Desliza hacia abajo (+Z, -Y) cuando c -> 1 (flexión profunda)
       const slide = c * 0.38;
-      sled.position.set(0, 1.18 - slide * 0.81, -0.14 + slide * 0.58);
+      sled.position.set(0, 1.07 - slide * 0.81, -0.21 + slide * 0.58);
     });
   }
 
@@ -586,8 +602,8 @@ export function buildGymEquipmentRig(
     addWeightStackTower(-0.68, 0.08, 1.58);
     addBox(group, 0.68, 0.05, 0.08, -0.34, 0.025, 0.08, frameMat);
 
-    // Eje de giro alineado con las rodillas (~ y=0.52, z=0.28)
-    const pivot = new THREE.Vector3(0, 0.52, 0.28);
+    // Eje de giro alineado con las rodillas (~ y=0.54, z=0.43)
+    const pivot = new THREE.Vector3(0, 0.54, 0.43);
     const pivotCam = new THREE.Mesh(
       new THREE.CylinderGeometry(0.055, 0.055, 0.36, 16),
       chromeMat
@@ -727,8 +743,8 @@ export function buildGymEquipmentRig(
       addBox(shoulderCarriage, 0.44, 0.06, 0.52, 0, 0.08, 0.36, frameMat);
       group.add(shoulderCarriage);
 
-      updaters.push(({ c }) => {
-        shoulderCarriage.position.set(0, 1.44 + c * 0.08, 0.02);
+      updaters.push(({ chest }) => {
+        shoulderCarriage.position.set(0, chest.y + 0.28, 0.02);
       });
     } else {
       addUprightBench(-0.04);
@@ -782,8 +798,8 @@ export function buildGymEquipmentRig(
     updaters.push(({ leftHand, rightHand }) => {
       handleL.position.copy(leftHand);
       handleR.position.copy(rightHand);
-      const upperL = new THREE.Vector3(leftHand.x, leftHand.y + 0.28, leftHand.z);
-      const upperR = new THREE.Vector3(rightHand.x, rightHand.y + 0.28, rightHand.z);
+      const upperL = new THREE.Vector3(leftHand.x, leftHand.y + 0.11, leftHand.z);
+      const upperR = new THREE.Vector3(rightHand.x, rightHand.y + 0.11, rightHand.z);
       orientUnitCylinderBetween(armL, topL, upperL);
       orientUnitCylinderBetween(armR, topR, upperR);
     });
@@ -797,10 +813,13 @@ export function buildGymEquipmentRig(
     cameraPos = [2.45, 1.75, 2.45];
     cameraTarget = [0, 0.92, 0.2];
 
-    addUprightBench(0.0);
-    // Almohadilla frontal de apoyo de pecho
-    addBox(group, 0.3, 0.34, 0.09, 0, 1.05, 0.24, padMat, 0.12);
-    addBox(group, 0.07, 0.9, 0.07, 0, 0.45, 0.26, frameMat);
+    // Asiento sin respaldo trasero para permitir apoyo frontal en pecho
+    addBox(group, 0.36, 0.075, 0.42, 0, 0.48, 0.0, padMat);
+    addBox(group, 0.07, 0.46, 0.07, 0, 0.23, 0.0, frameMat);
+    addBox(group, 0.42, 0.04, 0.54, 0, 0.02, 0.0, frameMat);
+    // Almohadilla frontal de apoyo de pecho pegada al torso
+    addBox(group, 0.3, 0.34, 0.09, 0, 1.05, 0.16, padMat, 0.12);
+    addBox(group, 0.07, 0.9, 0.07, 0, 0.45, 0.18, frameMat);
     addWeightStackTower(0, 0.88, 1.85);
     addBox(group, 0.08, 0.05, 0.88, 0, 0.025, 0.44, frameMat);
 
@@ -893,23 +912,51 @@ export function buildGymEquipmentRig(
     rigType === 'cable_low_row' ||
     rigType === 'cable_low_single'
   ) {
-    const towerZ = rigType === 'cable_overhead_back' ? -0.82 : 0.92;
+    const isPullThrough = id === 'cable_pull_through';
+    const isWoodchopper = id === 'cable_woodchopper';
+    const towerX = isWoodchopper ? -0.95 : 0;
+    const towerZ = isWoodchopper
+      ? 0.15
+      : isPullThrough
+      ? -0.92
+      : rigType === 'cable_overhead_back'
+      ? -0.82
+      : 0.92;
     const isLow = rigType === 'cable_low_row' || rigType === 'cable_low_single';
-    const pulleyY = isLow ? (rigType === 'cable_low_row' ? 0.55 : 0.25) : 2.1;
-    const pulleyZ = rigType === 'cable_overhead_back' ? towerZ + 0.2 : towerZ - 0.2;
-    const pulleyWorld = new THREE.Vector3(0, pulleyY, pulleyZ);
+    const pulleyY = isWoodchopper
+      ? 0.55
+      : isPullThrough
+      ? 0.28
+      : isLow
+      ? rigType === 'cable_low_row'
+        ? 0.55
+        : 0.25
+      : 2.1;
+    const pulleyX = isWoodchopper ? -0.75 : 0;
+    const pulleyZ = isWoodchopper
+      ? towerZ
+      : isPullThrough || rigType === 'cable_overhead_back'
+      ? towerZ + 0.2
+      : towerZ - 0.2;
+    const pulleyWorld = new THREE.Vector3(pulleyX, pulleyY, pulleyZ);
 
     label = isLow
       ? 'Torre de Polea Baja · Cable activo'
       : 'Torre de Polea Alta · Cable activo';
     cameraPos = [2.5, 1.85, 2.7];
-    cameraTarget = [0, 1.0, rigType === 'cable_overhead_back' ? -0.2 : 0.2];
+    cameraTarget = [
+      0,
+      1.0,
+      isPullThrough || rigType === 'cable_overhead_back' ? -0.2 : isWoodchopper ? 0.05 : 0.2,
+    ];
 
-    addWeightStackTower(0, towerZ, 2.2);
+    addWeightStackTower(towerX, towerZ, 2.2);
 
-    // Brazo superior con polea / polea inferior
+    // Brazo superior con polea / polea inferior o lateral
     if (!isLow) {
-      addBox(group, 0.08, 0.08, 0.42, 0, 2.16, (towerZ + pulleyZ) / 2, frameMat);
+      addBox(group, 0.08, 0.08, 0.42, towerX, 2.16, (towerZ + pulleyZ) / 2, frameMat);
+    } else if (isWoodchopper) {
+      addBox(group, 0.28, 0.07, 0.07, (towerX + pulleyX) / 2, pulleyY, towerZ, frameMat);
     }
     const pulleyWheel = new THREE.Mesh(
       new THREE.CylinderGeometry(0.065, 0.065, 0.04, 18),
@@ -941,12 +988,14 @@ export function buildGymEquipmentRig(
     // Accesorio de agarre (Barra ancha o Cuerda/Triángulo)
     const isWideBar =
       rigType === 'cable_high_bar' ||
+      id === 'straight_arm_pulldown' ||
       id === 'triceps_pushdown_cable' ||
       id === 'cable_biceps_curl' ||
       id === 'wide_grip_cable_row';
 
     if (isWideBar) {
-      const barWidth = rigType === 'cable_high_bar' ? 0.92 : 0.48;
+      const barWidth =
+        rigType === 'cable_high_bar' ? 0.92 : id === 'straight_arm_pulldown' ? 0.68 : 0.48;
       const barMesh = new THREE.Mesh(
         new THREE.CylinderGeometry(0.015, 0.015, barWidth, 12),
         chromeMat
@@ -1053,6 +1102,41 @@ export function buildGymEquipmentRig(
     topBar.rotation.z = Math.PI / 2;
     topBar.position.set(0, 2.22, 0);
     group.add(topBar);
+  } else if (rigType === 'hip_thrust_bench') {
+    label = 'Banco Hip Thrust + Barra Olímpica';
+    cameraPos = [2.4, 1.55, 2.35];
+    cameraTarget = [0, 0.52, -0.05];
+
+    addBox(group, 0.85, 0.09, 0.36, 0, 0.4, -0.46, padMat);
+    addBox(group, 0.07, 0.38, 0.07, -0.34, 0.19, -0.46, frameMat);
+    addBox(group, 0.07, 0.38, 0.07, 0.34, 0.19, -0.46, frameMat);
+    addBox(group, 0.82, 0.04, 0.32, 0, 0.02, -0.46, frameMat);
+  } else if (rigType === 'preacher_bench') {
+    label = exercise.equipment === 'Barra' ? 'Banco Scott + Barra Z' : 'Banco Scott + Mancuerna';
+    cameraPos = [2.25, 1.65, 2.35];
+    cameraTarget = [0, 0.85, 0.05];
+
+    addBox(group, 0.34, 0.075, 0.36, 0, 0.48, -0.18, padMat);
+    addBox(group, 0.07, 0.46, 0.07, 0, 0.23, -0.18, frameMat);
+    addBox(group, 0.48, 0.46, 0.08, 0, 0.88, 0.22, padMat, 0.78);
+    addBox(group, 0.07, 0.82, 0.07, 0, 0.41, 0.22, frameMat);
+    addBox(group, 0.52, 0.05, 0.72, 0, 0.025, 0.04, frameMat);
+    addBox(group, 0.36, 0.05, 0.06, 0, 0.64, 0.38, frameLightMat);
+  } else if (rigType === 'roman_chair') {
+    label = 'Banco Romano 45° (Hiperextensiones)';
+    cameraPos = [2.45, 1.6, 2.35];
+    cameraTarget = [0, 0.78, -0.05];
+
+    addBox(group, 0.62, 0.05, 1.05, 0, 0.025, -0.1, frameMat);
+    addBox(group, 0.08, 0.08, 0.96, 0, 0.46, -0.12, frameMat, -0.75);
+    addBox(group, 0.44, 0.1, 0.26, 0, 0.78, 0.08, padMat, -0.65);
+    const rearAnklePad = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.065, 0.065, 0.44, 16),
+      padMat
+    );
+    rearAnklePad.rotation.z = Math.PI / 2;
+    rearAnklePad.position.set(0, 0.26, -0.44);
+    group.add(rearAnklePad);
   } else if (rigType === 'free_bench_flat') {
     label =
       exercise.equipment === 'Barra'
@@ -1079,6 +1163,7 @@ export function buildGymEquipmentRig(
     rigType,
     label,
     usesOwnBarbell,
+    smithRailZ,
     cameraPos,
     cameraTarget,
     update: (ctx) => {
