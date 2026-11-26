@@ -160,11 +160,29 @@ export function resolveMachineRig(exercise: CatalogExercise): MachineRigType {
     return 'cable_low_single';
   }
 
-  // Peso libre y calistenia
-  if ((p === 'Tracción Vertical' && !id.includes('lat_pulldown')) || id.includes('hanging')) {
+  // Peso libre y calistenia en casa / gimnasio
+  if (id === 'bench_chair_dips') {
+    return 'free_bench_flat';
+  }
+  if (
+    id === 'bodyweight_superman_pull' ||
+    id === 'prone_y_t_raises' ||
+    id === 'inverted_table_row' ||
+    (exercise.equipment === 'Peso Corporal' && id.includes('push_up'))
+  ) {
+    return 'free_standing';
+  }
+  if (
+    (p === 'Tracción Vertical' && !id.includes('lat_pulldown')) ||
+    id.includes('hanging')
+  ) {
     return 'pullup_rig';
   }
-  if (p === 'Empuje Inclinado' || id === 'incline_dumbbell_curl') {
+  if (
+    p === 'Empuje Inclinado' ||
+    id === 'incline_dumbbell_curl' ||
+    id === 'incline_flye_dumbbell'
+  ) {
     return 'free_bench_incline';
   }
   if (
@@ -186,58 +204,58 @@ export function buildGymEquipmentRig(
   const id = exercise.id;
   const updaters: Array<(ctx: RigUpdateContext) => void> = [];
 
-  // Materiales de estudio con alto contraste sobre fondo #0f172a
+  // Materiales industriales de estudio (equilibrados para tema claro y oscuro)
   const frameMat = new THREE.MeshStandardMaterial({
-    color: '#334155',
-    roughness: 0.42,
-    metalness: 0.55,
-  });
-  const frameLightMat = new THREE.MeshStandardMaterial({
-    color: '#475569',
-    roughness: 0.38,
-    metalness: 0.6,
-  });
-  const chromeMat = new THREE.MeshStandardMaterial({
-    color: '#e2e8f0',
-    roughness: 0.2,
-    metalness: 0.85,
-  });
-  const padMat = new THREE.MeshStandardMaterial({
-    color: '#1e293b',
-    roughness: 0.72,
-    metalness: 0.15,
-  });
-  const plateMat = new THREE.MeshStandardMaterial({
-    color: '#2563eb',
-    roughness: 0.35,
-    metalness: 0.32,
-  });
-  const plateTrimMat = new THREE.MeshStandardMaterial({
-    color: '#38bdf8',
-    roughness: 0.3,
-    metalness: 0.4,
-  });
-  const stackBlockMat = new THREE.MeshStandardMaterial({
-    color: '#475569',
-    roughness: 0.45,
+    color: '#8c96a5',
+    roughness: 0.44,
     metalness: 0.45,
   });
+  const frameLightMat = new THREE.MeshStandardMaterial({
+    color: '#a3adb9',
+    roughness: 0.36,
+    metalness: 0.52,
+  });
+  const chromeMat = new THREE.MeshStandardMaterial({
+    color: '#e5e7eb',
+    roughness: 0.16,
+    metalness: 0.88,
+  });
+  const padMat = new THREE.MeshStandardMaterial({
+    color: '#1e232c',
+    roughness: 0.74,
+    metalness: 0.08,
+  });
+  const plateMat = new THREE.MeshStandardMaterial({
+    color: '#1c2028',
+    roughness: 0.48,
+    metalness: 0.35,
+  });
+  const plateTrimMat = new THREE.MeshStandardMaterial({
+    color: '#94a3b8',
+    roughness: 0.28,
+    metalness: 0.65,
+  });
+  const stackBlockMat = new THREE.MeshStandardMaterial({
+    color: '#2a303c',
+    roughness: 0.5,
+    metalness: 0.4,
+  });
   const activeStackMat = new THREE.MeshStandardMaterial({
-    color: '#0ea5e9',
-    emissive: new THREE.Color('#0284c7'),
-    emissiveIntensity: 0.25,
+    color: '#3b82f6',
+    emissive: new THREE.Color('#1d4ed8'),
+    emissiveIntensity: 0.18,
     roughness: 0.35,
     metalness: 0.4,
   });
   const cableMat = new THREE.MeshStandardMaterial({
-    color: '#cbd5e1',
-    roughness: 0.25,
-    metalness: 0.85,
+    color: '#94a3b8',
+    roughness: 0.28,
+    metalness: 0.8,
   });
   const gripMat = new THREE.MeshStandardMaterial({
-    color: '#0f172a',
-    roughness: 0.85,
-    metalness: 0.1,
+    color: '#11151d',
+    roughness: 0.88,
+    metalness: 0.08,
   });
 
   const addBox = (
@@ -524,8 +542,8 @@ export function buildGymEquipmentRig(
     group.add(sled);
 
     updaters.push(({ c }) => {
-      // Desliza hacia abajo (+Z, -Y) cuando c -> 1 (flexión profunda)
-      const slide = c * 0.38;
+      // Desliza hacia abajo (+Z, -Y) cuando c -> 1 (flexión profunda completa)
+      const slide = c * 0.46;
       sled.position.set(0, 1.07 - slide * 0.81, -0.21 + slide * 0.58);
     });
   }

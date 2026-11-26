@@ -13,6 +13,9 @@ import {
   Settings2,
   Loader2,
   AlertCircle,
+  Home,
+  Building2,
+  UserCheck,
   X
 } from 'lucide-react';
 import {
@@ -28,7 +31,9 @@ import {
   loadMyGymProfile,
   MyGymProfile,
   saveMyGymProfile,
-  SmartGenerateResult
+  SmartGenerateResult,
+  TRAINING_ENVIRONMENT_PRESETS,
+  TrainingEnvironment
 } from '@/lib/smart-workout-engine';
 import { StrengthRoutine } from '@/lib/types';
 import { loadGarminWellnessSnapshot } from '@/lib/garmin-wellness-client';
@@ -41,11 +46,18 @@ interface WorkoutGeneratorModalProps {
   onRoutineGenerated: (routine: StrengthRoutine) => void;
 }
 
-const QUICK_PROMPTS = [
+const GYM_QUICK_PROMPTS = [
   'Tengo 45 min, quiero enfocar pecho superior y hombro lateral en máquinas/poleas',
   'Sesión de piernas sin fatigar zona lumbar (Hack Squat, Prensa y Curl Sentado)',
   'Espalda en amplitud y bíceps con poleas y mancuernas en 60 min',
-  'Full Body rápido de 45 min con los mejores ejercicios S-Tier'
+  'Full Body en casa sin material (45 min)'
+];
+
+const HOME_QUICK_PROMPTS = [
+  'Full Body en casa sin material (45 min)',
+  'Empuje en casa: pecho, hombros en pica y tríceps sin material',
+  'Pierna y glúteos en casa sin equipamiento en 45 min',
+  'Torso en casa con poco material (mancuernas y peso corporal)'
 ];
 
 export default function WorkoutGeneratorModal({
@@ -82,15 +94,38 @@ export default function WorkoutGeneratorModal({
 
   if (!isOpen) return null;
 
+  const selectEnvironment = (env: TrainingEnvironment) => {
+    const preset = TRAINING_ENVIRONMENT_PRESETS[env];
+    setGymProfile(prev => {
+      const updated: MyGymProfile = {
+        ...prev,
+        environment: env,
+        availableEquipment: preset.availableEquipment,
+        gymName: preset.gymName
+      };
+      saveMyGymProfile(updated);
+      return updated;
+    });
+  };
+
   const toggleEquipment = (eq: EquipmentType) => {
     setGymProfile(prev => {
       const exists = prev.availableEquipment.includes(eq);
       const nextEq = exists
         ? prev.availableEquipment.filter(e => e !== eq)
         : [...prev.availableEquipment, eq];
-      const updated = {
+      const finalEq = nextEq.length > 0 ? nextEq : [eq];
+      const nextEnv: TrainingEnvironment =
+        finalEq.length === 1 && finalEq[0] === 'Peso Corporal'
+          ? 'home_no_equipment'
+          : finalEq.every(e => e === 'Mancuernas' || e === 'Peso Corporal')
+          ? 'home_minimal'
+          : 'gym';
+      const updated: MyGymProfile = {
         ...prev,
-        availableEquipment: nextEq.length > 0 ? nextEq : [eq]
+        environment: nextEnv,
+        availableEquipment: finalEq,
+        gymName: TRAINING_ENVIRONMENT_PRESETS[nextEnv].gymName
       };
       saveMyGymProfile(updated);
       return updated;
@@ -170,12 +205,17 @@ export default function WorkoutGeneratorModal({
       goal,
       level,
       durationMinutes: duration,
-      preferredEquipment: gymProfile.availableEquipment
+      preferredEquipment: gymProfile.availableEquipment,
+      environment: gymProfile.environment || 'gym'
     });
 
     onRoutineGenerated(routine);
     onClose();
   };
+
+  const activeEnv: TrainingEnvironment = gymProfile.environment || 'gym';
+  const isHomeEnv = activeEnv === 'home_minimal' || activeEnv === 'home_no_equipment';
+  const quickPrompts = isHomeEnv ? HOME_QUICK_PROMPTS : GYM_QUICK_PROMPTS;
 
   const getDayOptions = () => {
     if (split === 'ppl') {
@@ -268,6 +308,46 @@ export default function WorkoutGeneratorModal({
 
         {/* Body */}
         <div className="p-6 overflow-y-auto space-y-6">
+          {/* Selector rápido de Entorno: Gimnasio | En Casa Poco Material | En Casa Sin Material */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Entorno y Material Disponible
+              </label>
+              <span className="text-[11px] text-muted-foreground">
+                {TRAINING_ENVIRONMENT_PRESETS[activeEnv].description}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {(
+                [
+                  { id: 'gym', label: 'Gimnasio', Icon: Building2 },
+                  { id: 'home_minimal', label: 'Casa · Poco material', Icon: Home },
+                  { id: 'home_no_equipment', label: 'Casa · Sin material', Icon: UserCheck }
+                ] as const
+              ).map(({ id, label, Icon }) => {
+                const selected = activeEnv === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => selectEnvironment(id)}
+                    className={`min-h-[42px] px-3 py-2 rounded-xl border text-xs font-semibold inline-flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+                      selected
+                        ? id === 'gym'
+                          ? 'bg-slate-900 text-white border-slate-900 dark:bg-blue-600 dark:border-blue-600 shadow-xs'
+                          : 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-card border-border/70 text-foreground hover:bg-muted/50'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Panel Desplegable: Perfil Mi Gimnasio */}
           {showGymConfig && (
             <div className="p-4 rounded-xl bg-muted/30 border border-border/60 space-y-3 animate-in fade-in duration-150">
@@ -385,7 +465,7 @@ export default function WorkoutGeneratorModal({
                   className="w-full p-3.5 text-base sm:text-sm bg-background border border-border/80 rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 />
                 <div className="flex flex-wrap gap-1.5 pt-1">
-                  {QUICK_PROMPTS.map((qp, idx) => (
+                  {quickPrompts.map((qp, idx) => (
                     <button
                       key={idx}
                       type="button"

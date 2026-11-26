@@ -193,6 +193,26 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     pattern: 'Empuje Horizontal',
     tier: 3
   },
+  {
+    id: 'decline_push_up',
+    name: 'Flexiones declinadas (pies elevados)',
+    muscleGroup: 'Pecho',
+    category: 'PUSH_UP',
+    garminName: 'DECLINE_PUSH_UP',
+    equipment: 'Peso Corporal',
+    pattern: 'Empuje Inclinado',
+    tier: 2
+  },
+  {
+    id: 'incline_push_up',
+    name: 'Flexiones inclinadas (manos elevadas)',
+    muscleGroup: 'Pecho',
+    category: 'PUSH_UP',
+    garminName: 'INCLINE_PUSH_UP',
+    equipment: 'Peso Corporal',
+    pattern: 'Empuje Horizontal',
+    tier: 3
+  },
 
   // ==========================================
   // ESPALDA
@@ -457,6 +477,26 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     pattern: 'Bisagra / Cadena Posterior',
     tier: 3
   },
+  {
+    id: 'inverted_table_row',
+    name: 'Remo invertido / con toalla en casa',
+    muscleGroup: 'Espalda',
+    category: 'ROW',
+    garminName: 'INVERTED_ROW',
+    equipment: 'Peso Corporal',
+    pattern: 'Tracción Horizontal',
+    tier: 1
+  },
+  {
+    id: 'bodyweight_superman_pull',
+    name: 'Pull-down en suelo (Superman dorsal)',
+    muscleGroup: 'Espalda',
+    category: 'HYPEREXTENSION',
+    garminName: 'SUPERMAN',
+    equipment: 'Peso Corporal',
+    pattern: 'Tracción Vertical',
+    tier: 2
+  },
 
   // ==========================================
   // PIERNAS
@@ -701,6 +741,66 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     pattern: 'Gemelos',
     tier: 3
   },
+  {
+    id: 'bodyweight_squat',
+    name: 'Sentadilla libre sin peso (Air Squat)',
+    muscleGroup: 'Piernas',
+    category: 'SQUAT',
+    garminName: 'BODY_WEIGHT_SQUAT',
+    equipment: 'Peso Corporal',
+    pattern: 'Sentadilla / Cuádriceps',
+    tier: 1
+  },
+  {
+    id: 'bodyweight_bulgarian_split_squat',
+    name: 'Sentadilla búlgara en casa (silla/sofá)',
+    muscleGroup: 'Piernas',
+    category: 'LUNGE',
+    garminName: 'BULGARIAN_SPLIT_SQUAT',
+    equipment: 'Peso Corporal',
+    pattern: 'Sentadilla / Cuádriceps',
+    tier: 2
+  },
+  {
+    id: 'bodyweight_lunge',
+    name: 'Zancadas alternas sin peso',
+    muscleGroup: 'Piernas',
+    category: 'LUNGE',
+    garminName: 'LUNGE',
+    equipment: 'Peso Corporal',
+    pattern: 'Sentadilla / Cuádriceps',
+    tier: 2
+  },
+  {
+    id: 'bodyweight_glute_bridge',
+    name: 'Puente de glúteo en suelo (Glute Bridge)',
+    muscleGroup: 'Piernas',
+    category: 'HIP_RAISE',
+    garminName: 'GLUTE_BRIDGE',
+    equipment: 'Peso Corporal',
+    pattern: 'Bisagra / Cadena Posterior',
+    tier: 1
+  },
+  {
+    id: 'single_leg_glute_bridge',
+    name: 'Puente de glúteo a una pierna',
+    muscleGroup: 'Piernas',
+    category: 'HIP_RAISE',
+    garminName: 'SINGLE_LEG_GLUTE_BRIDGE',
+    equipment: 'Peso Corporal',
+    pattern: 'Bisagra / Cadena Posterior',
+    tier: 2
+  },
+  {
+    id: 'bodyweight_calf_raise',
+    name: 'Elevación de talones sin peso (escalón)',
+    muscleGroup: 'Piernas',
+    category: 'CALF_RAISE',
+    garminName: 'STANDING_CALF_RAISE',
+    equipment: 'Peso Corporal',
+    pattern: 'Gemelos',
+    tier: 3
+  },
 
   // ==========================================
   // HOMBROS
@@ -882,6 +982,26 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     category: 'SHRUG',
     garminName: 'DUMBBELL_SHRUG',
     equipment: 'Mancuernas',
+    pattern: 'Aislamiento Deltoides',
+    tier: 3
+  },
+  {
+    id: 'pike_push_up',
+    name: 'Flexiones en pica (Hombros en casa)',
+    muscleGroup: 'Hombros',
+    category: 'PUSH_UP',
+    garminName: 'PIKE_PUSH_UP',
+    equipment: 'Peso Corporal',
+    pattern: 'Empuje Vertical',
+    tier: 1
+  },
+  {
+    id: 'prone_y_t_raises',
+    name: 'Elevaciones Y-T en suelo (Hombro post.)',
+    muscleGroup: 'Hombros',
+    category: 'LATERAL_RAISE',
+    garminName: 'PRONE_Y_RAISE',
+    equipment: 'Peso Corporal',
     pattern: 'Aislamiento Deltoides',
     tier: 3
   },
@@ -1068,6 +1188,36 @@ export const EXERCISE_CATALOG: CatalogExercise[] = [
     equipment: 'Peso Corporal',
     pattern: 'Tríceps',
     tier: 2
+  },
+  {
+    id: 'diamond_push_up',
+    name: 'Flexiones diamante (Tríceps / Pecho)',
+    muscleGroup: 'Brazos',
+    category: 'PUSH_UP',
+    garminName: 'DIAMOND_PUSH_UP',
+    equipment: 'Peso Corporal',
+    pattern: 'Tríceps',
+    tier: 2
+  },
+  {
+    id: 'bench_chair_dips',
+    name: 'Fondos de tríceps en silla o banco',
+    muscleGroup: 'Brazos',
+    category: 'TRICEPS_EXTENSION',
+    garminName: 'BENCH_DIP',
+    equipment: 'Peso Corporal',
+    pattern: 'Tríceps',
+    tier: 2
+  },
+  {
+    id: 'towel_isometric_curl',
+    name: 'Curl de bíceps con toalla o mochila',
+    muscleGroup: 'Brazos',
+    category: 'CURL',
+    garminName: 'TOWEL_CURL',
+    equipment: 'Peso Corporal',
+    pattern: 'Bíceps',
+    tier: 3
   },
 
   // ==========================================

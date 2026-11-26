@@ -4,7 +4,12 @@ import {
   generateScientificRoutine,
   TrainingGoal,
 } from './scientific-workout-generator';
-import { getKnownExerciseWeights, loadMyGymProfile } from './smart-workout-engine';
+import {
+  getKnownExerciseWeights,
+  loadMyGymProfile,
+  TRAINING_ENVIRONMENT_PRESETS,
+  TrainingEnvironment,
+} from './smart-workout-engine';
 import { StrengthRoutine } from './types';
 
 export type WeekDayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
@@ -29,6 +34,7 @@ export interface CustomWeeklyPlanOptions {
   level: ExperienceLevel;
   durationMinutes: 45 | 60 | 75 | 90;
   useGymProfile?: boolean;
+  environment?: TrainingEnvironment;
 }
 
 const WEEKLY_PLAN_STORAGE_KEY = 'garmin_strength_weekly_plan_v1';
@@ -167,8 +173,14 @@ export function buildCustomWeeklyPlan(options: CustomWeeklyPlanOptions): WeeklyP
   const orderedDays = WEEK_DAYS.map((d) => d.key).filter((k) => options.selectedDays.includes(k));
   if (orderedDays.length === 0) return {};
 
-  const preferredEquipment: EquipmentType[] | undefined = options.useGymProfile
-    ? loadMyGymProfile().availableEquipment
+  const storedProfile = loadMyGymProfile();
+  const effectiveEnv: TrainingEnvironment =
+    options.environment || storedProfile.environment || 'gym';
+  const isHome = effectiveEnv === 'home_minimal' || effectiveEnv === 'home_no_equipment';
+  const preferredEquipment: EquipmentType[] | undefined = options.environment
+    ? TRAINING_ENVIRONMENT_PRESETS[options.environment].availableEquipment
+    : options.useGymProfile
+    ? storedProfile.availableEquipment
     : undefined;
   const knownWeights = getKnownExerciseWeights();
   const sequence = resolveSessionsSequence(orderedDays.length, options.splitStyle);
@@ -184,6 +196,7 @@ export function buildCustomWeeklyPlan(options: CustomWeeklyPlanOptions): WeeklyP
       level: options.level,
       durationMinutes: options.durationMinutes,
       preferredEquipment,
+      environment: effectiveEnv,
     });
 
     // Aplicar pesos conocidos y nombre limpio <= 16 chars
@@ -192,14 +205,15 @@ export function buildCustomWeeklyPlan(options: CustomWeeklyPlanOptions): WeeklyP
       return {
         ...b,
         id: `plan-${dayKey}-${Date.now()}-${bIdx}`,
-        weightKg: known || b.weightKg,
+        weightKg: b.exercise.equipment === 'Peso Corporal' ? 0 : known || b.weightKg,
       };
     });
 
+    const rawName = isHome ? `Casa ${spec.label}` : spec.label;
     plan[dayKey] = {
       ...routine,
       id: `plan-${dayKey}-${Date.now()}`,
-      name: spec.label.slice(0, 16),
+      name: rawName.slice(0, 16),
       blocks: enrichedBlocks,
     };
   });

@@ -62,6 +62,8 @@ const EXERCISE_MUSCLE_BY_ID: Record<string, ExerciseMuscleProfile> = {
   pec_deck_machine: { primary: ['chest'], secondary: ['shoulders'], activationMode: 'peak_at_1' },
   dips_chest: { primary: ['chest', 'triceps'], secondary: ['shoulders'], activationMode: 'peak_at_0' },
   push_up: { primary: ['chest'], secondary: ['shoulders', 'triceps', 'abs'], activationMode: 'peak_at_0' },
+  decline_push_up: { primary: ['chest'], secondary: ['shoulders', 'triceps', 'abs'], activationMode: 'peak_at_0' },
+  incline_push_up: { primary: ['chest'], secondary: ['shoulders', 'triceps', 'abs'], activationMode: 'peak_at_0' },
 
   // ESPALDA
   deadlift_barbell: { primary: ['hamstrings', 'glutes', 'lower_back'], secondary: ['quads', 'traps', 'forearms'], activationMode: 'peak_at_1' },
@@ -90,6 +92,8 @@ const EXERCISE_MUSCLE_BY_ID: Record<string, ExerciseMuscleProfile> = {
   machine_row: { primary: ['upper_back'], secondary: ['biceps', 'traps', 'shoulders'], activationMode: 'peak_at_1' },
   face_pull: { primary: ['shoulders'], secondary: ['upper_back', 'traps'], activationMode: 'peak_at_1' },
   back_extension: { primary: ['lower_back', 'glutes'], secondary: ['hamstrings'], activationMode: 'peak_at_1' },
+  inverted_table_row: { primary: ['upper_back'], secondary: ['biceps', 'traps', 'shoulders'], activationMode: 'peak_at_1' },
+  bodyweight_superman_pull: { primary: ['upper_back', 'lower_back'], secondary: ['shoulders', 'glutes'], activationMode: 'peak_at_1' },
 
   // PIERNAS
   squat_back_barbell: { primary: ['quads', 'glutes'], secondary: ['hamstrings', 'lower_back', 'abs'], activationMode: 'peak_at_1' },
@@ -116,6 +120,12 @@ const EXERCISE_MUSCLE_BY_ID: Record<string, ExerciseMuscleProfile> = {
   calf_raise_standing: { primary: ['calves'], secondary: [], activationMode: 'peak_at_1' },
   calf_raise_seated: { primary: ['calves'], secondary: [], activationMode: 'peak_at_1' },
   calf_raise_dumbbell: { primary: ['calves'], secondary: [], activationMode: 'peak_at_1' },
+  bodyweight_squat: { primary: ['quads', 'glutes'], secondary: ['hamstrings', 'abs'], activationMode: 'peak_at_1' },
+  bodyweight_bulgarian_split_squat: { primary: ['quads', 'glutes'], secondary: ['hamstrings', 'abs'], activationMode: 'peak_at_1' },
+  bodyweight_lunge: { primary: ['quads', 'glutes'], secondary: ['hamstrings', 'abs'], activationMode: 'peak_at_1' },
+  bodyweight_glute_bridge: { primary: ['glutes'], secondary: ['hamstrings', 'abs'], activationMode: 'peak_at_1' },
+  single_leg_glute_bridge: { primary: ['glutes'], secondary: ['hamstrings', 'abs'], activationMode: 'peak_at_1' },
+  bodyweight_calf_raise: { primary: ['calves'], secondary: [], activationMode: 'peak_at_1' },
 
   // HOMBROS
   military_press: { primary: ['shoulders'], secondary: ['triceps', 'traps', 'abs'], activationMode: 'peak_at_1' },
@@ -136,6 +146,8 @@ const EXERCISE_MUSCLE_BY_ID: Record<string, ExerciseMuscleProfile> = {
   upright_row_barbell: { primary: ['shoulders', 'traps'], secondary: ['biceps'], activationMode: 'peak_at_1' },
   shrug_barbell: { primary: ['traps'], secondary: ['forearms'], activationMode: 'peak_at_1' },
   shrug_dumbbell: { primary: ['traps'], secondary: ['forearms'], activationMode: 'peak_at_1' },
+  pike_push_up: { primary: ['shoulders'], secondary: ['triceps', 'chest', 'abs'], activationMode: 'peak_at_0' },
+  prone_y_t_raises: { primary: ['shoulders'], secondary: ['upper_back', 'traps'], activationMode: 'peak_at_1' },
 
   // BRAZOS
   biceps_curl_barbell: { primary: ['biceps'], secondary: ['forearms'], activationMode: 'peak_at_1' },
@@ -156,6 +168,9 @@ const EXERCISE_MUSCLE_BY_ID: Record<string, ExerciseMuscleProfile> = {
   skull_crusher_barbell: { primary: ['triceps'], secondary: ['shoulders'], activationMode: 'peak_at_1' },
   triceps_kickback_dumbbell: { primary: ['triceps'], secondary: ['shoulders'], activationMode: 'peak_at_1' },
   triceps_dip_weighted: { primary: ['triceps'], secondary: ['chest', 'shoulders'], activationMode: 'peak_at_0' },
+  diamond_push_up: { primary: ['triceps', 'chest'], secondary: ['shoulders', 'abs'], activationMode: 'peak_at_0' },
+  bench_chair_dips: { primary: ['triceps'], secondary: ['chest', 'shoulders'], activationMode: 'peak_at_0' },
+  towel_isometric_curl: { primary: ['biceps'], secondary: ['forearms'], activationMode: 'peak_at_1' },
 
   // CORE
   plank: { primary: ['abs'], secondary: ['lower_back', 'shoulders'], activationMode: 'isometric' },

@@ -3,7 +3,10 @@ import { EXERCISE_CATALOG, EquipmentType } from '@/lib/exercise-catalog';
 import {
   DEFAULT_GYM_PROFILE,
   generateSmartLocalRoutine,
+  isExerciseAllowedForProfile,
   MyGymProfile,
+  resolveEffectiveGymProfile,
+  TrainingEnvironment,
 } from '@/lib/smart-workout-engine';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { WorkoutExerciseBlock } from '@/lib/types';
@@ -31,13 +34,20 @@ export async function POST(req: Request) {
     }
 
     const prompt = body.prompt.trim().slice(0, 600);
-    const gymProfile: MyGymProfile = {
+    const rawEnv = body.gymProfile?.environment;
+    const env: TrainingEnvironment =
+      rawEnv === 'home_minimal' || rawEnv === 'home_no_equipment' || rawEnv === 'gym'
+        ? rawEnv
+        : 'gym';
+    const baseProfile: MyGymProfile = {
       availableEquipment: Array.isArray(body.gymProfile?.availableEquipment) && body.gymProfile.availableEquipment.length > 0
         ? (body.gymProfile.availableEquipment as EquipmentType[])
         : DEFAULT_GYM_PROFILE.availableEquipment,
       avoidLowerBackFatigue: Boolean(body.gymProfile?.avoidLowerBackFatigue),
       gymName: String(body.gymProfile?.gymName || DEFAULT_GYM_PROFILE.gymName).slice(0, 60),
+      environment: env,
     };
+    const { effectiveProfile: gymProfile, isHome } = resolveEffectiveGymProfile(baseProfile, prompt);
     const durationMinutes = ([45, 60, 75, 90].includes(body.durationMinutes) ? body.durationMinutes : 60) as 45 | 60 | 75 | 90;
     const goal = (['hypertrophy', 'strength', 'powerbuilding'].includes(body.goal) ? body.goal : 'hypertrophy') as 'hypertrophy' | 'strength' | 'powerbuilding';
     const knownWeights: Record<string, number> =
@@ -79,17 +89,16 @@ export async function POST(req: Request) {
       return NextResponse.json(localResult);
     }
 
-    // Filtrar catálogo al equipamiento disponible del usuario para el prompt de Gemini
-    const availableSet = new Set(gymProfile.availableEquipment);
-    const allowedCatalog = EXERCISE_CATALOG.filter((ex) => availableSet.has(ex.equipment));
+    // Filtrar catálogo al equipamiento y entorno reales del usuario para el prompt de Gemini
+    const allowedCatalog = EXERCISE_CATALOG.filter((ex) => isExerciseAllowedForProfile(ex, gymProfile));
     const catalogSummary = allowedCatalog
       .map((ex) => `${ex.id} | ${ex.name} (${ex.muscleGroup}, ${ex.equipment}, Tier ${ex.tier})`)
       .join('\n');
 
-    const systemInstruction = `Eres un entrenador experto en fuerza e hipertrofia y biomecánica de gimnasio.
+    const systemInstruction = `Eres un entrenador experto en fuerza e hipertrofia y biomecánica de entrenamiento.
 Debes diseñar una rutina optimizada para Garmin Fénix 8 eligiendo EXCLUSIVAMENTE IDs exactos de la lista PERMITIDA.
-Restricciones del gimnasio del usuario ("${gymProfile.gymName}"):
-- Equipamiento permitido: ${gymProfile.availableEquipment.join(', ')}
+Restricciones del entorno del usuario ("${gymProfile.gymName}", modo ${gymProfile.environment || 'gym'}):
+- Equipamiento permitido: ${gymProfile.availableEquipment.join(', ')}${isHome ? '\n- MODO EN CASA ACTIVO: selecciona exclusivamente ejercicios viables en un salón/habitación (sin máquinas, racks ni barra de dominadas).' : ''}
 - Evitar fatiga lumbar: ${gymProfile.avoidLowerBackFatigue ? 'SÍ' : 'NO'}
 - Objetivo: ${goal}
 - Duración objetivo: ${durationMinutes} minutos

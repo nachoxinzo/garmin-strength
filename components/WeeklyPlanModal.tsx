@@ -3,17 +3,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRightLeft,
+  Building2,
   Calendar,
   CheckCircle2,
   Clock,
   CloudUpload,
   Dumbbell,
+  Home,
   Layers,
   Play,
   RefreshCw,
   SlidersHorizontal,
   Sparkles,
   Trash2,
+  UserCheck,
   X,
 } from 'lucide-react';
 import { StrengthRoutine } from '@/lib/types';
@@ -28,7 +31,12 @@ import {
   WeeklyPlanMap,
   WeeklySplitStyle,
 } from '@/lib/weekly-planner';
-import { loadMyGymProfile } from '@/lib/smart-workout-engine';
+import {
+  loadMyGymProfile,
+  saveMyGymProfile,
+  TRAINING_ENVIRONMENT_PRESETS,
+  TrainingEnvironment,
+} from '@/lib/smart-workout-engine';
 
 interface WeeklyPlanModalProps {
   isOpen: boolean;
@@ -50,6 +58,7 @@ export function WeeklyPlanModal({
   const [level, setLevel] = useState<ExperienceLevel>('intermediate');
   const [durationMinutes, setDurationMinutes] = useState<45 | 60 | 75 | 90>(60);
   const [useGymProfile, setUseGymProfile] = useState(true);
+  const [environment, setEnvironment] = useState<TrainingEnvironment>('gym');
   const [moveSourceDay, setMoveSourceDay] = useState<WeekDayKey | null>(null);
   const [gymName, setGymName] = useState('Mi Gimnasio Habitual');
   const [isSyncingWeek, setIsSyncingWeek] = useState(false);
@@ -65,7 +74,9 @@ export function WeeklyPlanModal({
       if (activeKeys.length >= 2) {
         setSelectedDays(activeKeys);
       }
-      setGymName(loadMyGymProfile().gymName);
+      const profile = loadMyGymProfile();
+      setGymName(profile.gymName);
+      setEnvironment(profile.environment || 'gym');
       setMoveSourceDay(null);
     }
   }, [isOpen]);
@@ -94,6 +105,19 @@ export function WeeklyPlanModal({
     setSplitStyle(style);
   };
 
+  const selectWeekEnvironment = (env: TrainingEnvironment) => {
+    setEnvironment(env);
+    const preset = TRAINING_ENVIRONMENT_PRESETS[env];
+    setGymName(preset.gymName);
+    const current = loadMyGymProfile();
+    saveMyGymProfile({
+      ...current,
+      environment: env,
+      availableEquipment: preset.availableEquipment,
+      gymName: preset.gymName,
+    });
+  };
+
   const handleGenerateCustomWeek = () => {
     if (selectedDays.length === 0) return;
     const generated = buildCustomWeeklyPlan({
@@ -103,6 +127,7 @@ export function WeeklyPlanModal({
       level,
       durationMinutes,
       useGymProfile,
+      environment,
     });
     setPlan(generated);
     saveWeeklyPlan(generated);
@@ -117,6 +142,7 @@ export function WeeklyPlanModal({
       level,
       durationMinutes,
       useGymProfile,
+      environment,
     });
     if (singlePlan[day]) {
       const updated = { ...plan, [day]: singlePlan[day] };
@@ -284,6 +310,41 @@ export function WeeklyPlanModal({
                   </button>
                 );
               })}
+            </div>
+
+            {/* Entorno: Gimnasio vs En Casa */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-semibold text-muted-foreground">
+                Entorno y material del plan
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {(
+                  [
+                    { id: 'gym', label: 'Gimnasio', Icon: Building2 },
+                    { id: 'home_minimal', label: 'Casa · Poco material', Icon: Home },
+                    { id: 'home_no_equipment', label: 'Casa · Sin material', Icon: UserCheck },
+                  ] as const
+                ).map(({ id, label, Icon }) => {
+                  const selected = environment === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => selectWeekEnvironment(id)}
+                      className={`min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] ${
+                        selected
+                          ? id === 'gym'
+                            ? 'bg-slate-900 text-white border-slate-900 dark:bg-blue-600 dark:border-blue-600'
+                            : 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-card border-border/60 text-foreground hover:bg-muted/50'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5 shrink-0" />
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Parámetros de División, Objetivo, Duración, Nivel */}
