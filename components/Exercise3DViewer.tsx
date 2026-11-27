@@ -253,6 +253,18 @@ export function Exercise3DViewer({
       hip_thrust_bench: 'Banco Hip Thrust · Barra Olímpica',
       preacher_bench: 'Banco Scott · Curl Predicador',
       roman_chair: 'Banco Romano 45° · Hiperextensiones',
+      power_rack_squat: 'Jaula de Potencia (Power Rack)',
+      bench_press_rack_flat: 'Banco de Press Plano + Soportes',
+      bench_press_rack_incline: 'Banco Inclinado + Soportes',
+      decline_bench_rack: 'Banco Declinado',
+      t_bar_row_landmine: 'Estación Landmine · Barra T',
+      deadlift_platform: 'Plataforma Olímpica de Peso Muerto',
+      plyo_box: 'Cajón Pliométrico + Mancuernas',
+      home_chair_bench: 'En Casa · Banco / Silla de Apoyo',
+      home_inverted_row_rig: 'En Casa · Barra Baja / Mesa',
+      ab_mat_wheel_station: 'Colchoneta de Suelo',
+      calf_step_block: 'Escalón Elevado de Gemelos',
+      seated_dumbbell_bench: 'Banco Vertical + Mancuernas',
     };
     return {
       rigType,
@@ -995,16 +1007,17 @@ export function Exercise3DViewer({
           leftArm.midPivot.rotation.x = -1.1 + press * 0.98;
           rightArm.midPivot.rotation.x = -1.1 + press * 0.98;
         } else {
-          // Press de banca plano (barra o mancuernas / smith_flat_bench)
-          pelvisPivot.position.set(0, 0.51, 0.26);
-          pelvisPivot.rotation.x = -Math.PI / 2;
+          // Press de banca plano o declinado (barra o mancuernas / smith_flat_bench / decline_bench_rack)
+          const isDecline = rigType === 'decline_bench_rack';
+          pelvisPivot.position.set(0, isDecline ? 0.56 : 0.51, isDecline ? 0.24 : 0.26);
+          pelvisPivot.rotation.x = isDecline ? -Math.PI / 2 - 0.22 : -Math.PI / 2;
           leftLeg.topPivot.rotation.x = -0.2;
           leftLeg.midPivot.rotation.x = Math.PI / 2 + 0.2;
           rightLeg.topPivot.rotation.x = -0.2;
           rightLeg.midPivot.rotation.x = Math.PI / 2 + 0.2;
 
           if (exercise.equipment === 'Barra' || rigType === 'smith_flat_bench') {
-            const barY = 0.615 + c * 0.385;
+            const barY = (isDecline ? 0.55 : 0.615) + c * 0.385;
             const barZ = gymRig.smithRailZ ?? -0.25;
             const gripX = id === 'close_grip_bench_press' ? 0.2 : 0.38;
             anchorBarCenter.set(0, barY, barZ);
@@ -1012,20 +1025,20 @@ export function Exercise3DViewer({
             rootGroup.updateMatrixWorld(true);
             targetHandL.set(-gripX, barY, barZ);
             targetHandR.set(gripX, barY, barZ);
-            poleElbowL.set(-(gripX + 0.1), 0.4 + c * 0.14, barZ + 0.12);
-            poleElbowR.set(gripX + 0.1, 0.4 + c * 0.14, barZ + 0.12);
+            poleElbowL.set(-(gripX + 0.1), (isDecline ? 0.35 : 0.4) + c * 0.14, barZ + 0.12);
+            poleElbowR.set(gripX + 0.1, (isDecline ? 0.35 : 0.4) + c * 0.14, barZ + 0.12);
             solveTwoBoneArmIK(leftArm, chestPivot, targetHandL, poleElbowL);
             solveTwoBoneArmIK(rightArm, chestPivot, targetHandR, poleElbowR);
           } else {
-            // Press plano con mancuernas mediante IK analítica (antebrazos verticales y convergencia arriba)
+            // Press plano/declinado con mancuernas mediante IK analítica (antebrazos verticales y convergencia arriba)
             rootGroup.updateMatrixWorld(true);
             const handX = 0.38 - c * 0.23;
-            const handY = 0.58 + c * 0.42;
+            const handY = (isDecline ? 0.52 : 0.58) + c * 0.42;
             const handZ = -0.24 - c * 0.01;
             targetHandL.set(-handX, handY, handZ);
             targetHandR.set(handX, handY, handZ);
-            poleElbowL.set(-(0.46 - c * 0.06), 0.34 + c * 0.22, -0.12);
-            poleElbowR.set(0.46 - c * 0.06, 0.34 + c * 0.22, -0.12);
+            poleElbowL.set(-(0.46 - c * 0.06), (isDecline ? 0.3 : 0.34) + c * 0.22, -0.12);
+            poleElbowR.set(0.46 - c * 0.06, (isDecline ? 0.3 : 0.34) + c * 0.22, -0.12);
             solveTwoBoneArmIK(leftArm, chestPivot, targetHandL, poleElbowL);
             solveTwoBoneArmIK(rightArm, chestPivot, targetHandR, poleElbowR);
           }
@@ -1244,14 +1257,24 @@ export function Exercise3DViewer({
           rightArm.topPivot.rotation.set(0.05, 0, 0.2);
           leftArm.midPivot.rotation.x = -0.7;
           rightArm.midPivot.rotation.x = -0.7;
+        } else if (id === 'step_up_dumbbell') {
+          const hipY = 0.88 + c * 0.24;
+          const hipZ = 0.04 + c * 0.16;
+          pelvisPivot.position.set(0, hipY, hipZ);
+          spinePivot.rotation.x = 0.14 - c * 0.08;
+          const boxIk = solveSagittalLegIK(hipY - 0.03, hipZ, 0.404, 0.3, LEG_UPPER, LEG_LOWER);
+          leftLeg.topPivot.rotation.x = boxIk.hipAngleX;
+          leftLeg.midPivot.rotation.x = boxIk.kneeAngleX;
+          leftLeg.endPivot.rotation.x = boxIk.ankleAngleX;
+          rightLeg.topPivot.rotation.x = 0.22 - c * 0.18;
+          rightLeg.midPivot.rotation.x = 0.32 - c * 0.2;
         } else if (
           id === 'lunge_barbell' ||
           id === 'lunge_dumbbell' ||
           id === 'walking_lunge_dumbbell' ||
           id === 'bulgarian_split_squat' ||
           id === 'bodyweight_bulgarian_split_squat' ||
-          id === 'bodyweight_lunge' ||
-          id === 'step_up_dumbbell'
+          id === 'bodyweight_lunge'
         ) {
           const hipY = 0.88 - c * 0.38;
           const hipZ = -c * 0.05;
@@ -1583,7 +1606,18 @@ export function Exercise3DViewer({
           rightArm.midPivot.rotation.x = -0.28;
         }
       } else if (p === 'Bíceps') {
-        if (rigType === 'free_bench_incline') {
+        if (id === 'concentration_curl_dumbbell') {
+          pelvisPivot.position.set(0, 0.55, 0.04);
+          setSeatedLegs(-1.35, 1.35);
+          leftLeg.topPivot.rotation.z = -0.25;
+          rightLeg.topPivot.rotation.z = 0.25;
+          spinePivot.rotation.x = 0.48;
+          const curl = 0.1 + c * 1.98;
+          rightArm.topPivot.rotation.set(0.32, 0, -0.12);
+          rightArm.midPivot.rotation.x = -curl;
+          leftArm.topPivot.rotation.set(-0.45, 0, -0.2);
+          leftArm.midPivot.rotation.x = -0.8;
+        } else if (rigType === 'free_bench_incline') {
           pelvisPivot.position.set(0, 0.53, 0.18);
           pelvisPivot.rotation.x = -0.68;
           setSeatedLegs(-0.82, 1.45);

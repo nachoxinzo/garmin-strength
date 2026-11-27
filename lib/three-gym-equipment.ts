@@ -29,6 +29,18 @@ export type MachineRigType =
   | 'hip_thrust_bench'
   | 'preacher_bench'
   | 'roman_chair'
+  | 'power_rack_squat'
+  | 'bench_press_rack_flat'
+  | 'bench_press_rack_incline'
+  | 'decline_bench_rack'
+  | 't_bar_row_landmine'
+  | 'deadlift_platform'
+  | 'plyo_box'
+  | 'home_chair_bench'
+  | 'home_inverted_row_rig'
+  | 'ab_mat_wheel_station'
+  | 'calf_step_block'
+  | 'seated_dumbbell_bench'
   | 'free_bench_flat'
   | 'free_bench_incline'
   | 'free_standing';
@@ -160,16 +172,44 @@ export function resolveMachineRig(exercise: CatalogExercise): MachineRigType {
     return 'cable_low_single';
   }
 
-  // Peso libre y calistenia en casa / gimnasio
-  if (id === 'bench_chair_dips') {
-    return 'free_bench_flat';
+  // Peso libre y calistenia en casa / gimnasio (cobertura 100% de los 127 ejercicios)
+  if (id === 't_bar_row') {
+    return 't_bar_row_landmine';
+  }
+  if (id === 'step_up_dumbbell') {
+    return 'plyo_box';
+  }
+  if (id === 'inverted_table_row') {
+    return 'home_inverted_row_rig';
   }
   if (
-    id === 'bodyweight_superman_pull' ||
-    id === 'prone_y_t_raises' ||
-    id === 'inverted_table_row' ||
-    (exercise.equipment === 'Peso Corporal' && id.includes('push_up'))
+    id === 'bench_chair_dips' ||
+    id === 'bulgarian_split_squat' ||
+    id === 'bodyweight_bulgarian_split_squat' ||
+    id === 'incline_push_up' ||
+    id === 'decline_push_up'
   ) {
+    return 'home_chair_bench';
+  }
+  if (
+    id === 'ab_wheel_rollout' ||
+    id === 'plank' ||
+    id === 'side_plank' ||
+    id === 'crunch' ||
+    id === 'bicycle_crunch' ||
+    id === 'russian_twist' ||
+    id === 'bodyweight_glute_bridge' ||
+    id === 'single_leg_glute_bridge' ||
+    id === 'glute_bridge_barbell' ||
+    id === 'bodyweight_superman_pull' ||
+    id === 'prone_y_t_raises'
+  ) {
+    return 'ab_mat_wheel_station';
+  }
+  if (id === 'calf_raise_dumbbell' || id === 'bodyweight_calf_raise') {
+    return 'calf_step_block';
+  }
+  if (exercise.equipment === 'Peso Corporal' && id.includes('push_up')) {
     return 'free_standing';
   }
   if (
@@ -177,6 +217,43 @@ export function resolveMachineRig(exercise: CatalogExercise): MachineRigType {
     id.includes('hanging')
   ) {
     return 'pullup_rig';
+  }
+  if (id === 'bench_press_decline_barbell' || id === 'bench_press_decline_dumbbell') {
+    return 'decline_bench_rack';
+  }
+  if (id === 'bench_press_incline_barbell') {
+    return 'bench_press_rack_incline';
+  }
+  if (id === 'bench_press_barbell' || id === 'close_grip_bench_press') {
+    return 'bench_press_rack_flat';
+  }
+  if (
+    id === 'squat_back_barbell' ||
+    id === 'squat_front_barbell' ||
+    id === 'good_morning_barbell' ||
+    id === 'military_press' ||
+    id === 'overhead_barbell_press' ||
+    id === 'seated_barbell_shoulder_press'
+  ) {
+    return 'power_rack_squat';
+  }
+  if (
+    id === 'deadlift_barbell' ||
+    id === 'deadlift_sumo' ||
+    id === 'deadlift_straight_leg' ||
+    id === 'rack_pull' ||
+    id === 'barbell_row' ||
+    id === 'pendlay_row' ||
+    id === 'reverse_grip_barbell_row'
+  ) {
+    return 'deadlift_platform';
+  }
+  if (
+    id === 'dumbbell_shoulder_press' ||
+    id === 'arnold_press' ||
+    id === 'concentration_curl_dumbbell'
+  ) {
+    return 'seated_dumbbell_bench';
   }
   if (
     p === 'Empuje Inclinado' ||
@@ -1155,6 +1232,212 @@ export function buildGymEquipmentRig(
     rearAnklePad.rotation.z = Math.PI / 2;
     rearAnklePad.position.set(0, 0.26, -0.44);
     group.add(rearAnklePad);
+  } else if (rigType === 'power_rack_squat') {
+    label = 'Jaula de Potencia (Power Rack) + Barra Olímpica';
+    cameraPos = [2.55, 1.85, 2.9];
+    cameraTarget = [0, 1.05, 0];
+
+    const rackX = 0.58;
+    const rackFrontZ = 0.36;
+    const rackRearZ = -0.38;
+    const rackH = 2.16;
+
+    [-rackX, rackX].forEach((rx) => {
+      addBox(group, 0.07, 0.05, 0.92, rx, 0.025, 0, frameMat);
+      addBox(group, 0.065, rackH, 0.065, rx, rackH / 2, rackFrontZ, frameMat);
+      addBox(group, 0.065, rackH, 0.065, rx, rackH / 2, rackRearZ, frameMat);
+      // Larguero superior y barra de seguridad horizontal
+      addBox(group, 0.065, 0.065, rackFrontZ - rackRearZ + 0.07, rx, rackH - 0.035, 0, frameMat);
+      addBox(group, 0.05, 0.05, rackFrontZ - rackRearZ, rx, 0.68, 0, chromeMat);
+      // Ganchos J-Hooks a altura de hombros
+      addBox(group, 0.07, 0.09, 0.08, rx, 1.36, -0.1, plateTrimMat);
+    });
+    // Travesaño trasero y barra superior de dominadas
+    addBox(group, rackX * 2 + 0.07, 0.07, 0.07, 0, rackH - 0.035, rackRearZ, frameMat);
+    addBox(group, rackX * 2 + 0.07, 0.06, 0.06, 0, 0.06, rackRearZ, frameMat);
+    const topPullBar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.018, rackX * 2, 12),
+      chromeMat
+    );
+    topPullBar.rotation.z = Math.PI / 2;
+    topPullBar.position.set(0, rackH - 0.04, rackFrontZ);
+    group.add(topPullBar);
+
+    if (id === 'seated_barbell_shoulder_press') {
+      addUprightBench(0.04);
+    }
+  } else if (rigType === 'bench_press_rack_flat' || rigType === 'bench_press_rack_incline') {
+    const isIncline = rigType === 'bench_press_rack_incline';
+    label = isIncline
+      ? 'Banco Inclinado con Soportes + Barra Olímpica'
+      : 'Banco de Press Plano con Soportes + Barra';
+    cameraPos = [2.45, 1.8, 2.75];
+    cameraTarget = [0, 0.88, -0.05];
+
+    if (isIncline) {
+      addInclineBench(0.2);
+    } else {
+      addFlatBench(-0.05);
+    }
+    const postX = 0.54;
+    const postZ = isIncline ? -0.22 : -0.3;
+    const postH = isIncline ? 1.32 : 0.98;
+    [-postX, postX].forEach((px) => {
+      addBox(group, 0.065, postH, 0.065, px, postH / 2, postZ, frameMat);
+      addBox(group, 0.075, 0.045, 0.45, px, 0.022, postZ + 0.06, frameMat);
+      addBox(group, 0.07, 0.08, 0.08, px, postH - 0.04, postZ + 0.04, plateTrimMat);
+    });
+    addBox(group, postX * 2 + 0.07, 0.055, 0.055, 0, 0.14, postZ, frameMat);
+  } else if (rigType === 'decline_bench_rack') {
+    label =
+      exercise.equipment === 'Barra'
+        ? 'Banco Declinado con Soportes + Barra'
+        : 'Banco Declinado + Mancuernas';
+    cameraPos = [2.45, 1.75, 2.65];
+    cameraTarget = [0, 0.78, 0.05];
+
+    // Banco declinado inclinado hacia -Z con rodillos de piernas en +Z
+    addBox(group, 0.34, 0.075, 1.15, 0, 0.44, 0.02, padMat, -0.22);
+    addBox(group, 0.07, 0.28, 0.07, 0, 0.14, -0.36, frameMat);
+    addBox(group, 0.07, 0.54, 0.07, 0, 0.27, 0.42, frameMat);
+    addBox(group, 0.44, 0.04, 0.96, 0, 0.02, 0.03, frameMat);
+    const legLockPad = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.42, 14), padMat);
+    legLockPad.rotation.z = Math.PI / 2;
+    legLockPad.position.set(0, 0.62, 0.48);
+    group.add(legLockPad);
+
+    if (exercise.equipment === 'Barra') {
+      [-0.54, 0.54].forEach((px) => {
+        addBox(group, 0.065, 0.88, 0.065, px, 0.44, -0.32, frameMat);
+        addBox(group, 0.07, 0.08, 0.08, px, 0.86, -0.28, plateTrimMat);
+      });
+      addBox(group, 1.14, 0.05, 0.05, 0, 0.12, -0.32, frameMat);
+    }
+  } else if (rigType === 't_bar_row_landmine') {
+    usesOwnBarbell = true;
+    label = 'Estación Landmine / Remo en Barra T';
+    cameraPos = [2.45, 1.75, 2.55];
+    cameraTarget = [0, 0.85, 0.1];
+
+    // Plataforma de apoyo de pies y pivote Landmine delante (+Z)
+    addBox(group, 0.88, 0.04, 0.52, 0, 0.02, 0.0, frameMat);
+    addBox(group, 0.16, 0.1, 0.18, 0, 0.05, 0.78, frameLightMat);
+    const anchor = new THREE.Vector3(0, 0.08, 0.78);
+
+    const tBar = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, 1, 12), chromeMat);
+    group.add(tBar);
+    const vHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.28, 12), gripMat);
+    vHandle.rotation.z = Math.PI / 2;
+    group.add(vHandle);
+    const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.045, 20), plateMat);
+    group.add(plate);
+
+    updaters.push(({ leftHand, rightHand }) => {
+      tmpMid.addVectors(leftHand, rightHand).multiplyScalar(0.5);
+      vHandle.position.copy(tmpMid);
+      orientUnitCylinderBetween(tBar, anchor, tmpMid);
+      tmpDir.subVectors(tmpMid, anchor).normalize();
+      plate.position.copy(tmpMid).addScaledVector(tmpDir, -0.14);
+      plate.quaternion.setFromUnitVectors(UP_Y, tmpDir);
+    });
+  } else if (rigType === 'deadlift_platform') {
+    label =
+      id === 'rack_pull'
+        ? 'Rack Pull · Plataforma + Soportes'
+        : 'Plataforma Olímpica de Peso Muerto / Barra';
+    cameraPos = [2.45, 1.75, 2.7];
+    cameraTarget = [0, 0.88, 0];
+
+    // Tarima central + laterales de goma
+    addBox(group, 0.96, 0.024, 1.38, 0, 0.012, 0, frameLightMat);
+    addBox(group, 0.54, 0.026, 1.38, -0.76, 0.013, 0, gripMat);
+    addBox(group, 0.54, 0.026, 1.38, 0.76, 0.013, 0, gripMat);
+    if (id === 'rack_pull') {
+      [-0.56, 0.56].forEach((bx) => {
+        addBox(group, 0.16, 0.36, 0.28, bx, 0.18, 0.2, frameMat);
+      });
+    }
+  } else if (rigType === 'plyo_box') {
+    label = 'Cajón Pliométrico + Mancuernas';
+    cameraPos = [2.35, 1.7, 2.5];
+    cameraTarget = [0, 0.85, 0.1];
+
+    addBox(group, 0.54, 0.36, 0.44, 0, 0.18, 0.3, frameMat);
+    addBox(group, 0.56, 0.03, 0.46, 0, 0.36, 0.3, padMat);
+  } else if (rigType === 'home_chair_bench') {
+    label = 'En Casa · Banco / Silla de Apoyo';
+    cameraPos = [2.35, 1.65, 2.5];
+    cameraTarget = [0, 0.72, 0];
+
+    if (id === 'incline_push_up') {
+      addBox(group, 0.56, 0.06, 0.36, 0, 0.22, 0.42, padMat);
+      addBox(group, 0.5, 0.2, 0.06, 0, 0.1, 0.42, frameMat);
+    } else if (id === 'bench_chair_dips') {
+      addBox(group, 0.64, 0.07, 0.38, 0, 0.42, -0.14, padMat);
+      [-0.26, 0.26].forEach((lx) => {
+        addBox(group, 0.05, 0.4, 0.05, lx, 0.2, -0.14, frameMat);
+      });
+    } else {
+      // Búlgara o flexiones declinadas (apoyo detrás en z = -0.46)
+      addBox(group, 0.56, 0.07, 0.36, 0, 0.4, -0.46, padMat);
+      [-0.22, 0.22].forEach((lx) => {
+        addBox(group, 0.05, 0.38, 0.05, lx, 0.19, -0.46, frameMat);
+      });
+    }
+  } else if (rigType === 'home_inverted_row_rig') {
+    label = 'En Casa · Mesa / Barra Baja de Remo Invertido';
+    cameraPos = [2.35, 1.6, 2.45];
+    cameraTarget = [0, 0.68, -0.15];
+
+    [-0.52, 0.52].forEach((lx) => {
+      addBox(group, 0.06, 0.92, 0.06, lx, 0.46, -0.35, frameMat);
+      addBox(group, 0.08, 0.04, 0.48, lx, 0.02, -0.35, frameMat);
+    });
+    const edgeBar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.02, 1.12, 12),
+      chromeMat
+    );
+    edgeBar.rotation.z = Math.PI / 2;
+    edgeBar.position.set(0, 0.92, -0.35);
+    group.add(edgeBar);
+  } else if (rigType === 'ab_mat_wheel_station') {
+    label =
+      id === 'ab_wheel_rollout'
+        ? 'Colchoneta + Rueda Abdominal'
+        : 'Colchoneta de Entrenamiento en Suelo';
+    cameraPos = [2.25, 1.45, 2.35];
+    cameraTarget = [0, 0.35, 0];
+
+    // Colchoneta limpia en suelo
+    addBox(group, 0.78, 0.018, 1.78, 0, 0.009, 0.05, padMat);
+
+    if (id === 'ab_wheel_rollout') {
+      const wheelGroup = new THREE.Group();
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.045, 20), plateMat);
+      wheel.rotation.z = Math.PI / 2;
+      wheelGroup.add(wheel);
+      const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.28, 10), gripMat);
+      axle.rotation.z = Math.PI / 2;
+      wheelGroup.add(axle);
+      group.add(wheelGroup);
+
+      updaters.push(({ leftHand, rightHand }) => {
+        tmpMid.addVectors(leftHand, rightHand).multiplyScalar(0.5);
+        wheelGroup.position.set(0, 0.09, tmpMid.z);
+      });
+    }
+  } else if (rigType === 'calf_step_block') {
+    label = 'Escalón Elevado de Gemelos';
+    cameraPos = [2.2, 1.55, 2.4];
+    cameraTarget = [0, 0.78, 0];
+
+    addBox(group, 0.52, 0.04, 0.26, 0, 0.02, 0.04, frameLightMat);
+  } else if (rigType === 'seated_dumbbell_bench') {
+    label = 'Banco Vertical + Mancuernas';
+    cameraPos = [2.25, 1.7, 2.45];
+    cameraTarget = [0, 0.9, 0];
+
+    addUprightBench(0.04);
   } else if (rigType === 'free_bench_flat') {
     label =
       exercise.equipment === 'Barra'
